@@ -18,9 +18,11 @@ class Functor f {
     map : (a -> b) -> f a -> f b;
 }
 
+data List a = (a :: List a) | Nil;
+
 map : (a -> b) -> List a -> List b;
 map f (x::xs) = f x :: map f xs;
-map _ [] = [];
+map _ Nil = Nil;
 
 infixr 0 $;
 $ : (a -> b) -> a -> b;
@@ -32,7 +34,7 @@ map : (a -> b) -> Maybe a -> Maybe b;
 map f (Just x) = Just (f x);
 map _ Nothing = Nothing;
 
-data Either l r = Left l | Right r;
+data Result e x = Err e | Ok x;
 
 -- Haskell syntax:
 -- type CrapString = List Char

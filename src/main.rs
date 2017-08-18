@@ -13,4 +13,5 @@ fn main() {
         contents
     };
     let ast: Ast = contents.parse().unwrap();
+    println!("{:?}", ast);
 }
