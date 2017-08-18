@@ -1,0 +1,59 @@
+module Foo;
+
+one : Int;
+one = 1;
+
+two : Int = 2;
+
+three = 3;
+
+id : a -> a;
+id x = x;
+
+const, const' : a -> b -> a;
+const x _ = x;
+const' x = \_ -> x;
+
+class Functor f {
+    map : (a -> b) -> f a -> f b;
+}
+
+map : (a -> b) -> List a -> List b;
+map f (x::xs) = f x :: map f xs;
+map _ [] = [];
+
+infixr 0 $;
+$ : (a -> b) -> a -> b;
+f $ x = f x;
+
+data Maybe a = Just a | Nothing;
+
+map : (a -> b) -> Maybe a -> Maybe b;
+map f (Just x) = Just (f x);
+map _ Nothing = Nothing;
+
+data Either l r = Left l | Right r;
+
+-- Haskell syntax:
+-- type CrapString = List Char
+--
+-- Huck syntax:
+-- CrapString : Type = List Char;
+-- or simply:
+CrapString = List Char;
+
+&& : Bool -> Lazy Bool -> Bool;
+False && _ = False;
+True  && b = b;
+
+|| : Bool -> Lazy Bool -> Bool;
+True  || _ = True;
+False || b = b;
+
+not : Bool -> Bool;
+not True  = False;
+not False = True;
+
+if : Bool -> Lazy a -> Lazy a -> a;
+if True  x _ = x;
+if False _ y = y;

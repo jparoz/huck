@@ -1,0 +1,6 @@
+[package]
+name = "huck"
+version = "0.1.0"
+authors = ["Jesse Paroz <jesse.paroz@gmail.com>"]
+
+[dependencies]
