@@ -49,8 +49,6 @@ pub struct LexError {
 
 #[derive(Debug)]
 enum Token<'a> {
-    Comment, /* @Hacky? Will always be skipped by the parser.
-              * Is only there to return a dummy value for convenience. */
     Module,
     Class,
     Data,
@@ -113,6 +111,18 @@ impl<'a> Iterator for Tokens<'a> {
     type Item = Token<'a>;
     fn next(&mut self) -> Option<Self::Item> {
         if let Some((start, c)) = self.iter.next() {
+
+            // Check for (line) comments.
+            if c == '-' {
+                if let Some(&(_, c2)) = self.iter.peek() {
+                    if c2 == '-' {
+                        let _ = self.lex_with(|c| c != '\n'); // Skip to newline
+                        self.skip_whitespace();
+                        return self.next();
+                    }
+                }
+            }
+
             let res: Result<Token, LexError> = match c {
                 ';' => Ok(Token::Semi),
                 '\\' => Ok(Token::Backslash),
@@ -150,11 +160,6 @@ impl<'a> Iterator for Tokens<'a> {
                             ":" => Token::Colon,
                             "=" => Token::Equals,
                             "|" => Token::Bar,
-                            op if op.starts_with("--") => {
-                                let _ = self.lex_with(|c| c != '\n'); // Skip to newline
-                                // self.skip_whitespace(); // Unnecessary; gets skipped later
-                                Token::Comment // @Hacky? See comment in enum definition
-                            }
                             op => Token::Operator(op),
                         }
                     })
