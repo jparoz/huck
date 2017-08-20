@@ -1,5 +1,6 @@
 use std::str::{FromStr, Chars};
 use std::iter::{Enumerate, Peekable};
+use std::fmt;
 
 #[derive(Debug)]
 pub enum Ast<'a> {
@@ -34,18 +35,26 @@ impl<'a> FromStr for Ast<'a> {
 }
 
 #[derive(Debug)]
-pub struct ParseError {
-    message: &'static str,
-}
-
-#[derive(Debug)]
 pub struct LexError {
     message: &'static str,
 }
 
-// @Todo:
-// impl Display for ParseError {
-// }
+impl fmt::Display for LexError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Lex error: {}", self.message)
+    }
+}
+
+#[derive(Debug)]
+pub struct ParseError {
+    message: &'static str,
+}
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Parse error: {}", self.message)
+    }
+}
 
 #[derive(Debug)]
 enum Token<'a> {

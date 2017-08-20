@@ -12,6 +12,6 @@ fn main() {
         file.read_to_string(&mut contents).unwrap();
         contents
     };
-    let ast: Ast = contents.parse().unwrap();
+    let ast: Ast = contents.parse().unwrap_or_else(|err| panic!("{}", err));
     println!("{:?}", ast);
 }
