@@ -110,7 +110,7 @@ impl<'a> Tokens<'a> {
 impl<'a> Iterator for Tokens<'a> {
     type Item = Token<'a>;
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some((start, c)) = self.iter.next() {
+        while let Some((start, c)) = self.iter.next() {
 
             // Check for (line) comments.
             if c == '-' {
@@ -118,7 +118,7 @@ impl<'a> Iterator for Tokens<'a> {
                     if c2 == '-' {
                         let _ = self.lex_with(|c| c != '\n'); // Skip to newline
                         self.skip_whitespace();
-                        return self.next();
+                        continue;
                     }
                 }
             }
@@ -175,6 +175,7 @@ impl<'a> Iterator for Tokens<'a> {
 
             return res.ok();
         }
+        // The internal iterator ended, and so also do we!
         None
     }
 }
