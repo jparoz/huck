@@ -1,11 +1,23 @@
+// Lifetimes
+// <'compile> is for values that will be erased in the final binary, or after typechecking and so
+// forth. Probably will only be used in type-level stuff.
+//
+// <'run> is for values that may be needed at runtime, i.e. will be included in the final binary, or
+// in memory when interpreted.
+
+extern crate num_bigint;
+use self::num_bigint::BigInt;
+
 use std::str::{FromStr, Chars};
 use std::iter::{Enumerate, Peekable};
 use std::fmt;
+use std::ops::Range;
 
 #[derive(Debug)]
-pub enum Ast<'a> {
-    Lit(Lit<'a>),
-    Var(&'a str),
+pub enum Ast<'compile, 'run> {
+    Lit(Lit<'run>),
+    // TypeLit(Lit<'compile>), // or something like that
+    Var(&'compile str),
 }
 // data Expr'
 // = Lit Lit
@@ -14,17 +26,17 @@ pub enum Ast<'a> {
 // | App Expr' Expr'
 
 #[derive(Debug)]
-pub struct Lit<'a> {
-    text: &'a str,
+pub enum Lit<'a> {
+    Int(BigInt), // Is BigInt the right move?
+    Float(f64), // Is f64 the right move?
+    String(&'a str), /* @Fixme: ownership probably needs to be differently defined.
+                      * See "Lifetimes" at top of file */
+    Char(char),
 }
-// data Lit
-// = Number (Either Integer Double)
-// | String Text
-// | Char Char
 
-impl<'a> FromStr for Ast<'a> {
+impl<'compile, 'run> FromStr for Ast<'compile, 'run> {
     type Err = ParseError;
-    fn from_str(file: &str) -> Result<Ast<'a>, ParseError> {
+    fn from_str(file: &str) -> Result<Ast<'compile, 'run>, ParseError> {
         let mut iter = Tokens::new(file);
         while let Some(tok) = iter.next() {
             // @Todo
@@ -60,10 +72,9 @@ impl fmt::Display for ParseError {
 enum Token<'a> {
     Module,
     Class,
+    Type,
     Data,
-    Infix,
-    Infixl,
-    Infixr,
+    Precedence,
     Semi,
     Colon,
     Equals,
@@ -76,9 +87,20 @@ enum Token<'a> {
     BracketClose,
     ParenOpen,
     ParenClose,
+    String(&'a str),
     Number(&'a str),
     Ident(&'a str),
     Operator(&'a str),
+}
+
+impl<'a> Token<'a> {
+    fn requires_separator(&self) -> bool {
+        use self::Token::*;
+        match *self {
+            Ident(_) | Number(_) | String(_) | Module | Class | Type | Data | Precedence => true,
+            _ => false,
+        }
+    }
 }
 
 struct Tokens<'a> {
@@ -98,21 +120,46 @@ impl<'a> Tokens<'a> {
         tokens
     }
 
-    fn lex_with<F>(&mut self, mut pred: F) -> Result<usize, LexError>
+    fn lex_while<F>(&mut self, start: usize, mut pred: F) -> Result<Range<usize>, LexError>
         where F: FnMut(char) -> bool
     {
         while let Some(&(i, c)) = self.iter.peek() {
             if pred(c) {
                 self.iter.next();
             } else {
-                return Ok(i);
+                return Ok(start..i);
             }
         }
         Err(LexError { message: "Unexpected EOF" })
     }
 
-    fn skip_whitespace(&mut self) {
-        let _ = self.lex_with(|c| c.is_whitespace());
+    /// Returns true if whitespace was skipped, otherwise returns false.
+    // @Todo: handle comments here
+    fn skip_whitespace(&mut self) -> bool {
+        if let Some(&(start, _)) = self.iter.peek() {
+            self.lex_while(start, |c| c.is_whitespace())
+                .map(|range| range.start < range.end)
+                .unwrap_or(false) // @Check: maybe true?
+        } else {
+            false
+        }
+    }
+
+    fn peek_with<F, T>(&mut self, mut f: F) -> T
+        where F: FnMut(Option<char>) -> T
+    {
+        let arg = if let Some(&(_, c)) = self.iter.peek() {
+            Some(c)
+        } else {
+            None
+        };
+        f(arg)
+    }
+
+    fn extend_range(&mut self, mut range: Range<usize>) -> Range<usize> {
+        self.iter.next();
+        range.end += 1;
+        range
     }
 }
 
@@ -125,7 +172,7 @@ impl<'a> Iterator for Tokens<'a> {
             if c == '-' {
                 if let Some(&(_, c2)) = self.iter.peek() {
                     if c2 == '-' {
-                        let _ = self.lex_with(|c| c != '\n'); // Skip to newline
+                        let _ = self.lex_while(start, |c| c != '\n'); // Skip to newline
                         self.skip_whitespace();
                         continue;
                     }
@@ -142,49 +189,63 @@ impl<'a> Iterator for Tokens<'a> {
                 ']' => Ok(Token::BracketClose),
                 '(' => Ok(Token::ParenOpen),
                 ')' => Ok(Token::ParenClose),
+                '"' => {
+                    // At this stage, we include opening and closing quotes, and we don't do
+                    // escaping of any kind; a Token::String includes the whole string literal,
+                    // as it is in the source.
+                    self.lex_while(start, |c| c != '"' /* @Fixme */).map(|range| {
+                        let range = self.extend_range(range);
+                        Token::String(&self.file[range])
+                    })
+                }
                 '0'...'9' => {
-                    let res = self.lex_with(|c| c.is_digit(10));
-                    res.map(|end| Token::Number(&self.file[start..end]))
+                    // @Todo
+                    self.lex_while(start, |c| c.is_digit(10))
+                        .map(|range| Token::Number(&self.file[range]))
                 }
                 c if is_word_start_char(c) => {
-                    let res = self.lex_with(is_word_char);
-                    res.map(|end| {
-                        let slice = &self.file[start..end];
-                        match slice {
-                            "module" => Token::Module,
-                            "class" => Token::Class,
-                            "data" => Token::Data,
-                            "infix" => Token::Infix,
-                            "infixl" => Token::Infixl,
-                            "infixr" => Token::Infixr,
-                            ident => Token::Ident(ident),
-                        }
-                    })
+                    self.lex_while(start, is_word_char)
+                        .map(|range| {
+                            let slice = &self.file[range];
+                            match slice {
+                                "module" => Token::Module,
+                                "class" => Token::Class,
+                                "type" => Token::Type,
+                                "data" => Token::Data,
+                                "prec" => Token::Precedence,
+                                ident => Token::Ident(ident),
+                            }
+                        })
                 }
                 c if is_operator_char(c) => {
-                    let res = self.lex_with(is_operator_char);
-                    res.map(|end| {
-                        let slice = &self.file[start..end];
-                        match slice {
-                            ":" => Token::Colon,
-                            "=" => Token::Equals,
-                            "|" => Token::Bar,
-                            op => Token::Operator(op),
-                        }
-                    })
+                    self.lex_while(start, is_operator_char)
+                        .map(|range| {
+                            let slice = &self.file[range];
+                            match slice {
+                                ":" => Token::Colon,
+                                "=" => Token::Equals,
+                                "|" => Token::Bar,
+                                op => Token::Operator(op),
+                            }
+                        })
                 }
-                c => panic!("Got char {:?}, not handled", c),
+                c => panic!("Char {:?} not yet handled!", c),
             };
 
-            if let Err(err) = res {
-                panic!("Lex error: {}", err.message)
+            match res {
+                Ok(tok) => {
+                    let skipped = self.skip_whitespace();
+                    let next_is_sep =
+                        skipped || self.peek_with(|opt| opt.map(is_separator_char)).unwrap_or(true);
+                    if tok.requires_separator() && !next_is_sep {
+                        panic!("Lex error: Expected separating character");
+                    }
+                    return Some(tok);
+                }
+                Err(err) => panic!("{}", err),
             }
-
-            self.skip_whitespace();
-
-            return res.ok();
         }
-        // The internal iterator ended, and so also do we!
+        // We ran out of chars, and therefore out of tokens.
         None
     }
 }
@@ -205,4 +266,8 @@ fn is_word_char(c: char) -> bool {
 
 fn is_operator_char(c: char) -> bool {
     "!$%^&*-=+|<>./?:~".contains(c)
+}
+
+fn is_separator_char(c: char) -> bool {
+    is_operator_char(c) || c.is_whitespace() || ",;(){}[]".contains(c)
 }

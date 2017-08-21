@@ -24,7 +24,7 @@ map : (a -> b) -> List a -> List b;
 map f (x::xs) = f x :: map f xs;
 map _ Nil = Nil;
 
-infixr 0 $;
+$ prec right 0;
 $ : (a -> b) -> a -> b;
 f $ x = f x;
 
@@ -36,18 +36,15 @@ map _ Nothing = Nothing;
 
 data Result e x = Err e | Ok x;
 
--- Haskell syntax:
--- type CrapString = List Char
---
--- Huck syntax:
--- CrapString : Type = List Char;
--- or simply:
-CrapString = List Char;
+-- type CrapString : Type = List Char;
+type CrapString = List Char;
 
+&& prec right 3;
 && : Bool -> Lazy Bool -> Bool;
 False && _ = False;
 True  && b = b;
 
+|| prec right 2;
 || : Bool -> Lazy Bool -> Bool;
 True  || _ = True;
 False || b = b;
@@ -56,6 +53,17 @@ not : Bool -> Bool;
 not True  = False;
 not False = True;
 
-if : Bool -> Lazy a -> Lazy a -> a;
+if, ? : Bool -> Lazy a -> Lazy a -> a;
 if True  x _ = x;
 if False _ y = y;
+
+? prec 1;
+(?) = if;
+
+hello : String = "Hello, world!";
+s = "foo";
+emptyString = "";
+
+four : Float = 4.0;
+
+twelve = 0xc;
