@@ -4,4 +4,3 @@ version = "0.1.0"
 authors = ["Jesse Paroz <jesse.paroz@gmail.com>"]
 
 [dependencies]
-num-bigint = "0.1.40"

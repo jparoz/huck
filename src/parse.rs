@@ -5,9 +5,7 @@
 // <'run> is for values that may be needed at runtime, i.e. will be included in the final binary, or
 // in memory when interpreted.
 
-extern crate num_bigint;
-use self::num_bigint::BigInt;
-
+use std::default::Default;
 use std::str::{FromStr, Chars};
 use std::iter::{Enumerate, Peekable};
 use std::fmt;
@@ -27,44 +25,71 @@ pub enum Ast<'compile, 'run> {
 
 #[derive(Debug)]
 pub enum Lit<'a> {
-    Int(BigInt), // Is BigInt the right move?
+    Int(bool, u64), // Int(is_negative, value)
     Float(f64), // Is f64 the right move?
-    String(&'a str), /* @Fixme: ownership probably needs to be differently defined.
-                      * See "Lifetimes" at top of file */
+    String(&'a str),
     Char(char),
 }
 
-impl<'compile, 'run> FromStr for Ast<'compile, 'run> {
-    type Err = ParseError;
-    fn from_str(file: &str) -> Result<Ast<'compile, 'run>, ParseError> {
-        let mut iter = Tokens::new(file);
-        while let Some(tok) = iter.next() {
-            // @Todo
-            println!("{:?}", tok);
+pub fn parse<'compile, 'run>(filename: &str,
+                             file: &str)
+                             -> Result<Ast<'compile, 'run>, Error<'compile>> {
+    let mut iter = Tokens::new(filename, file);
+    while let Some(tok) = iter.next() {
+        // @Todo
+        println!("{:?}", tok);
+    }
+    Ok(Ast::Var("hi")) // @Todo
+}
+
+#[derive(Debug)]
+pub struct Error<'a> {
+    error_type: ErrorType,
+    message: String,
+    location: Location<'a>,
+}
+
+#[derive(Debug)]
+pub enum ErrorType {
+    Lex,
+    Parse,
+}
+
+#[derive(Debug)]
+pub struct Location<'a> {
+    filename: &'a str,
+    start: Position,
+    end: Position,
+}
+
+impl<'a> Location<'a> {
+    fn new(filename: &str) -> Location {
+        Location {
+            filename: filename,
+            start: Position::default(),
+            end: Position::default(),
         }
-        Ok(Ast::Var("hi")) // @Todo
     }
 }
 
 #[derive(Debug)]
-pub struct LexError {
-    message: &'static str,
+pub struct Position {
+    line: usize,
+    column: usize,
 }
 
-impl fmt::Display for LexError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Lex error: {}", self.message)
+impl Default for Position {
+    fn default() -> Position {
+        Position {
+            line: 1,
+            column: 0,
+        }
     }
 }
 
-#[derive(Debug)]
-pub struct ParseError {
-    message: &'static str,
-}
-
-impl fmt::Display for ParseError {
+impl<'a> fmt::Display for Error<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Parse error: {}", self.message)
+        write!(f, "{:?} error: {}", self.error_type, self.message)
     }
 }
 
@@ -104,14 +129,16 @@ impl<'a> Token<'a> {
 }
 
 struct Tokens<'a> {
+    filename: &'a str,
     file: &'a str,
     iter: Peekable<Enumerate<Chars<'a>>>,
 }
 
 impl<'a> Tokens<'a> {
-    fn new<'b>(file: &'b str) -> Tokens<'b> {
+    fn new(filename: &'a str, file: &'a str) -> Tokens<'a> {
         let iter = file.chars().enumerate().peekable();
         let mut tokens = Tokens {
+            filename: filename,
             file: file,
             iter: iter,
         };
@@ -120,7 +147,7 @@ impl<'a> Tokens<'a> {
         tokens
     }
 
-    fn lex_while<F>(&mut self, start: usize, mut pred: F) -> Result<Range<usize>, LexError>
+    fn lex_while<F>(&mut self, start: usize, mut pred: F) -> Result<Range<usize>, Error<'a>>
         where F: FnMut(char) -> bool
     {
         while let Some(&(i, c)) = self.iter.peek() {
@@ -130,7 +157,11 @@ impl<'a> Tokens<'a> {
                 return Ok(start..i);
             }
         }
-        Err(LexError { message: "Unexpected EOF" })
+        Err(Error {
+            error_type: ErrorType::Lex,
+            message: "Unexpected EOF".to_string(),
+            location: Location::new(self.filename),
+        })
     }
 
     /// Returns true if whitespace was skipped, otherwise returns false.
@@ -179,7 +210,7 @@ impl<'a> Iterator for Tokens<'a> {
                 }
             }
 
-            let res: Result<Token, LexError> = match c {
+            let res: Result<Token, Error> = match c {
                 ';' => Ok(Token::Semi),
                 '\\' => Ok(Token::Backslash),
                 ',' => Ok(Token::Comma),
@@ -229,7 +260,13 @@ impl<'a> Iterator for Tokens<'a> {
                             }
                         })
                 }
-                c => panic!("Char {:?} not yet handled!", c),
+                c => {
+                    Err(Error {
+                        error_type: ErrorType::Lex,
+                        message: format!("Char {:?} not yet handled!", c),
+                        location: Location::new(self.filename),
+                    })
+                }
             };
 
             match res {
