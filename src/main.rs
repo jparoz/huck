@@ -1,4 +1,6 @@
 mod parse;
+mod error;
+
 use parse::{Ast, parse};
 
 use std::fs::File;

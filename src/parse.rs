@@ -6,10 +6,12 @@
 // in memory when interpreted.
 
 use std::default::Default;
-use std::str::{FromStr, Chars};
+use std::str::Chars;
 use std::iter::{Enumerate, Peekable};
 use std::fmt;
 use std::ops::Range;
+
+use error::{Error, ErrorType, Location};
 
 #[derive(Debug)]
 pub enum Ast<'compile, 'run> {
@@ -40,80 +42,6 @@ pub fn parse<'compile, 'run>(filename: &str,
         println!("{:?}", tok);
     }
     Ok(Ast::Var("hi")) // @Todo
-}
-
-#[derive(Debug)]
-pub struct Error<'a> {
-    error_type: ErrorType,
-    message: String,
-    location: Location<'a>,
-}
-
-#[derive(Debug)]
-pub enum ErrorType {
-    Lex,
-    Parse,
-}
-
-#[derive(Debug)]
-pub struct Location<'a> {
-    filename: &'a str,
-    start: Position,
-    end: Position,
-}
-
-impl<'a> Location<'a> {
-    fn new(filename: &str) -> Location {
-        Location {
-            filename: filename,
-            start: Position::default(),
-            end: Position::default(),
-        }
-    }
-}
-
-impl<'a> fmt::Display for Location<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}:", self.filename)?;
-
-        if self.start.line == self.end.line {
-            write!(f, "{}:", self.start.line)?;
-        } else {
-            write!(f, "{}-{}:", self.start.line, self.end.line)?;
-        }
-
-        if self.start.column == self.end.column {
-            write!(f, "{}", self.start.column)?;
-        } else {
-            write!(f, "{}-{}", self.start.column, self.end.column)?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug)]
-pub struct Position {
-    line: usize,
-    column: usize,
-}
-
-impl Default for Position {
-    fn default() -> Position {
-        Position {
-            line: 1,
-            column: 0,
-        }
-    }
-}
-
-impl<'a> fmt::Display for Error<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f,
-               "{:?} error at {}: {}",
-               self.error_type,
-               self.location,
-               self.message)
-    }
 }
 
 #[derive(Debug)]
@@ -173,7 +101,9 @@ impl<'a> Tokens<'a> {
     fn lex_while<F>(&mut self, start: usize, mut pred: F) -> Result<Range<usize>, Error<'a>>
         where F: FnMut(char) -> bool
     {
+        let mut last = start;
         while let Some(&(i, c)) = self.iter.peek() {
+            last = i;
             if pred(c) {
                 self.iter.next();
             } else {
@@ -183,7 +113,7 @@ impl<'a> Tokens<'a> {
         Err(Error {
             error_type: ErrorType::Lex,
             message: "Unexpected EOF".to_string(),
-            location: Location::new(self.filename),
+            location: self.get_location(start, last),
         })
     }
 
@@ -214,6 +144,10 @@ impl<'a> Tokens<'a> {
         self.iter.next();
         range.end += 1;
         range
+    }
+
+    fn get_location(&mut self, start: usize, end: usize) -> Location<'a> {
+        Location::new(self.filename)
     }
 }
 
@@ -253,19 +187,19 @@ impl<'a> Iterator for Tokens<'a> {
                     })
                 }
                 '0'...'9' => {
-                    if let Some(&(_, c2)) = self.iter.peek() {
+                    if let Some(&(end, c2)) = self.iter.peek() {
                             match c2 {
                                 'x' | 'X' => {
                                     Err(Error {
                                         error_type: ErrorType::Lex,
-                                        location: Location::new(self.filename),
+                                        location: self.get_location(start, end),
                                         message: "hexadecimal".to_string(),
                                     })
                                 }
                                 'b' | 'B' => {
                                     Err(Error {
                                         error_type: ErrorType::Lex,
-                                        location: Location::new(self.filename),
+                                        location: self.get_location(start, end),
                                         message: "binary".to_string(),
                                     })
                                 }
@@ -309,7 +243,7 @@ impl<'a> Iterator for Tokens<'a> {
                     Err(Error {
                         error_type: ErrorType::Lex,
                         message: format!("Char {:?} not yet handled!", c),
-                        location: Location::new(self.filename),
+                        location: self.get_location(start, start),
                     })
                 }
             };
