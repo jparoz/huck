@@ -1,6 +1,6 @@
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Error<'a> {
     // @Cleanup: not pub
     pub error_type: ErrorType,
@@ -8,14 +8,14 @@ pub struct Error<'a> {
     pub location: Location<'a>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum ErrorType {
     Lex,
     Parse,
 }
 
 // @Cleanup: not pub (??)
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Location<'a> {
     pub filename: &'a str,
     pub start: Position,

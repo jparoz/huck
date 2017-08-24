@@ -147,11 +147,11 @@ impl<'a> Tokens<'a> {
     }
 
     fn location(&mut self, range: RangeInclusive<usize>) -> Location<'a> {
-        let mut iter = self.file.chars();
+        let mut chars = self.file.chars();
 
         let mut start = Position::default();
         for _ in 0..range.start {
-            if let Some(c) = iter.next() {
+            if let Some(c) = chars.next() {
                 if c == '\n' {
                     start.line += 1;
                     start.column = 1;
@@ -163,7 +163,7 @@ impl<'a> Tokens<'a> {
 
         let mut end = start;
         for _ in range.start..range.end {
-            if let Some(c) = iter.next() {
+            if let Some(c) = chars.next() {
                 if c == '\n' {
                     end.line += 1;
                     end.column = 1;
@@ -217,13 +217,47 @@ impl<'a> Iterator for Tokens<'a> {
                     })
                 }
                 '0'...'9' => {
-                    if let Some(&(end, c2)) = self.iter.peek() {
+                    if let Some(&(matched_index, c2)) = self.iter.peek() {
                             match c2 {
-                                'x' | 'X' => Err(error!(self, Lex, start...end, "hexadecimal")),
-                                'b' | 'B' => Err(error!(self, Lex, start...end, "binary")),
+                                'x' | 'X' => {
+                                    Err(error!(self, Lex, start...matched_index, "hexadecimal"))
+                                }
+                                'b' | 'B' => {
+                                    Err(error!(self, Lex, start...matched_index, "binary"))
+                                }
                                 _ => {
-                                    // @Todo: floats
-                                    self.lex_while(start, |c| c.is_digit(10))
+                                    // @Cleanup
+                                    let integral = self.lex_while(start, is_decimal_char);
+                                    if integral.is_ok() {
+                                        if let Some(&(dot, c3)) = self.iter.peek() {
+                                            if c3 == '.' {
+                                                self.iter.next();
+                                                let fractional =
+                                                    self.lex_while(dot, is_decimal_char);
+                                                if let Ok(range) = fractional.clone() {
+                                                    if range.start == range.end {
+                                                        Err(error!(self,
+                                                                   Lex,
+                                                                   range,
+                                                                   "Expected fractional part of \
+                                                                    numeric literal"))
+                                                    } else {
+                                                        let start = integral.unwrap().start;
+                                                        let end = fractional.unwrap().end;
+                                                        Ok(start...end)
+                                                    }
+                                                } else {
+                                                    fractional
+                                                }
+                                            } else {
+                                                integral
+                                            }
+                                        } else {
+                                            integral
+                                        }
+                                    } else {
+                                        integral
+                                    }
                                 }
                             }
                         } else {
@@ -298,4 +332,8 @@ fn is_operator_char(c: char) -> bool {
 
 fn is_separator_char(c: char) -> bool {
     is_operator_char(c) || c.is_whitespace() || ",;(){}[]".contains(c)
+}
+
+fn is_decimal_char(c: char) -> bool {
+    c.is_digit(10) || c == '_'
 }

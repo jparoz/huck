@@ -66,4 +66,4 @@ emptyString = "";
 
 four : Float = 4.0;
 
-twelve = 0xcd;
+twelve = 0xc;
