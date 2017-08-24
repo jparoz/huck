@@ -72,6 +72,25 @@ impl<'a> Location<'a> {
     }
 }
 
+impl<'a> fmt::Display for Location<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}:", self.filename)?;
+
+        if self.start.line == self.end.line {
+            write!(f, "{}:", self.start.line)?;
+        } else {
+            write!(f, "{}-{}:", self.start.line, self.end.line)?;
+        }
+
+        if self.start.column == self.end.column {
+            write!(f, "{}", self.start.column)?;
+        } else {
+            write!(f, "{}-{}", self.start.column, self.end.column)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 pub struct Position {
     line: usize,
@@ -89,7 +108,11 @@ impl Default for Position {
 
 impl<'a> fmt::Display for Error<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?} error: {}", self.error_type, self.message)
+        write!(f,
+               "{:?} error at {}: {}",
+               self.error_type,
+               self.location,
+               self.message)
     }
 }
 
@@ -230,8 +253,30 @@ impl<'a> Iterator for Tokens<'a> {
                     })
                 }
                 '0'...'9' => {
-                    // @Todo
-                    self.lex_while(start, |c| c.is_digit(10))
+                    if let Some(&(_, c2)) = self.iter.peek() {
+                            match c2 {
+                                'x' | 'X' => {
+                                    Err(Error {
+                                        error_type: ErrorType::Lex,
+                                        location: Location::new(self.filename),
+                                        message: "hexadecimal".to_string(),
+                                    })
+                                }
+                                'b' | 'B' => {
+                                    Err(Error {
+                                        error_type: ErrorType::Lex,
+                                        location: Location::new(self.filename),
+                                        message: "binary".to_string(),
+                                    })
+                                }
+                                _ => {
+                                    // @Todo: floats
+                                    self.lex_while(start, |c| c.is_digit(10))
+                                }
+                            }
+                        } else {
+                            self.lex_while(start, |c| c.is_digit(10))
+                        }
                         .map(|range| Token::Number(&self.file[range]))
                 }
                 c if is_word_start_char(c) => {
