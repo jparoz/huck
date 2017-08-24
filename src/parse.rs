@@ -217,13 +217,15 @@ impl<'a> Iterator for Tokens<'a> {
                     })
                 }
                 '0'...'9' => {
-                    if let Some(&(matched_index, c2)) = self.iter.peek() {
+                    if let Some(&(c2_index, c2)) = self.iter.peek() {
                             match c2 {
                                 'x' | 'X' => {
-                                    Err(error!(self, Lex, start...matched_index, "hexadecimal"))
+                                    self.iter.next();
+                                    self.lex_while(start, is_hexadecimal_char)
                                 }
                                 'b' | 'B' => {
-                                    Err(error!(self, Lex, start...matched_index, "binary"))
+                                    self.iter.next();
+                                    self.lex_while(start, is_binary_char)
                                 }
                                 _ => {
                                     // @Cleanup
@@ -336,4 +338,12 @@ fn is_separator_char(c: char) -> bool {
 
 fn is_decimal_char(c: char) -> bool {
     c.is_digit(10) || c == '_'
+}
+
+fn is_hexadecimal_char(c: char) -> bool {
+    c.is_digit(16) || c == '_'
+}
+
+fn is_binary_char(c: char) -> bool {
+    c.is_digit(2) || c == '_'
 }
