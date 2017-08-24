@@ -117,16 +117,45 @@ impl<'a> Tokens<'a> {
         Err(error!(self, Lex, start...last, "Unexpected EOF"))
     }
 
+    fn lex_while_until<F, G>(&mut self,
+                             start: usize,
+                             pred_while: F,
+                             mut pred_until: G)
+                             -> Result<RangeInclusive<usize>, Error<'a>>
+        where F: FnMut(char) -> bool,
+              G: FnMut(char) -> bool
+    {
+        let lexed = self.lex_while(start, pred_while);
+        let success: bool;
+        if let Some(&(_, c)) = self.iter.peek() {
+            success = pred_until(c);
+        } else {
+            success = true;
+        }
+
+        if success {
+            lexed
+        } else {
+            let end = lexed.unwrap_or(start...start).end;
+            if let Some(&(_, c)) = self.iter.peek() {
+                Err(error!(self, Lex, start...end, "Unexpected char {:?}", c))
+            } else {
+                Err(error!(self, Lex, start...end, "Unexpected char"))
+            }
+        }
+    }
+
     /// Returns true if whitespace was skipped, otherwise returns false.
     // @Todo: handle comments here
     fn skip_whitespace(&mut self) -> bool {
-        if let Some(&(start, _)) = self.iter.peek() {
-            self.lex_while(start, |c| c.is_whitespace())
-                .map(|range| range.start <= range.end)
-                .unwrap_or(false) // @Check: maybe true?
+        let skipped: bool;
+        if let Some(&(start, c)) = self.iter.peek() {
+            skipped = c.is_whitespace();
+            let _ = self.lex_while(start, |c| c.is_whitespace());
         } else {
-            false
+            skipped = false; // @Check: maybe true?
         }
+        skipped
     }
 
     fn peek_with<F, T>(&mut self, mut f: F) -> T
@@ -197,7 +226,7 @@ impl<'a> Iterator for Tokens<'a> {
                 }
             }
 
-            let res: Result<Token, Error> = match c {
+            let res = match c {
                 ';' => Ok(Token::Semi),
                 '\\' => Ok(Token::Backslash),
                 ',' => Ok(Token::Comma),
@@ -217,15 +246,15 @@ impl<'a> Iterator for Tokens<'a> {
                     })
                 }
                 '0'...'9' => {
-                    if let Some(&(c2_index, c2)) = self.iter.peek() {
+                    if let Some(&(_, c2)) = self.iter.peek() {
                             match c2 {
                                 'x' | 'X' => {
                                     self.iter.next();
-                                    self.lex_while(start, is_hexadecimal_char)
+                                    self.lex_while_until(start, is_hex_char, is_separator_char)
                                 }
                                 'b' | 'B' => {
                                     self.iter.next();
-                                    self.lex_while(start, is_binary_char)
+                                    self.lex_while_until(start, is_binary_char, is_separator_char)
                                 }
                                 _ => {
                                     // @Cleanup
@@ -302,13 +331,16 @@ impl<'a> Iterator for Tokens<'a> {
                     let next_is_sep =
                         skipped || self.peek_with(|opt| opt.map(is_separator_char)).unwrap_or(true);
                     if tok.requires_separator() && !next_is_sep {
-                        panic!("Lex error: Expected separating character");
+                        panic!("{}",
+                               error!(self, Lex, start...start, "Expected separating character"));
                     }
+
                     return Some(tok);
                 }
                 Err(err) => panic!("{}", err),
             }
         }
+
         // We ran out of chars, and therefore out of tokens.
         None
     }
@@ -340,7 +372,7 @@ fn is_decimal_char(c: char) -> bool {
     c.is_digit(10) || c == '_'
 }
 
-fn is_hexadecimal_char(c: char) -> bool {
+fn is_hex_char(c: char) -> bool {
     c.is_digit(16) || c == '_'
 }
 
