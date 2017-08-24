@@ -5,13 +5,12 @@
 // <'run> is for values that may be needed at runtime, i.e. will be included in the final binary, or
 // in memory when interpreted.
 
-use std::default::Default;
 use std::str::Chars;
 use std::iter::{Enumerate, Peekable};
-use std::fmt;
 use std::ops::Range;
 
-use error::{Error, ErrorType, Location};
+use error::{Error, Location};
+use error::ErrorType::*;
 
 #[derive(Debug)]
 pub enum Ast<'compile, 'run> {
@@ -111,7 +110,7 @@ impl<'a> Tokens<'a> {
             }
         }
         Err(Error {
-            error_type: ErrorType::Lex,
+            error_type: Lex,
             message: "Unexpected EOF".to_string(),
             location: self.get_location(start, last),
         })
@@ -147,6 +146,7 @@ impl<'a> Tokens<'a> {
     }
 
     fn get_location(&mut self, start: usize, end: usize) -> Location<'a> {
+        // @Todo
         Location::new(self.filename)
     }
 }
@@ -189,20 +189,8 @@ impl<'a> Iterator for Tokens<'a> {
                 '0'...'9' => {
                     if let Some(&(end, c2)) = self.iter.peek() {
                             match c2 {
-                                'x' | 'X' => {
-                                    Err(Error {
-                                        error_type: ErrorType::Lex,
-                                        location: self.get_location(start, end),
-                                        message: "hexadecimal".to_string(),
-                                    })
-                                }
-                                'b' | 'B' => {
-                                    Err(Error {
-                                        error_type: ErrorType::Lex,
-                                        location: self.get_location(start, end),
-                                        message: "binary".to_string(),
-                                    })
-                                }
+                                'x' | 'X' => Err(error!(self, Lex, start, end, "hexadecimal")),
+                                'b' | 'B' => Err(error!(self, Lex, start, end, "binary")),
                                 _ => {
                                     // @Todo: floats
                                     self.lex_while(start, |c| c.is_digit(10))
@@ -240,11 +228,12 @@ impl<'a> Iterator for Tokens<'a> {
                         })
                 }
                 c => {
-                    Err(Error {
-                        error_type: ErrorType::Lex,
-                        message: format!("Char {:?} not yet handled!", c),
-                        location: self.get_location(start, start),
-                    })
+                    Err(error!(self, Lex, start, start, "Char {:?} not yet handled!", c))
+                    // Err(Error {
+                    //     error_type: Lex,
+                    //     message: format!("Char {:?} not yet handled!", c),
+                    //     location: self.get_location(start, start),
+                    // })
                 }
             };
 

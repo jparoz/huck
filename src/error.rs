@@ -14,6 +14,7 @@ pub enum ErrorType {
     Parse,
 }
 
+// @Cleanup: not pub
 #[derive(Debug)]
 pub struct Location<'a> {
     filename: &'a str,
@@ -51,6 +52,7 @@ impl<'a> fmt::Display for Location<'a> {
     }
 }
 
+// @Cleanup: not pub
 #[derive(Debug)]
 pub struct Position {
     line: usize,
@@ -74,4 +76,13 @@ impl<'a> fmt::Display for Error<'a> {
                self.location,
                self.message)
     }
+}
+
+macro_rules! error {
+    ($toks:expr, $et:expr, $start:expr, $end:expr, $str:expr) => {
+        Error {error_type: $et, location: $toks.get_location($start, $end), message: $str.to_string()}
+    };
+    ($toks:expr, $et:expr, $start:expr, $end:expr, $str:expr, $($arg:tt)*) => {
+        Error {error_type: $et, location: $toks.get_location($start, $end), message: format!($str, $($arg)*)}
+    };
 }

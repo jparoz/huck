@@ -1,5 +1,6 @@
-mod parse;
+#[macro_use]
 mod error;
+mod parse;
 
 use parse::{Ast, parse};
 
