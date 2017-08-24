@@ -34,8 +34,8 @@ pub enum Lit<'a> {
     Char(char),
 }
 
-pub fn parse<'compile, 'run>(filename: &str,
-                             file: &str)
+pub fn parse<'compile, 'run>(filename: &'compile str,
+                             file: &'compile str)
                              -> Result<Ast<'compile, 'run>, Error<'compile>> {
     let mut iter = Tokens::new(filename, file);
     while let Some(tok) = iter.next() {
@@ -142,6 +142,29 @@ impl<'a> Tokens<'a> {
             } else {
                 Err(error!(self, Lex, start...end, "Unexpected char"))
             }
+        }
+    }
+
+    fn lex_decimal(&mut self, start: usize) -> Result<RangeInclusive<usize>, Error<'a>> {
+        let integer = self.lex_while(start, is_decimal_char)?;
+        if let Some(&(dot_index, dot)) = self.iter.peek() {
+            if dot != '.' {
+                return Ok(integer);
+            }
+
+            self.iter.next();
+
+            let floating = self.lex_while(start, is_decimal_char)?;
+            if dot_index >= floating.end {
+                return Err(error!(self,
+                                  Lex,
+                                  floating,
+                                  "Missing fractional part of numeric literal"));
+            } else {
+                return Ok(floating);
+            }
+        } else {
+            Err(error!(self, Lex, start...start, "Unexpected EOF"))
         }
     }
 
@@ -256,40 +279,7 @@ impl<'a> Iterator for Tokens<'a> {
                                     self.iter.next();
                                     self.lex_while_until(start, is_binary_char, is_separator_char)
                                 }
-                                _ => {
-                                    // @Cleanup
-                                    let integral = self.lex_while(start, is_decimal_char);
-                                    if integral.is_ok() {
-                                        if let Some(&(dot, c3)) = self.iter.peek() {
-                                            if c3 == '.' {
-                                                self.iter.next();
-                                                let fractional =
-                                                    self.lex_while(dot, is_decimal_char);
-                                                if let Ok(range) = fractional.clone() {
-                                                    if range.start == range.end {
-                                                        Err(error!(self,
-                                                                   Lex,
-                                                                   range,
-                                                                   "Expected fractional part of \
-                                                                    numeric literal"))
-                                                    } else {
-                                                        let start = integral.unwrap().start;
-                                                        let end = fractional.unwrap().end;
-                                                        Ok(start...end)
-                                                    }
-                                                } else {
-                                                    fractional
-                                                }
-                                            } else {
-                                                integral
-                                            }
-                                        } else {
-                                            integral
-                                        }
-                                    } else {
-                                        integral
-                                    }
-                                }
+                                _ => self.lex_decimal(start),
                             }
                         } else {
                             self.lex_while(start, |c| c.is_digit(10))
