@@ -1,16 +1,18 @@
-// Lifetimes
-// <'compile> is for values that will be erased in the final binary, or after typechecking and so
-// forth. Probably will only be used in type-level stuff.
-//
-// <'run> is for values that may be needed at runtime, i.e. will be included in the final binary, or
-// in memory when interpreted.
+use std::str::CharIndices;
+use std::iter::Peekable;
+use std::ops::RangeInclusive;
 
-use std::str::Chars;
-use std::iter::{Enumerate, Peekable};
-use std::ops::Range;
-
-use error::{Error, Location};
+use error::{Error, Location, Position};
 use error::ErrorType::*;
+
+macro_rules! error {
+    ($toks:expr, $et:expr, $range:expr, $str:expr) => {
+        Error {error_type: $et, location: $toks.location($range), message: $str.to_string()}
+    };
+    ($toks:expr, $et:expr, $range:expr, $str:expr, $($arg:tt)*) => {
+        Error {error_type: $et, location: $toks.location($range), message: format!($str, $($arg)*)}
+    };
+}
 
 #[derive(Debug)]
 pub enum Ast<'compile, 'run> {
@@ -27,7 +29,7 @@ pub enum Ast<'compile, 'run> {
 #[derive(Debug)]
 pub enum Lit<'a> {
     Int(bool, u64), // Int(is_negative, value)
-    Float(f64), // Is f64 the right move?
+    Float(f64),
     String(&'a str),
     Char(char),
 }
@@ -81,12 +83,12 @@ impl<'a> Token<'a> {
 struct Tokens<'a> {
     filename: &'a str,
     file: &'a str,
-    iter: Peekable<Enumerate<Chars<'a>>>,
+    iter: Peekable<CharIndices<'a>>,
 }
 
 impl<'a> Tokens<'a> {
     fn new(filename: &'a str, file: &'a str) -> Tokens<'a> {
-        let iter = file.chars().enumerate().peekable();
+        let iter = file.char_indices().peekable();
         let mut tokens = Tokens {
             filename: filename,
             file: file,
@@ -97,23 +99,22 @@ impl<'a> Tokens<'a> {
         tokens
     }
 
-    fn lex_while<F>(&mut self, start: usize, mut pred: F) -> Result<Range<usize>, Error<'a>>
+    fn lex_while<F>(&mut self,
+                    start: usize,
+                    mut pred: F)
+                    -> Result<RangeInclusive<usize>, Error<'a>>
         where F: FnMut(char) -> bool
     {
         let mut last = start;
         while let Some(&(i, c)) = self.iter.peek() {
-            last = i;
             if pred(c) {
                 self.iter.next();
             } else {
-                return Ok(start..i);
+                return Ok(start...last);
             }
+            last = i;
         }
-        Err(Error {
-            error_type: Lex,
-            message: "Unexpected EOF".to_string(),
-            location: self.get_location(start, last),
-        })
+        Err(error!(self, Lex, start...last, "Unexpected EOF"))
     }
 
     /// Returns true if whitespace was skipped, otherwise returns false.
@@ -121,7 +122,7 @@ impl<'a> Tokens<'a> {
     fn skip_whitespace(&mut self) -> bool {
         if let Some(&(start, _)) = self.iter.peek() {
             self.lex_while(start, |c| c.is_whitespace())
-                .map(|range| range.start < range.end)
+                .map(|range| range.start <= range.end)
                 .unwrap_or(false) // @Check: maybe true?
         } else {
             false
@@ -139,15 +140,44 @@ impl<'a> Tokens<'a> {
         f(arg)
     }
 
-    fn extend_range(&mut self, mut range: Range<usize>) -> Range<usize> {
+    fn extend_range(&mut self, mut range: RangeInclusive<usize>) -> RangeInclusive<usize> {
         self.iter.next();
         range.end += 1;
         range
     }
 
-    fn get_location(&mut self, start: usize, end: usize) -> Location<'a> {
-        // @Todo
-        Location::new(self.filename)
+    fn location(&mut self, range: RangeInclusive<usize>) -> Location<'a> {
+        let mut iter = self.file.chars();
+
+        let mut start = Position::default();
+        for _ in 0..range.start {
+            if let Some(c) = iter.next() {
+                if c == '\n' {
+                    start.line += 1;
+                    start.column = 1;
+                } else {
+                    start.column += 1;
+                }
+            }
+        }
+
+        let mut end = start;
+        for _ in range.start..range.end {
+            if let Some(c) = iter.next() {
+                if c == '\n' {
+                    end.line += 1;
+                    end.column = 1;
+                } else {
+                    end.column += 1;
+                }
+            }
+        }
+
+        Location {
+            filename: self.filename,
+            start: start,
+            end: end,
+        }
     }
 }
 
@@ -189,8 +219,8 @@ impl<'a> Iterator for Tokens<'a> {
                 '0'...'9' => {
                     if let Some(&(end, c2)) = self.iter.peek() {
                             match c2 {
-                                'x' | 'X' => Err(error!(self, Lex, start, end, "hexadecimal")),
-                                'b' | 'B' => Err(error!(self, Lex, start, end, "binary")),
+                                'x' | 'X' => Err(error!(self, Lex, start...end, "hexadecimal")),
+                                'b' | 'B' => Err(error!(self, Lex, start...end, "binary")),
                                 _ => {
                                     // @Todo: floats
                                     self.lex_while(start, |c| c.is_digit(10))
@@ -227,14 +257,7 @@ impl<'a> Iterator for Tokens<'a> {
                             }
                         })
                 }
-                c => {
-                    Err(error!(self, Lex, start, start, "Char {:?} not yet handled!", c))
-                    // Err(Error {
-                    //     error_type: Lex,
-                    //     message: format!("Char {:?} not yet handled!", c),
-                    //     location: self.get_location(start, start),
-                    // })
-                }
+                c => Err(error!(self, Lex, start...start, "Char {:?} not yet handled!", c)),
             };
 
             match res {

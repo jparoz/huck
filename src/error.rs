@@ -14,23 +14,12 @@ pub enum ErrorType {
     Parse,
 }
 
-// @Cleanup: not pub
+// @Cleanup: not pub (??)
 #[derive(Debug)]
 pub struct Location<'a> {
-    filename: &'a str,
-    start: Position,
-    end: Position,
-}
-
-impl<'a> Location<'a> {
-    // @Cleanup: not pub
-    pub fn new(filename: &str) -> Location {
-        Location {
-            filename: filename,
-            start: Position::default(),
-            end: Position::default(),
-        }
-    }
+    pub filename: &'a str,
+    pub start: Position,
+    pub end: Position,
 }
 
 impl<'a> fmt::Display for Location<'a> {
@@ -52,18 +41,17 @@ impl<'a> fmt::Display for Location<'a> {
     }
 }
 
-// @Cleanup: not pub
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Position {
-    line: usize,
-    column: usize,
+    pub line: usize,
+    pub column: usize,
 }
 
 impl Default for Position {
     fn default() -> Position {
         Position {
             line: 1,
-            column: 0,
+            column: 1,
         }
     }
 }
@@ -76,13 +64,4 @@ impl<'a> fmt::Display for Error<'a> {
                self.location,
                self.message)
     }
-}
-
-macro_rules! error {
-    ($toks:expr, $et:expr, $start:expr, $end:expr, $str:expr) => {
-        Error {error_type: $et, location: $toks.get_location($start, $end), message: $str.to_string()}
-    };
-    ($toks:expr, $et:expr, $start:expr, $end:expr, $str:expr, $($arg:tt)*) => {
-        Error {error_type: $et, location: $toks.get_location($start, $end), message: format!($str, $($arg)*)}
-    };
 }

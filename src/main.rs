@@ -1,4 +1,5 @@
-#[macro_use]
+#![feature(inclusive_range,inclusive_range_syntax)]
+
 mod error;
 mod parse;
 
