@@ -125,8 +125,8 @@ impl<'a> Tokens<'a> {
     }
 
     fn snip(&mut self) -> &'a str {
-        let s = &self.file[self.start...self.end];
         self.end += 1;
+        let s = &self.file[self.start..self.end];
         self.start = self.end;
         s
     }
