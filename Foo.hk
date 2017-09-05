@@ -70,4 +70,4 @@ twelve = 0xC;
 
 thirtyTwo = 0b_0010_0000;
 
-char = 'h';
+char = '\n';

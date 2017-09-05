@@ -270,15 +270,36 @@ impl<'a> Iterator for Tokens<'a> {
                 ')' => Some(Token::ParenClose),
                 '"' => {
                     // At this stage, we include opening and closing quotes, and we don't do
-                    // escaping of any kind; a Some(Token::String includes the whole string literal,
+                    // escaping of any kind; a Token::String includes the whole string literal,
                     // as it is in the source.
-                    self.lex_while(|c| c != '"' /* @Fixme */);
+                    self.lex_while(|c| c != '"'); // @Fixme
                     assert_eq!(self.eat(), Some('"'));
                     Some(Token::String(self.snip()))
                 }
                 '\'' => {
-                    // @Todo
-                    Some(Token::Char("")) // @XXX
+                    match self.eat() {
+                        Some('\\') => {
+                            match self.eat() {
+                                Some(c) => {
+                                    match c {
+                                        '\\' | '\'' | 'n' | 'r' | 't' => (),
+                                        c => {
+                                            self.error(format!("Unexpected character {:?} in \
+                                                                character literal",
+                                                               c))
+                                        }
+                                    }
+                                }
+                                None => {
+                                    self.error("Unexpected EOF in character literal".to_string())
+                                }
+                            }
+                        }
+                        Some(_) => (),
+                        None => self.error("Unexpected EOF in character literal".to_string()),
+                    }
+                    assert_eq!(self.eat(), Some('\''));
+                    Some(Token::Char(self.snip()))
                 }
                 '0'...'9' => {
                     if let Some(c2) = self.peek() {
