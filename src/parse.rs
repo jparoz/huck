@@ -65,6 +65,7 @@ enum Token<'a> {
     ParenOpen,
     ParenClose,
     String(&'a str),
+    Char(&'a str),
     Number(&'a str),
     Ident(&'a str),
     Operator(&'a str),
@@ -97,6 +98,16 @@ impl<'a> Tokens<'a> {
 
         tokens.skip_whitespace();
         tokens
+    }
+
+    fn eat_char(&mut self, c: char) -> bool {
+        if let Some(&(_, actual_c)) = self.iter.peek() {
+            if c == actual_c {
+                self.iter.next();
+                return true;
+            }
+        }
+        false
     }
 
     fn lex_while<F>(&mut self,
@@ -267,6 +278,10 @@ impl<'a> Iterator for Tokens<'a> {
                         let range = self.extend_range(range);
                         Token::String(&self.file[range])
                     })
+                }
+                '\'' => {
+                    // @Todo
+                    Ok(Token::Char("")) // @XXX
                 }
                 '0'...'9' => {
                     if let Some(&(_, c2)) = self.iter.peek() {
