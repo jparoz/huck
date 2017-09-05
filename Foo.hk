@@ -63,6 +63,7 @@ if False _ y = y;
 hello : String = "Hello, world!";
 s = "foo";
 emptyString = "";
+escapedString = "\"Hello, world!\"";
 
 four : Float = 4.0;
 

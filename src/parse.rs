@@ -269,11 +269,21 @@ impl<'a> Iterator for Tokens<'a> {
                 '(' => Some(Token::ParenOpen),
                 ')' => Some(Token::ParenClose),
                 '"' => {
-                    // At this stage, we include opening and closing quotes, and we don't do
-                    // escaping of any kind; a Token::String includes the whole string literal,
-                    // as it is in the source.
-                    self.lex_while(|c| c != '"'); // @Fixme
-                    assert_eq!(self.eat(), Some('"'));
+                    while let Some(c) = self.eat() {
+                        match c {
+                            '"' => break,
+                            '\\' => {
+                                if let Some(c2) = self.eat() {
+                                    if !is_escaped_char('"', c2) {
+                                        self.error(format!("Illegal escaped character {:?}", c2));
+                                    }
+                                } else {
+                                    self.error("Unexpected EOF in string literal".to_string());
+                                }
+                            }
+                            _ => (),
+                        }
+                    }
                     Some(Token::String(self.snip()))
                 }
                 '\'' => {
@@ -282,7 +292,7 @@ impl<'a> Iterator for Tokens<'a> {
                             match self.eat() {
                                 Some(c) => {
                                     match c {
-                                        '\\' | '\'' | 'n' | 'r' | 't' => (),
+                                        c if is_escaped_char('\'', c) => (),
                                         c => {
                                             self.error(format!("Unexpected character {:?} in \
                                                                 character literal",
@@ -399,4 +409,8 @@ fn is_hex_char(c: char) -> bool {
 
 fn is_binary_char(c: char) -> bool {
     c.is_digit(2) || c == '_'
+}
+
+fn is_escaped_char(quote: char, c: char) -> bool {
+    "\\nrt".contains(c) || c == quote
 }
