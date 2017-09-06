@@ -118,15 +118,6 @@ impl<'a> Tokens<'a> {
         }
     }
 
-    fn eat_if_char(&mut self, c: char) -> Option<char> {
-        if let Some(actual_c) = self.peek() {
-            if c == actual_c {
-                return self.eat();
-            }
-        }
-        None
-    }
-
     fn snip(&mut self) -> &'a str {
         let s = &self.file[self.start..self.end + 1];
         self.start = self.end + 1;
