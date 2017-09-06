@@ -113,8 +113,7 @@ impl<'a> Tokens<'a> {
     {
         let lexed_len = self.lex_while(pred_while);
 
-        // Maybe false? or ask for default but that sucks
-        let success = self.peek().map(pred_until).unwrap_or(true);
+        let success = self.peek().map(pred_until).unwrap_or(false);
 
         if success {
             Some(lexed_len)
@@ -162,13 +161,8 @@ impl<'a> Tokens<'a> {
     /// Returns true if whitespace was skipped, otherwise returns false.
     // @Todo: handle comments here
     fn skip_whitespace(&mut self) -> bool {
-        let skipped: bool;
-        if let Some(c) = self.peek() {
-            skipped = c.is_whitespace();
-            let _ = self.lex_while(|c| c.is_whitespace());
-        } else {
-            skipped = false; // @Check: maybe true?
-        }
+        let skipped = self.peek().map(|c| c.is_whitespace()).unwrap_or(false);
+        self.lex_while(|c| c.is_whitespace());
         self.snip();
         skipped
     }
