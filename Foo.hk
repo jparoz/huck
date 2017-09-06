@@ -72,3 +72,6 @@ twelve = 0xC;
 thirtyTwo = 0b_0010_0000;
 
 char = '\n';
+
+useHash : (#foo r : Int) => r -> Int;
+useHash rec = #foo rec + 2;

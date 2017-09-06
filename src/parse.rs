@@ -59,6 +59,7 @@ enum Token<'a> {
     Number(&'a str),
     Ident(&'a str),
     Operator(&'a str),
+    Hash(&'a str),
 }
 
 impl<'a> Token<'a> {
@@ -125,9 +126,8 @@ impl<'a> Tokens<'a> {
     }
 
     fn snip(&mut self) -> &'a str {
-        self.end += 1;
-        let s = &self.file[self.start..self.end];
-        self.start = self.end;
+        let s = &self.file[self.start..self.end + 1];
+        self.start = self.end + 1;
         s
     }
 
@@ -268,11 +268,15 @@ impl<'a> Iterator for Tokens<'a> {
                 ']' => Some(Token::BracketClose),
                 '(' => Some(Token::ParenOpen),
                 ')' => Some(Token::ParenClose),
+                '#' => {
+                    // @Todo
+                    Some(Token::Hash("")) // @XXX
+                }
                 '"' => {
-                    while let Some(c) = self.eat() {
-                        match c {
-                            '"' => break,
-                            '\\' => {
+                    loop {
+                        match self.eat() {
+                            Some('"') => break,
+                            Some('\\') => {
                                 if let Some(c2) = self.eat() {
                                     if !is_escaped_char('"', c2) {
                                         self.error(format!("Illegal escaped character {:?}", c2));
@@ -281,7 +285,11 @@ impl<'a> Iterator for Tokens<'a> {
                                     self.error("Unexpected EOF in string literal".to_string());
                                 }
                             }
-                            _ => (),
+                            Some(_) => (),
+                            None => {
+                                self.error("Unexpected EOF in string literal".to_string());
+                                break;
+                            }
                         }
                     }
                     Some(Token::String(self.snip()))
@@ -349,9 +357,13 @@ impl<'a> Iterator for Tokens<'a> {
                         op => Some(Token::Operator(op)),
                     }
                 }
+                c if c.is_control() => {
+                    self.error(format!("Found illegal control character {:?}", c));
+                    self.snip();
+                    None
+                }
                 c => {
                     self.error(format!("Char {:?} not yet handled!", c));
-                    self.eat();
                     self.snip();
                     None
                 }
