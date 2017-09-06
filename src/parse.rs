@@ -138,17 +138,14 @@ impl<'a> Tokens<'a> {
         self.end - start
     }
 
-    fn lex_while_until<F, G>(&mut self, pred_while: F, mut pred_until: G) -> Option<usize>
+    fn lex_while_until<F, G>(&mut self, pred_while: F, pred_until: G) -> Option<usize>
         where F: FnMut(char) -> bool,
               G: FnMut(char) -> bool
     {
         let lexed_len = self.lex_while(pred_while);
-        let success: bool;
-        if let Some(c) = self.peek() {
-            success = pred_until(c);
-        } else {
-            success = true; // Maybe false? or ask for default but that sucks
-        }
+
+        // Maybe false? or ask for default but that sucks
+        let success = self.peek().map(pred_until).unwrap_or(true);
 
         if success {
             Some(lexed_len)
@@ -156,7 +153,7 @@ impl<'a> Tokens<'a> {
             if let Some(c) = self.peek() {
                 self.error(format!("Unexpected char {:?}", c));
             } else {
-                self.error("Unexpected char".to_string());
+                self.error("Unexpected EOF".to_string());
             }
             None
         }
@@ -172,11 +169,13 @@ impl<'a> Tokens<'a> {
         self.end - start
     }
 
-    fn lex_decimal(&mut self) {
+    fn lex_decimal(&mut self) -> usize {
+        let start = self.end;
+
         self.lex_while(is_decimal_char);
         if let Some(dot) = self.peek() {
             if dot != '.' {
-                return;
+                return self.end - start;
             }
 
             self.eat();
@@ -184,9 +183,11 @@ impl<'a> Tokens<'a> {
             let lexed = self.lex_while(is_decimal_char);
             if lexed == 0 {
                 self.error("Missing fractional part of numeric literal".to_string());
-                return;
+                return self.end - start;
             }
         }
+
+        self.end - start
     }
 
     /// Returns true if whitespace was skipped, otherwise returns false.
@@ -381,10 +382,10 @@ impl<'a> Iterator for Tokens<'a> {
                                 self.eat();
                                 self.lex_while_until(is_binary_char, is_separator_char);
                             }
-                            _ => self.lex_decimal(),
+                            _ => {
+                                self.lex_decimal();
+                            }
                         }
-                    } else {
-                        self.lex_while(|c| c.is_digit(10));
                     }
                     Some(Token::Number(self.snip()))
                 }
@@ -414,7 +415,7 @@ impl<'a> Iterator for Tokens<'a> {
                     None
                 }
                 c => {
-                    self.error(format!("Char {:?} not yet handled!", c));
+                    self.error(format!("Unknown char {:?}", c));
                     self.snip();
                     None
                 }
