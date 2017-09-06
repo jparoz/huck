@@ -1,7 +1,10 @@
 mod error;
+mod lex;
 mod parse;
+mod ast;
 
-use parse::{Ast, parse};
+use parse::parse;
+use ast::Ast;
 
 use std::fs::File;
 use std::io::Read;
