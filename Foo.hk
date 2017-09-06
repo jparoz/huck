@@ -73,5 +73,15 @@ thirtyTwo = 0b_0010_0000;
 
 char = '\n';
 
-useHash : (#foo r : Int) => r -> Int;
-useHash rec = #foo rec + 2;
+usesFoo : (#foo r : Int) => r -> Int;
+usesFoo rec = #foo rec + 2;
+
+type FooBar = {foo : Int, bar : Bool};
+
+concreteWithHash : FooBar -> Int;
+concreteWithHash fb = if (#bar fb) (usesFoo fb) 0xcafe;
+
+data Wrapped a b = Wrap {foo : a, bar : b};
+
+usesWrapped : Wrapped Int Bool -> Int;
+usesWrapped (Wrap w) = if (#bar w) (usesFoo w) 0xbabe;

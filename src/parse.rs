@@ -269,8 +269,8 @@ impl<'a> Iterator for Tokens<'a> {
                 '(' => Some(Token::ParenOpen),
                 ')' => Some(Token::ParenClose),
                 '#' => {
-                    // @Todo
-                    Some(Token::Hash("")) // @XXX
+                    self.lex_while(is_word_char);
+                    Some(Token::Hash(self.snip()))
                 }
                 '"' => {
                     loop {
