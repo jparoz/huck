@@ -59,6 +59,7 @@ enum Token<'a> {
     Number(&'a str),
     Ident(&'a str),
     Operator(&'a str),
+    Backtick(&'a str),
     Hash(&'a str),
 }
 
@@ -66,7 +67,8 @@ impl<'a> Token<'a> {
     fn requires_separator(&self) -> bool {
         use self::Token::*;
         match *self {
-            Ident(_) | Number(_) | String(_) | Module | Class | Type | Data | Precedence => true,
+            Ident(_) | Number(_) | String(_) | Char(_) | Hash(_) | Backtick(_) | Module |
+            Class | Type | Data | Precedence => true,
             _ => false,
         }
     }
@@ -169,6 +171,16 @@ impl<'a> Tokens<'a> {
         }
     }
 
+    fn lex_ident(&mut self) -> usize {
+        let start = self.end;
+        let success = self.peek().map(is_word_start_char).unwrap_or(false);
+        if success {
+            self.eat();
+            self.lex_while(is_word_char);
+        }
+        self.end - start
+    }
+
     fn lex_decimal(&mut self) {
         self.lex_while(is_decimal_char);
         if let Some(dot) = self.peek() {
@@ -268,9 +280,18 @@ impl<'a> Iterator for Tokens<'a> {
                 ']' => Some(Token::BracketClose),
                 '(' => Some(Token::ParenOpen),
                 ')' => Some(Token::ParenClose),
+                '@' => {
+                    self.error("Illegal character '@' is currently reserved".to_string());
+                    None
+                }
                 '#' => {
-                    self.lex_while(is_word_char);
-                    Some(Token::Hash(self.snip()))
+                    let lexed = self.lex_ident();
+                    if lexed == 0 {
+                        self.error("Missing identifier after hash".to_string());
+                        None
+                    } else {
+                        Some(Token::Hash(self.snip()))
+                    }
                 }
                 '"' => {
                     loop {
@@ -316,8 +337,47 @@ impl<'a> Iterator for Tokens<'a> {
                         Some(_) => (),
                         None => self.error("Unexpected EOF in character literal".to_string()),
                     }
-                    assert_eq!(self.eat(), Some('\''));
-                    Some(Token::Char(self.snip()))
+                    if let Some(c) = self.eat() {
+                        if c == '\'' {
+                            Some(Token::Char(self.snip()))
+                        } else {
+                            self.error(format!("Expected '\\'' to end character literal, but \
+                                                found {:?}",
+                                               c));
+                            None
+                        }
+                    } else {
+                        self.error("Unexpected EOF in character literal".to_string());
+                        None
+                    }
+                }
+                '`' => {
+                    let lexed = self.lex_ident();
+                    if lexed == 0 {
+                        if let Some(c) = self.peek() {
+                            self.error(format!("Expected identifier after backtick, but found \
+                                                {:?}",
+                                               c));
+                        } else {
+                            self.error("Expected identifier after backtick, but found EOF"
+                                .to_string());
+                        }
+                        None
+                    } else {
+                        if let Some(c) = self.eat() {
+                            if c == '`' {
+                                Some(Token::Backtick(self.snip()))
+                            } else {
+                                self.error(format!("Expected '`' to end infix function \
+                                                        call, but found {:?}",
+                                                   c));
+                                None
+                            }
+                        } else {
+                            self.error("Unexpected EOF in infix function call".to_string());
+                            None
+                        }
+                    }
                 }
                 '0'...'9' => {
                     if let Some(c2) = self.peek() {

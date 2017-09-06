@@ -85,3 +85,5 @@ data Wrapped a b = Wrap {foo : a, bar : b};
 
 usesWrapped : Wrapped Int Bool -> Int;
 usesWrapped (Wrap w) = if (#bar w) (usesFoo w) 0xbabe;
+
+usesBackticks b a = a `div` b;
