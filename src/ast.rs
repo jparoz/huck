@@ -4,7 +4,6 @@ use error::Error;
 pub struct Module<'a> {
     pub name: &'a str,
     pub statements: Vec<Statement<'a>>,
-    pub errors: Vec<Error<'a>>,
 }
 
 impl<'a> Module<'a> {
@@ -12,12 +11,7 @@ impl<'a> Module<'a> {
         Module {
             name: "Main",
             statements: Vec::new(),
-            errors: Vec::new(),
         }
-    }
-
-    pub fn error(&mut self, msg: String) {
-        // @Todo
     }
 }
 

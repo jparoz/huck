@@ -43,7 +43,67 @@ impl<'a> Token<'a> {
     }
 }
 
-pub struct Tokens<'a> {
+pub struct Tokens<'a>(Peekable<Lexer<'a>>);
+
+impl<'a> Tokens<'a> {
+    pub fn new(filename: &'a str, file: &'a str) -> Tokens<'a> {
+        Tokens(Lexer::new(filename, file).peekable())
+    }
+
+    pub fn peek(&mut self) -> Option<&Token<'a>> {
+        self.0.peek()
+    }
+
+    pub fn eat(&mut self) -> Option<Token<'a>> {
+        self.0.next()
+    }
+
+    pub fn eat_if(&mut self, tok: Token<'a>) -> bool {
+        if let Some(actual_tok) = self.peek() {
+            if tok != *actual_tok {
+                return false;
+            }
+        } else {
+            return false;
+        }
+        self.eat();
+        true
+    }
+
+    pub fn expect(&mut self, tok: Token<'a>) {
+        if let Some(actual_tok) = self.peek() {
+            if tok != *actual_tok {
+                // @Error
+                panic!();
+            }
+        } else {
+            // @Error
+            panic!();
+        }
+        self.eat();
+    }
+
+    pub fn expect_ident<F, T>(&mut self, mut f: F) -> T
+        where F: FnMut(&'a str) -> T
+    {
+        if let Some(&Token::Ident(s)) = self.peek() {
+            self.next();
+            f(s)
+        } else {
+            panic!();
+            // @Error
+        }
+    }
+}
+
+impl<'a> Iterator for Tokens<'a> {
+    type Item = Token<'a>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+}
+
+struct Lexer<'a> {
     filename: &'a str,
     file: &'a str,
     iter: Peekable<CharIndices<'a>>,
@@ -52,10 +112,10 @@ pub struct Tokens<'a> {
     errors: Vec<Error<'a>>,
 }
 
-impl<'a> Tokens<'a> {
-    pub fn new(filename: &'a str, file: &'a str) -> Tokens<'a> {
+impl<'a> Lexer<'a> {
+    fn new(filename: &'a str, file: &'a str) -> Lexer<'a> {
         let iter = file.char_indices().peekable();
-        let mut tokens = Tokens {
+        let mut tokens = Lexer {
             filename: filename,
             file: file,
             iter: iter,
@@ -210,7 +270,7 @@ impl<'a> Tokens<'a> {
     }
 }
 
-impl<'a> Iterator for Tokens<'a> {
+impl<'a> Iterator for Lexer<'a> {
     type Item = Token<'a>;
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(c) = self.eat() {
