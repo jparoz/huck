@@ -3,8 +3,7 @@ mod lex;
 mod parse;
 mod ast;
 
-use parse::parse;
-use ast::Ast;
+use parse::parse_module;
 
 use std::fs::File;
 use std::io::Read;
@@ -17,6 +16,6 @@ fn main() {
         file.read_to_string(&mut contents).unwrap();
         contents
     };
-    let ast: Ast = parse(&filename, &contents).unwrap_or_else(|err| panic!("{}", err));
-    println!("{:?}", ast);
+    let module = parse_module(&filename, &contents).unwrap_or_else(|err| panic!("{}", err));
+    println!("{:?}", module);
 }

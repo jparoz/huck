@@ -1,14 +1,34 @@
-use lex::Tokens;
-use ast::Ast;
+use lex::{Token, Tokens};
+use ast;
 use error::Error;
 
-pub fn parse<'compile, 'run>(filename: &'compile str,
-                             file: &'compile str)
-                             -> Result<Ast<'compile, 'run>, Error<'compile>> {
-    let mut iter = Tokens::new(filename, file);
-    while let Some(tok) = iter.next() {
-        // @Todo
-        println!("{:?}", tok);
+pub fn parse_module<'a>(filename: &'a str, file: &'a str) -> Result<ast::Module<'a>, Error<'a>> {
+    let mut module = ast::Module::new();
+    let tokens: Vec<Token> = Tokens::new(filename, file).collect();
+    let mut cursor = 0;
+
+    if tokens[cursor] == Token::Module {
+        cursor += 1;
+        if let Token::Ident(s) = tokens[cursor] {
+            module.name = s;
+
+            if tokens[cursor] != Token::Semi {
+                module.error(format!("Expected semicolon, but found {:?}", tokens[cursor]));
+            }
+        } else {
+            // @Error
+        }
     }
-    Ok(Ast::Var("hi")) // @Todo
+
+    // loop {
+    //     match tokens[cursor] {
+    //         // @Todo
+    //     }
+    // }
+
+    // for tok in tokens {
+    // }
+
+    println!("tokens[cursor]: {:?}", tokens[cursor]);
+    Ok(module)
 }

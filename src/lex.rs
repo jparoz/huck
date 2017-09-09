@@ -4,7 +4,7 @@ use std::iter::Peekable;
 use error::{Error, Location, Position};
 use error::ErrorType::*;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Token<'a> {
     Module,
     Class,
