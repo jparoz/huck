@@ -7,6 +7,7 @@ use parse::parse_module;
 
 use std::fs::File;
 use std::io::Read;
+use std::process::exit;
 
 fn main() {
     let filename = std::env::args().nth(1).unwrap();
@@ -16,6 +17,16 @@ fn main() {
         file.read_to_string(&mut contents).unwrap();
         contents
     };
-    let module = parse_module(&filename, &contents).unwrap_or_else(|err| panic!("{}", err));
-    println!("{:?}", module);
+
+    let module = match parse_module(&filename, &contents) {
+        Ok(module) => module,
+        Err(errors) => {
+            for err in errors {
+                println!("{}", err);
+            }
+            exit(1)
+        }
+    };
+
+    println!("{:?}", module); // @XXX
 }

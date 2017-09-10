@@ -1,5 +1,3 @@
-use error::Error;
-
 #[derive(Debug)]
 pub struct Module<'a> {
     pub name: &'a str,

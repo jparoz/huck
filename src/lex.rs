@@ -5,7 +5,13 @@ use error::{Error, Location, Position};
 use error::ErrorType::*;
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum Token<'a> {
+pub struct Token<'a> {
+    pub typ: TokenType,
+    pub text: &'a str,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum TokenType {
     Module,
     Class,
     Type,
@@ -23,44 +29,52 @@ pub enum Token<'a> {
     BracketClose,
     ParenOpen,
     ParenClose,
-    String(&'a str),
-    Char(&'a str),
-    Number(&'a str),
-    Ident(&'a str),
-    Operator(&'a str),
-    Backtick(&'a str),
-    Hash(&'a str),
+    String,
+    Char,
+    Number,
+    Ident,
+    Operator,
+    Backtick,
+    Hash,
 }
 
-impl<'a> Token<'a> {
+impl TokenType {
     fn requires_separator(&self) -> bool {
-        use self::Token::*;
+        use self::TokenType::*;
         match *self {
-            Ident(_) | Number(_) | String(_) | Char(_) | Hash(_) | Backtick(_) | Module |
-            Class | Type | Data | Precedence => true,
+            Ident | Number | String | Char | Hash | Backtick | Module | Class | Type | Data |
+            Precedence => true,
             _ => false,
         }
     }
 }
 
-pub struct Tokens<'a>(Peekable<Lexer<'a>>);
+pub struct Tokens<'a> {
+    filename: &'a str,
+    iter: Peekable<Lexer<'a>>,
+    errors: Vec<Error<'a>>,
+}
 
 impl<'a> Tokens<'a> {
     pub fn new(filename: &'a str, file: &'a str) -> Tokens<'a> {
-        Tokens(Lexer::new(filename, file).peekable())
+        Tokens {
+            filename: filename,
+            iter: Lexer::new(filename, file).peekable(),
+            errors: Vec::new(),
+        }
     }
 
     pub fn peek(&mut self) -> Option<&Token<'a>> {
-        self.0.peek()
+        self.iter.peek()
     }
 
     pub fn eat(&mut self) -> Option<Token<'a>> {
-        self.0.next()
+        self.iter.next()
     }
 
-    pub fn eat_if(&mut self, tok: Token<'a>) -> bool {
-        if let Some(actual_tok) = self.peek() {
-            if tok != *actual_tok {
+    pub fn eat_if(&mut self, typ: TokenType) -> bool {
+        if let Some(tok) = self.peek() {
+            if typ != tok.typ {
                 return false;
             }
         } else {
@@ -70,9 +84,9 @@ impl<'a> Tokens<'a> {
         true
     }
 
-    pub fn expect(&mut self, tok: Token<'a>) {
-        if let Some(actual_tok) = self.peek() {
-            if tok != *actual_tok {
+    pub fn expect(&mut self, typ: TokenType) -> Option<Token<'a>> {
+        if let Some(tok) = self.peek() {
+            if typ != tok.typ {
                 // @Error
                 panic!();
             }
@@ -80,26 +94,33 @@ impl<'a> Tokens<'a> {
             // @Error
             panic!();
         }
-        self.eat();
+        self.eat()
     }
 
-    pub fn expect_ident<F, T>(&mut self, mut f: F) -> T
-        where F: FnMut(&'a str) -> T
-    {
-        if let Some(&Token::Ident(s)) = self.peek() {
-            self.next();
-            f(s)
-        } else {
-            panic!();
-            // @Error
-        }
+    pub fn error(&mut self, start_tok: &'a Token<'a>, end_tok: &'a Token<'a>, msg: String) {
+        let start = unsafe { pos_from_slice(self.filename, start_tok.text) };
+        let end = unsafe { pos_from_slice(self.filename, end_tok.text) };
+
+        let loc = Location {
+            filename: self.filename,
+            start: start,
+            end: end,
+        };
+
+        let e = Error {
+            error_type: Parse,
+            message: msg,
+            location: loc,
+        };
+
+        self.errors.push(e);
     }
 }
 
 impl<'a> Iterator for Tokens<'a> {
     type Item = Token<'a>;
     fn next(&mut self) -> Option<Self::Item> {
-        self.0.next()
+        self.iter.next()
     }
 }
 
@@ -147,10 +168,17 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn snip(&mut self) -> &'a str {
-        let s = &self.file[self.start..self.end + 1];
+    fn reset(&mut self) {
         self.start = self.end + 1;
-        s
+    }
+
+    fn snip(&mut self, typ: TokenType) -> Token<'a> {
+        let tok = Token {
+            typ: typ,
+            text: &self.file[self.start..self.end + 1],
+        };
+        self.reset();
+        tok
     }
 
     fn lex_while<F>(&mut self, mut pred: F) -> usize
@@ -223,7 +251,7 @@ impl<'a> Lexer<'a> {
     fn skip_whitespace(&mut self) -> bool {
         let skipped = self.peek().map(|c| c.is_whitespace()).unwrap_or(false);
         self.lex_while(|c| c.is_whitespace());
-        self.snip();
+        self.reset();
         skipped
     }
 
@@ -285,16 +313,17 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
 
+            use self::TokenType::*;
             let tok = match c {
-                ';' => Some(Token::Semi),
-                '\\' => Some(Token::Backslash),
-                ',' => Some(Token::Comma),
-                '{' => Some(Token::BraceOpen),
-                '}' => Some(Token::BraceClose),
-                '[' => Some(Token::BracketOpen),
-                ']' => Some(Token::BracketClose),
-                '(' => Some(Token::ParenOpen),
-                ')' => Some(Token::ParenClose),
+                ';' => Some(self.snip(Semi)),
+                '\\' => Some(self.snip(Backslash)),
+                ',' => Some(self.snip(Comma)),
+                '{' => Some(self.snip(BraceOpen)),
+                '}' => Some(self.snip(BraceClose)),
+                '[' => Some(self.snip(BracketOpen)),
+                ']' => Some(self.snip(BracketClose)),
+                '(' => Some(self.snip(ParenOpen)),
+                ')' => Some(self.snip(ParenClose)),
                 '@' => {
                     self.error("Illegal character '@' is currently reserved".to_string());
                     None
@@ -305,7 +334,7 @@ impl<'a> Iterator for Lexer<'a> {
                         self.error("Missing identifier after hash".to_string());
                         None
                     } else {
-                        Some(Token::Hash(self.snip()))
+                        Some(self.snip(Hash))
                     }
                 }
                 '"' => {
@@ -328,7 +357,7 @@ impl<'a> Iterator for Lexer<'a> {
                             }
                         }
                     }
-                    Some(Token::String(self.snip()))
+                    Some(self.snip(String))
                 }
                 '\'' => {
                     match self.eat() {
@@ -354,7 +383,7 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                     if let Some(c) = self.eat() {
                         if c == '\'' {
-                            Some(Token::Char(self.snip()))
+                            Some(self.snip(Char))
                         } else {
                             self.error(format!("Expected '\\'' to end character literal, but \
                                                 found {:?}",
@@ -381,7 +410,7 @@ impl<'a> Iterator for Lexer<'a> {
                     } else {
                         if let Some(c) = self.eat() {
                             if c == '`' {
-                                Some(Token::Backtick(self.snip()))
+                                Some(self.snip(Backtick))
                             } else {
                                 self.error(format!("Expected '`' to end infix function \
                                                         call, but found {:?}",
@@ -410,36 +439,40 @@ impl<'a> Iterator for Lexer<'a> {
                             }
                         }
                     }
-                    Some(Token::Number(self.snip()))
+                    Some(self.snip(Number))
                 }
                 c if is_word_start_char(c) => {
                     self.lex_while(is_word_char);
-                    match self.snip() {
-                        "module" => Some(Token::Module),
-                        "class" => Some(Token::Class),
-                        "type" => Some(Token::Type),
-                        "data" => Some(Token::Data),
-                        "prec" => Some(Token::Precedence),
-                        ident => Some(Token::Ident(ident)),
-                    }
+                    let mut tok = self.snip(Ident);
+                    tok.typ = match tok.text {
+                        "module" => Module,
+                        "class" => Class,
+                        "type" => Type,
+                        "data" => Data,
+                        "prec" => Precedence,
+                        _ => Ident,
+                    };
+                    Some(tok)
                 }
                 c if is_operator_char(c) => {
                     self.lex_while(is_operator_char);
-                    match self.snip() {
-                        ":" => Some(Token::Colon),
-                        "=" => Some(Token::Equals),
-                        "|" => Some(Token::Bar),
-                        op => Some(Token::Operator(op)),
-                    }
+                    let mut tok = self.snip(Operator);
+                    tok.typ = match tok.text {
+                        ":" => Colon,
+                        "=" => Equals,
+                        "|" => Bar,
+                        _ => Operator,
+                    };
+                    Some(tok)
                 }
                 c if c.is_control() => {
                     self.error(format!("Found illegal control character {:?}", c));
-                    self.snip();
+                    self.reset();
                     None
                 }
                 c => {
                     self.error(format!("Unknown char {:?}", c));
-                    self.snip();
+                    self.reset();
                     None
                 }
             };
@@ -447,7 +480,7 @@ impl<'a> Iterator for Lexer<'a> {
             if let Some(tok) = tok.as_ref() {
                 let skipped = self.skip_whitespace();
                 let next_is_sep = skipped || self.peek().map(is_separator_char).unwrap_or(true);
-                if tok.requires_separator() && !next_is_sep {
+                if tok.typ.requires_separator() && !next_is_sep {
                     self.error("Expected separating character".to_string());
                 }
             }
@@ -500,4 +533,8 @@ fn is_binary_char(c: char) -> bool {
 
 fn is_escaped_char(quote: char, c: char) -> bool {
     "\\nrt".contains(c) || c == quote
+}
+
+unsafe fn pos_from_slice<'a>(haystack: &'a str, needle: &'a str) -> Position {
+    Position::default() // @XXX
 }
