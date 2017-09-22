@@ -47,6 +47,25 @@ pub struct Position {
     pub column: usize,
 }
 
+impl Position {
+    pub fn from_offset(s: &str, offset: usize) -> Position {
+        let mut chars = s.chars();
+
+        let mut pos = Position::default();
+        for _ in 0..offset {
+            if let Some(c) = chars.next() {
+                if c == '\n' {
+                    pos.line += 1;
+                    pos.column = 1;
+                } else {
+                    pos.column += 1;
+                }
+            }
+        }
+        pos
+    }
+}
+
 impl Default for Position {
     fn default() -> Position {
         Position {
@@ -59,7 +78,7 @@ impl Default for Position {
 impl<'a> fmt::Display for Error<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f,
-               "{:?} error at {}: {}",
+               "{:?} error at {}: {}", // @Cleanup: Use Display instead of Debug
                self.error_type,
                self.location,
                self.message)

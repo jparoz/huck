@@ -15,8 +15,12 @@ impl<'a> Module<'a> {
 
 #[derive(Debug)]
 pub enum Statement<'a> {
-    TypeSignature { name: &'a str, typ: Type<'a> },
-    Definition { name: &'a str, value: Expr<'a> },
+    TypeSignature { names: Vec<&'a str>, typ: Type<'a> },
+    Definition {
+        name: &'a str,
+        args: Vec<&'a str>,
+        value: Expr<'a>,
+    },
 }
 
 #[derive(Debug)]

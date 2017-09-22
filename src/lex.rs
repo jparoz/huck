@@ -4,13 +4,13 @@ use std::iter::Peekable;
 use error::{Error, Location, Position};
 use error::ErrorType::*;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct Token<'a> {
     pub typ: TokenType,
     pub text: &'a str,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TokenType {
     Module,
     Class,
@@ -50,38 +50,39 @@ impl TokenType {
 }
 
 pub struct Tokens<'a> {
-    filename: &'a str,
+    pub filename: &'a str,
+    file: &'a str,
     iter: Peekable<Lexer<'a>>,
-    errors: Vec<Error<'a>>,
+    pub errors: Vec<Error<'a>>,
 }
 
 impl<'a> Tokens<'a> {
     pub fn new(filename: &'a str, file: &'a str) -> Tokens<'a> {
         Tokens {
             filename: filename,
+            file: file,
             iter: Lexer::new(filename, file).peekable(),
             errors: Vec::new(),
         }
     }
 
-    pub fn peek(&mut self) -> Option<&Token<'a>> {
-        self.iter.peek()
+    pub fn peek(&mut self) -> Option<Token<'a>> {
+        self.iter.peek().map(|x| *x)
     }
 
     pub fn eat(&mut self) -> Option<Token<'a>> {
         self.iter.next()
     }
 
-    pub fn eat_if(&mut self, typ: TokenType) -> bool {
+    pub fn eat_if(&mut self, typ: TokenType) -> Option<Token<'a>> {
         if let Some(tok) = self.peek() {
             if typ != tok.typ {
-                return false;
+                return None;
             }
         } else {
-            return false;
+            return None;
         }
-        self.eat();
-        true
+        self.eat()
     }
 
     pub fn expect(&mut self, typ: TokenType) -> Option<Token<'a>> {
@@ -97,9 +98,12 @@ impl<'a> Tokens<'a> {
         self.eat()
     }
 
-    pub fn error(&mut self, start_tok: &'a Token<'a>, end_tok: &'a Token<'a>, msg: String) {
-        let start = unsafe { pos_from_slice(self.filename, start_tok.text) };
-        let end = unsafe { pos_from_slice(self.filename, end_tok.text) };
+    pub fn error<'b>(&mut self, start_tok: &'b Token<'a>, end_tok: &'b Token<'a>, msg: String) {
+        let start = pos_from_slice(self.file, start_tok.text);
+
+        let ix = end_tok.text.len();
+        // @Hack: see note on pos_from_slice
+        let end = pos_from_slice(self.file, &end_tok.text[ix - 1..ix]);
 
         let loc = Location {
             filename: self.filename,
@@ -258,6 +262,8 @@ impl<'a> Lexer<'a> {
     fn error(&mut self, msg: String) {
         let mut chars = self.file.chars();
 
+        // @Cleanup: use Position::from_offset()
+        // although this is bad for speed... worth?
         let mut start = Position::default();
         for _ in 0..self.start {
             if let Some(c) = chars.next() {
@@ -485,6 +491,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
 
+            // @Fixme @Cleanup: Really we ought to propogate this up somehow.
             if !self.errors.is_empty() {
                 panic!("{}", self.errors[0]);
             }
@@ -535,6 +542,15 @@ fn is_escaped_char(quote: char, c: char) -> bool {
     "\\nrt".contains(c) || c == quote
 }
 
-unsafe fn pos_from_slice<'a>(haystack: &'a str, needle: &'a str) -> Position {
-    Position::default() // @XXX
+// This is almost certainly the wrong thing to do. Not UTF8-clean, not neat. We should just store
+// the start and end char indicies on Token, like we do in Charles! Silly Jesse.
+// Also, it's just plain wrong! We need to give it the end of the second token, and this just gives
+// the position of the start of the string. Bloody hell mate.
+// But all this said, I'm still about to write the thing, because it'll be fun and whatever. Close
+// enough for now.
+// @Fixme @Hack
+pub fn pos_from_slice(haystack: &str, needle: &str) -> Position {
+    let base = haystack.as_ptr() as usize;
+    let offset = needle.as_ptr() as usize - base;
+    Position::from_offset(haystack, offset)
 }
