@@ -22,39 +22,41 @@ pub fn parse_module<'a>(filename: &'a str,
                 if let Some(next_tok) = tokens.peek() {
                     match next_tok.typ {
                         // Definition
-                        Ident => {
-                            let name = next_tok.text;
-                            tokens.next();
-                            let mut args: Vec<ast::Expr> = Vec::new();
+                        Ident | Equals => {
+                            let name = tok.text;
+                            let mut args: Vec<&str> = Vec::new();
                             while let Some(cur_tok) = tokens.eat_if(Ident) {
+                                args.push(cur_tok.text);
                             }
+                            tokens.expect(Equals);
+                            let value = tokens.parse_expr();
+                            tokens.expect(Semi);
 
-                            // let value: ast::Expr;
-
-                            // module.statements.push(Statement::Definition {
-                            //     name: name,
-                            //     args: args,
-                            //     value: value,
-                            // });
-                        }
-                        Equals => {
-                            // @Todo
+                            module.statements.push(Statement::Definition {
+                                name: name,
+                                args: args,
+                                value: value,
+                            });
                         }
 
                         // Type signature
                         Comma => {
                             // @Todo
+                            unimplemented!("{:?}", next_tok);
                         }
                         Colon => {
                             // @Todo
+                            unimplemented!("{:?}", next_tok);
                         }
 
                         _ => {
                             // @Error unexpected token @Todo
+                            panic!("{:?}", next_tok);
                         }
                     }
                 } else {
                     // @Error eof @Todo
+                    panic!("EOFFF");
                 }
             }
             _ => unimplemented!("{:?}", tok),

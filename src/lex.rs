@@ -1,6 +1,8 @@
 use std::str::CharIndices;
 use std::iter::Peekable;
+use std::fmt;
 
+use ast;
 use error::{Error, Location, Position};
 use error::ErrorType::*;
 
@@ -49,6 +51,39 @@ impl TokenType {
     }
 }
 
+impl fmt::Display for TokenType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use self::TokenType::*;
+        let name = match *self {
+            Module => "keyword 'module'",
+            Class => "keyword 'class'",
+            Type => "keyword 'type'",
+            Data => "keyword 'data'",
+            Precedence => "keyword 'prec'",
+            Semi => "';'",
+            Colon => "':'",
+            Equals => "'='",
+            Bar => "'|'",
+            Comma => "','",
+            Backslash => "'\\'",
+            BraceOpen => "'{'",
+            BraceClose => "'}'",
+            BracketOpen => "'['",
+            BracketClose => "']'",
+            ParenOpen => "'('",
+            ParenClose => "')'",
+            String => "string literal",
+            Char => "char literal",
+            Number => "numeric literal",
+            Ident => "identifier",
+            Operator => "operator",
+            Backtick => "'`'",
+            Hash => "'#ident'",
+        };
+        f.write_str(name)
+    }
+}
+
 pub struct Tokens<'a> {
     pub filename: &'a str,
     file: &'a str,
@@ -85,15 +120,28 @@ impl<'a> Tokens<'a> {
         self.eat()
     }
 
+    pub fn parse_expr(&mut self) -> ast::Expr<'a> {
+        // @Todo
+        unimplemented!()
+    }
+
     pub fn expect(&mut self, typ: TokenType) -> Option<Token<'a>> {
         if let Some(tok) = self.peek() {
             if typ != tok.typ {
-                // @Error
-                panic!();
+                self.error(&tok, &tok, format!("Expected {}, but got {}", typ, tok.typ));
+                return None;
             }
         } else {
-            // @Error
-            panic!();
+
+            // @Hack-y
+            let ix = self.file.len();
+            let tok = Token {
+                typ: TokenType::Ident,
+                text: &self.file[ix - 1..ix],
+            };
+
+            self.error(&tok, &tok, format!("Expected {}, but got EOF", typ));
+            return None;
         }
         self.eat()
     }
