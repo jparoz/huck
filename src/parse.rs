@@ -1,5 +1,5 @@
 use lex::{TokenType, Tokens};
-use ast::{self, Statement};
+use ast::{self, Statement, Lambda, Pattern};
 use error::Error;
 
 pub fn parse_module<'a>(filename: &'a str,
@@ -22,20 +22,33 @@ pub fn parse_module<'a>(filename: &'a str,
                 if let Some(next_tok) = tokens.peek() {
                     match next_tok.typ {
                         // Definition
-                        Ident | Equals => {
+                        Ident | ParenOpen | Equals => {
                             let name = tok.text;
-                            let mut args: Vec<&str> = Vec::new();
-                            while let Some(cur_tok) = tokens.eat_if(Ident) {
-                                args.push(cur_tok.text);
+                            let mut args: Vec<Pattern<'a>> = Vec::new();
+
+                            while let Some(cur_tok) = tokens.peek() {
+                                if cur_tok.typ.is_pattern_start() {
+                                    if let Some(pat) = tokens.parse_pattern() {
+                                        args.push(pat);
+                                    } else {
+                                        // @Error: couldn't parse pattern
+                                        panic!("@Todo @Error patterns: {:?}", cur_tok);
+                                    }
+                                } else {
+                                    break;
+                                }
                             }
+
                             tokens.expect(Equals);
-                            let value = tokens.parse_expr();
+                            let rhs = tokens.parse_expr();
                             tokens.expect(Semi);
 
                             module.statements.push(Statement::Definition {
                                 name: name,
-                                args: args,
-                                value: value,
+                                lam: Lambda {
+                                    args: args,
+                                    rhs: rhs,
+                                },
                             });
                         }
 
@@ -51,7 +64,7 @@ pub fn parse_module<'a>(filename: &'a str,
 
                         _ => {
                             // @Error unexpected token @Todo
-                            panic!("{:?}", next_tok);
+                            panic!("unexpected token {:?}", next_tok);
                         }
                     }
                 } else {

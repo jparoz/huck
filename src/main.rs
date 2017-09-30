@@ -1,3 +1,11 @@
+// For debugging purposes
+#[allow(unused_macros)]
+macro_rules! inspect {
+    ($($e:expr),*) => {
+        $(println!("{}: {:?}", stringify!($e), $e);)*
+    }
+}
+
 mod error;
 mod lex;
 mod parse;

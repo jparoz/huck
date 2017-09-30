@@ -33,7 +33,8 @@ pub enum TokenType {
     ParenClose,
     String,
     Char,
-    Number,
+    Int,
+    Float,
     Ident,
     Operator,
     Backtick,
@@ -44,8 +45,24 @@ impl TokenType {
     fn requires_separator(&self) -> bool {
         use self::TokenType::*;
         match *self {
-            Ident | Number | String | Char | Hash | Backtick | Module | Class | Type | Data |
-            Precedence => true,
+            Ident | Int | Float | String | Char | Hash | Backtick | Module | Class | Type |
+            Data | Precedence => true,
+            _ => false,
+        }
+    }
+
+    fn is_literal(&self) -> bool {
+        use self::TokenType::*;
+        match *self {
+            String | Char | Int | Float => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_pattern_start(&self) -> bool {
+        use self::TokenType::*;
+        match *self {
+            String | Char | Int | Float | Ident | ParenOpen => true,
             _ => false,
         }
     }
@@ -74,7 +91,8 @@ impl fmt::Display for TokenType {
             ParenClose => "')'",
             String => "string literal",
             Char => "char literal",
-            Number => "numeric literal",
+            Int => "integer literal",
+            Float => "floating literal",
             Ident => "identifier",
             Operator => "operator",
             Backtick => "'`'",
@@ -120,9 +138,114 @@ impl<'a> Tokens<'a> {
         self.eat()
     }
 
-    pub fn parse_expr(&mut self) -> ast::Expr<'a> {
+    pub fn parse_expr(&mut self) -> Box<ast::Expr<'a>> {
         // @Todo
         unimplemented!()
+    }
+
+    pub fn parse_pattern(&mut self) -> Option<ast::Pattern<'a>> {
+        use ast::Pattern::*;
+        use lex::TokenType::*;
+        if let Some(tok) = self.peek() {
+            match tok.typ {
+                Ident => {
+                    self.next();
+                    if tok.text.starts_with(char::is_uppercase) {
+                        Some(Match {
+                            constructor: tok.text,
+                            args: Vec::new(),
+                        })
+                    } else {
+                        Some(Bind(tok.text))
+                    }
+                }
+                ParenOpen => {
+                    self.next(); // self.expect(ParenOpen);
+                    if let Some(tok) = self.next() {
+                        match tok.typ {
+                            Ident => {
+                                if tok.text.starts_with(char::is_uppercase) {
+                                    let cons = tok.text;
+                                    let mut args = Vec::new();
+
+                                    while let Some(cur_tok) = self.peek() {
+                                        if cur_tok.typ.is_pattern_start() {
+                                            if let Some(pat) = self.parse_pattern() {
+                                                args.push(pat);
+                                            } else {
+                                                // @Error: couldn't parse pattern
+                                                panic!("@Todo @Error patterns: {:?}", cur_tok);
+                                            }
+                                        } else {
+                                            break;
+                                        }
+                                    }
+
+                                    self.expect(ParenClose);
+
+                                    Some(Match {
+                                        constructor: cons,
+                                        args: args,
+                                    })
+                                } else {
+                                    // @Todo: clean up, probably skip until close parens or sommat
+                                    None
+                                }
+                            }
+                            _ => None,
+                        }
+                    } else {
+                        // @Error: eof
+                        panic!("EOFFF")
+                    }
+                }
+                _ if tok.typ.is_literal() => {
+                    let lit = self.parse_literal();
+                    if lit.is_none() {
+                        // @Error: probably impossible
+                        panic!("probably impossible, failed to parse literal we know is a literal");
+                    }
+                    Some(Lit(lit.unwrap()))
+                }
+                _ => None,
+            }
+        } else {
+            // @Error: eof
+            panic!("EOFFF");
+        }
+    }
+
+    fn parse_literal(&mut self) -> Option<ast::Literal> {
+        use ast::Literal::*;
+        use lex::TokenType;
+        if let Some(tok) = self.next() {
+            match tok.typ {
+                TokenType::String => {
+                    // @Todo: properly process. for now we just pass through as is, but we want to
+                    // expand escapes, and maybe some other stuff that i can't think of right now.
+                    let processed = tok.text.to_string();
+                    Some(String(processed))
+                }
+                TokenType::Char => {
+                    // @Todo: we probably want to manually process escapes and so forth.
+                    // Also, this relies on the single-quotes being included in the tok.text, which
+                    // I'm getting more iffy on as time goes by.
+                    tok.text.parse().ok().map(Char)
+                }
+                TokenType::Int => {
+                    // @Todo: proper parsing, similar to above
+                    tok.text.parse().ok().map(Int)
+                }
+                TokenType::Float => {
+                    // @Todo: proper parsing, similar to above
+                    tok.text.parse().ok().map(Float)
+                }
+                _ => unreachable!(),
+            }
+        } else {
+            // @Error: eof
+            panic!("EOFFF");
+        }
     }
 
     pub fn expect(&mut self, typ: TokenType) -> Option<Token<'a>> {
@@ -277,25 +400,26 @@ impl<'a> Lexer<'a> {
         self.end - start
     }
 
-    fn lex_decimal(&mut self) -> usize {
-        let start = self.end;
+    fn lex_decimal(&mut self) -> TokenType {
+        let mut typ = TokenType::Int;
 
         self.lex_while(is_decimal_char);
         if let Some(dot) = self.peek() {
             if dot != '.' {
-                return self.end - start;
+                return typ;
             }
+            typ = TokenType::Float;
 
             self.eat();
 
             let lexed = self.lex_while(is_decimal_char);
             if lexed == 0 {
                 self.error("Missing fractional part of numeric literal".to_string());
-                return self.end - start;
+                return TokenType::Float;
             }
         }
 
-        self.end - start
+        typ
     }
 
     /// Returns true if whitespace was skipped, otherwise returns false.
@@ -478,22 +602,24 @@ impl<'a> Iterator for Lexer<'a> {
                     }
                 }
                 '0'...'9' => {
-                    if let Some(c2) = self.peek() {
+                    let typ = if let Some(c2) = self.peek() {
                         match c2 {
                             'x' | 'X' => {
                                 self.eat();
                                 self.lex_while_until(is_hex_char, is_separator_char);
+                                Int
                             }
                             'b' | 'B' => {
                                 self.eat();
                                 self.lex_while_until(is_binary_char, is_separator_char);
+                                Int
                             }
-                            _ => {
-                                self.lex_decimal();
-                            }
+                            _ => self.lex_decimal(),
                         }
-                    }
-                    Some(self.snip(Number))
+                    } else {
+                        Int
+                    };
+                    Some(self.snip(typ))
                 }
                 c if is_word_start_char(c) => {
                     self.lex_while(is_word_char);

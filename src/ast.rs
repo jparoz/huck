@@ -16,48 +16,44 @@ impl<'a> Module<'a> {
 #[derive(Debug)]
 pub enum Statement<'a> {
     TypeSignature { names: Vec<&'a str>, typ: Type<'a> },
-    Definition {
-        name: &'a str,
-        args: Vec<&'a str>,
-        value: Expr<'a>,
-    },
+    Definition { name: &'a str, lam: Lambda<'a> },
 }
 
 #[derive(Debug)]
 pub enum Expr<'a> {
-    Lit(Lit<'a>),
+    Lit(Literal),
     Var(&'a str),
-    Lam(&'a Lambda<'a>),
-    App(&'a Expr<'a>, &'a Expr<'a>),
+    Lam(Lambda<'a>),
+    App(Box<Expr<'a>>, Box<Expr<'a>>),
+}
+
+#[derive(Debug)]
+pub struct Lambda<'a> {
+    pub args: Vec<Pattern<'a>>,
+    pub rhs: Box<Expr<'a>>,
 }
 
 #[derive(Debug)]
 pub enum Type<'a> {
     Var(&'a str),
     Concrete(&'a str),
-    App(&'a Type<'a>, &'a Type<'a>),
+    App(Box<Type<'a>>, Box<Type<'a>>),
 }
 
 #[derive(Debug)]
-pub enum Lit<'a> {
-    Int(bool, u64), // Int(is_negative, value)
+pub enum Literal {
+    Int(u64),
     Float(f64),
-    String(&'a str),
+    String(String),
     Char(char),
-}
-
-#[derive(Debug)]
-pub struct Lambda<'a> {
-    lhs: Pattern<'a>,
-    rhs: &'a Expr<'a>,
-}
+} // @Todo: [1, 2, 3] !!!!
 
 #[derive(Debug)]
 pub enum Pattern<'a> {
     Bind(&'a str),
+    Lit(Literal),
     Match {
         constructor: &'a str,
-        arity: usize,
-        args: Vec<&'a str>,
+        args: Vec<Pattern<'a>>,
     },
 }
