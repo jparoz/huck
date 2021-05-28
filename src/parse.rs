@@ -1,17 +1,13 @@
 use nom::branch::alt;
-use nom::bytes::complete::{escaped, is_not, tag, take_till};
-use nom::character::complete::{
-    anychar, char, digit1, hex_digit1, line_ending, multispace0, one_of, satisfy,
-};
-use nom::combinator::{map, not, opt, peek, recognize, success, value, verify};
-use nom::multi::{count, many0, many0_count, many1, many_till, separated_list1};
+use nom::bytes::complete::{escaped, is_not, tag};
+use nom::character::complete::{char, digit1, hex_digit1, multispace0, one_of, satisfy};
+use nom::combinator::{map, opt, recognize, success, verify};
+use nom::multi::{many0, many1, separated_list0};
 use nom::number::complete::recognize_float;
 use nom::sequence::{delimited, preceded, separated_pair, terminated, tuple};
 use nom::IResult;
 
 use std::collections::HashMap;
-use std::fs::read_to_string;
-use std::path::Path;
 
 use crate::ast::*;
 use crate::error::*;
@@ -40,43 +36,40 @@ fn chunk(input: &str) -> IResult<&str, Chunk> {
 
 fn assign(input: &str) -> IResult<&str, (Name, Expr)> {
     // println!("assign"); // @DebugParsing
-    separated_pair(name, equals, expr)(input)
+    terminated(separated_pair(name, equals, expr), semi)(input)
 }
 
 fn expr(input: &str) -> IResult<&str, Expr> {
     // println!("expr"); // @DebugParsing
-    terminated(
-        alt((
-            map(tuple((term, many0(term))), |(t, ts)| {
-                ts.into_iter()
-                    .map(Expr::Term)
-                    // @Note: why doesn't .reduce() work here?? Rust can't find the method
-                    // .reduce(|a, b| Expr::App {
-                    //     func: Box::new(a),
-                    //     argument: Box::new(b),
-                    // })
-                    // .unwrap() // safe unwrap because we're mapping over many1(term)
-                    .fold(Expr::Term(t), |a, b| Expr::App {
-                        func: Box::new(a),
-                        argument: Box::new(b),
-                    })
-            }),
-            map(term, Expr::Term),
-            map(tuple((operator, expr)), |(operator, operand)| Expr::Unop {
-                operator,
-                operand: Box::new(operand),
-            }),
-            // @Fixme: Binops
-            // map(tuple((expr, operator, expr)), |(lhs, operator, rhs)| {
-            //     Expr::Binop {
-            //         operator,
-            //         lhs: Box::new(lhs),
-            //         rhs: Box::new(rhs),
-            //     }
-            // }),
-        )),
-        semi,
-    )(input)
+    alt((
+        map(tuple((term, many0(term))), |(t, ts)| {
+            ts.into_iter()
+                .map(Expr::Term)
+                // @Note: why doesn't .reduce() work here?? Rust can't find the method
+                // .reduce(|a, b| Expr::App {
+                //     func: Box::new(a),
+                //     argument: Box::new(b),
+                // })
+                // .unwrap() // safe unwrap because we're mapping over many1(term)
+                .fold(Expr::Term(t), |a, b| Expr::App {
+                    func: Box::new(a),
+                    argument: Box::new(b),
+                })
+        }),
+        map(term, Expr::Term),
+        map(tuple((operator, expr)), |(operator, operand)| Expr::Unop {
+            operator,
+            operand: Box::new(operand),
+        }),
+        // @Fixme: Binops
+        // map(tuple((expr, operator, expr)), |(lhs, operator, rhs)| {
+        //     Expr::Binop {
+        //         operator,
+        //         lhs: Box::new(lhs),
+        //         rhs: Box::new(rhs),
+        //     }
+        // }),
+    ))(input)
 }
 
 fn term(input: &str) -> IResult<&str, Term> {
@@ -84,6 +77,7 @@ fn term(input: &str) -> IResult<&str, Term> {
     alt((
         map(numeral, Term::Numeral),
         map(string, Term::String),
+        map(list, Term::List),
         map(name, Term::Name),
         map(parens(expr), |e| Term::Parens(Box::new(e))),
     ))(input)
@@ -96,7 +90,7 @@ fn name(input: &str) -> IResult<&str, Name> {
             satisfy(is_name_start_char),
             many0(satisfy(is_name_char)),
         ))),
-        |name| Name { name },
+        Name,
     ))(input)
 }
 
@@ -126,6 +120,11 @@ fn string(input: &str) -> IResult<&str, &str> {
     )))(input)
 }
 
+fn list(input: &str) -> IResult<&str, Vec<Expr>> {
+    // println!("list"); // @DebugParsing
+    delimited(ws(tag("[")), separated_list0(comma, expr), ws(tag("]")))(input)
+}
+
 fn operator(input: &str) -> IResult<&str, &str> {
     // println!("operator"); // @DebugParsing
     ws(recognize(many1(one_of("=+-|!@#$%^&*:./~"))))(input)
@@ -137,13 +136,13 @@ fn equals(input: &str) -> IResult<&str, &str> {
 }
 
 fn semi(input: &str) -> IResult<&str, &str> {
+    // println!("semi"); // @DebugParsing
     ws(tag(";"))(input)
 }
 
-fn line_end(input: &str) -> IResult<&str, LineEnd> {
-    map(preceded(line_ending, multispace0), |spaces: &str| {
-        LineEnd(spaces.len())
-    })(input)
+fn comma(input: &str) -> IResult<&str, &str> {
+    // println!("comma"); // @DebugParsing
+    ws(tag(","))(input)
 }
 
 fn ws<'a, F: 'a, O>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O>

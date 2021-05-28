@@ -28,11 +28,8 @@ impl<'a> Chunk<'a> {
 }
 
 #[derive(PartialEq, Eq, Hash, Debug)]
-pub struct Name<'a> {
-    pub name: &'a str,
-    // @Todo: path/scope i.e. `Foo::foo 123` instead of just `foo 123`
-    // pub path: Vec<&'a str>,
-}
+// @Todo: path/scope i.e. `Foo::foo 123` instead of just `foo 123`
+pub struct Name<'a>(pub &'a str);
 
 impl<'a> Display for Name<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -68,6 +65,7 @@ impl<'a> Display for Expr<'a> {
 pub enum Term<'a> {
     Numeral(&'a str),
     String(&'a str),
+    List(Vec<Expr<'a>>),
     Name(Name<'a>),
     Parens(Box<Expr<'a>>),
 }
@@ -77,6 +75,3 @@ impl<'a> Display for Term<'a> {
         unimplemented!()
     }
 }
-
-#[derive(PartialEq, Debug)]
-pub struct LineEnd(pub usize);

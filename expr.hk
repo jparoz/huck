@@ -1,3 +1,5 @@
-str = toUpper 123 "hi"
+emptyList = [];
 
-num = 123
+shoutedGreetings = map toUpper ["hi", "hello"];
+
+num = 123;
