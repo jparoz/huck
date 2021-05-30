@@ -18,11 +18,11 @@ use std::fmt::{self, Display};
 
 #[derive(Debug)]
 pub struct Chunk<'a> {
-    assignments: HashMap<Name<'a>, Expr<'a>>,
+    assignments: HashMap<Lhs<'a>, Expr<'a>>,
 }
 
 impl<'a> Chunk<'a> {
-    pub fn new(assignments: HashMap<Name<'a>, Expr<'a>>) -> Chunk<'a> {
+    pub fn new(assignments: HashMap<Lhs<'a>, Expr<'a>>) -> Chunk<'a> {
         Chunk { assignments }
     }
 }
@@ -37,6 +37,21 @@ impl<'a> Display for Name<'a> {
     }
 }
 
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+pub struct Lhs<'a> {
+    pub name: Name<'a>,
+    pub args: Vec<Pattern<'a>>,
+}
+
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+pub enum Pattern<'a> {
+    Name(Name<'a>),
+    Match {
+        constructor: Name<'a>,
+        args: Vec<Pattern<'a>>,
+    },
+}
+
 #[derive(PartialEq, Clone, Debug)]
 pub enum Expr<'a> {
     Term(Term<'a>),
@@ -44,12 +59,8 @@ pub enum Expr<'a> {
         func: Box<Expr<'a>>,
         argument: Box<Expr<'a>>,
     },
-    // Unop {
-    //     operator: &'a str,
-    //     operand: Box<Expr<'a>>,
-    // },
     Binop {
-        operator: &'a str,
+        operator: Name<'a>,
         lhs: Box<Expr<'a>>,
         rhs: Box<Expr<'a>>,
     },

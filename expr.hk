@@ -5,4 +5,6 @@ shoutedGreetings = map toUpper ["hi", "hello"];
 num  = 1 + 2 * 3;
 num' = (1 + 2) * 3;
 
+addOne n = n + 1;
+
 map f (x::xs) = f x :: map f xs;

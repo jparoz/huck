@@ -32,9 +32,33 @@ fn chunk(input: &str) -> IResult<&str, Chunk> {
     Ok((leftovers, Chunk::new(assigns.into_iter().collect())))
 }
 
-fn assign(input: &str) -> IResult<&str, (Name, Expr)> {
+fn assign(input: &str) -> IResult<&str, (Lhs, Expr)> {
     // println!("assign"); // @DebugParsing
-    terminated(separated_pair(name, equals, expr), semi)(input)
+    terminated(separated_pair(lhs, equals, expr), semi)(input)
+}
+
+fn lhs(input: &str) -> IResult<&str, Lhs> {
+    map(tuple((name, many0(pattern))), |(name, args)| Lhs {
+        name,
+        args,
+    })(input)
+}
+
+fn pattern(input: &str) -> IResult<&str, Pattern> {
+    alt((
+        map(name, Pattern::Name),
+        map(
+            parens(tuple((pattern, operator, pattern))),
+            |(lhs, op, rhs)| Pattern::Match {
+                constructor: op,
+                args: vec![lhs, rhs],
+            },
+        ),
+        map(
+            parens(tuple((name, many0(pattern)))),
+            |(constructor, args)| Pattern::Match { constructor, args },
+        ),
+    ))(input)
 }
 
 fn expr(input: &str) -> IResult<&str, Expr> {
@@ -121,14 +145,14 @@ fn list(input: &str) -> IResult<&str, Vec<Expr>> {
     delimited(ws(tag("[")), separated_list0(comma, expr), ws(tag("]")))(input)
 }
 
-fn operator(input: &str) -> IResult<&str, &str> {
+fn operator(input: &str) -> IResult<&str, Name> {
     // println!("operator"); // @DebugParsing
-    ws(recognize(many1(one_of("=+-|!@#$%^&*:./~"))))(input)
+    map(ws(recognize(many1(one_of("=+-|!@#$%^&*:./~")))), Name)(input)
 }
 
-fn equals(input: &str) -> IResult<&str, &str> {
+fn equals(input: &str) -> IResult<&str, Name> {
     // println!("equals"); // @DebugParsing
-    verify(operator, |s: &str| s == "=")(input)
+    verify(operator, |name| name.0 == "=")(input)
 }
 
 fn semi(input: &str) -> IResult<&str, &str> {
