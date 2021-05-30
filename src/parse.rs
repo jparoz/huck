@@ -7,8 +7,6 @@ use nom::number::complete::recognize_float;
 use nom::sequence::{delimited, preceded, separated_pair, terminated, tuple};
 use nom::IResult;
 
-use std::collections::HashMap;
-
 use crate::ast::*;
 use crate::error::*;
 
@@ -40,36 +38,34 @@ fn assign(input: &str) -> IResult<&str, (Name, Expr)> {
 }
 
 fn expr(input: &str) -> IResult<&str, Expr> {
-    // println!("expr"); // @DebugParsing
-    alt((
-        map(tuple((term, many0(term))), |(t, ts)| {
-            ts.into_iter()
-                .map(Expr::Term)
-                // @Note: why doesn't .reduce() work here?? Rust can't find the method
-                // .reduce(|a, b| Expr::App {
-                //     func: Box::new(a),
-                //     argument: Box::new(b),
-                // })
-                // .unwrap() // safe unwrap because we're mapping over many1(term)
-                .fold(Expr::Term(t), |a, b| Expr::App {
-                    func: Box::new(a),
-                    argument: Box::new(b),
-                })
-        }),
-        map(term, Expr::Term),
-        map(tuple((operator, expr)), |(operator, operand)| Expr::Unop {
+    alt((binop, app))(input)
+}
+
+fn binop(input: &str) -> IResult<&str, Expr> {
+    map(tuple((app, operator, expr)), |(lhs, operator, rhs)| {
+        Expr::Binop {
             operator,
-            operand: Box::new(operand),
-        }),
-        // @Fixme: Binops
-        // map(tuple((expr, operator, expr)), |(lhs, operator, rhs)| {
-        //     Expr::Binop {
-        //         operator,
-        //         lhs: Box::new(lhs),
-        //         rhs: Box::new(rhs),
-        //     }
-        // }),
-    ))(input)
+            lhs: Box::new(lhs),
+            rhs: Box::new(rhs),
+        }
+    })(input)
+}
+
+fn app(input: &str) -> IResult<&str, Expr> {
+    map(tuple((term, many0(term))), |(t, ts)| {
+        ts.into_iter()
+            .map(Expr::Term)
+            // @Note: why doesn't .reduce() work here?? Rust can't find the method
+            // .reduce(|a, b| Expr::App {
+            //     func: Box::new(a),
+            //     argument: Box::new(b),
+            // })
+            // .unwrap() // safe unwrap because we're mapping over many1(term)
+            .fold(Expr::Term(t), |a, b| Expr::App {
+                func: Box::new(a),
+                argument: Box::new(b),
+            })
+    })(input)
 }
 
 fn term(input: &str) -> IResult<&str, Term> {

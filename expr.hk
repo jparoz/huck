@@ -2,4 +2,7 @@ emptyList = [];
 
 shoutedGreetings = map toUpper ["hi", "hello"];
 
-num = 123;
+num  = 1 + 2 * 3;
+num' = (1 + 2) * 3;
+
+map f (x::xs) = f x :: map f xs;

@@ -27,7 +27,7 @@ impl<'a> Chunk<'a> {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Debug)]
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
 // @Todo: path/scope i.e. `Foo::foo 123` instead of just `foo 123`
 pub struct Name<'a>(pub &'a str);
 
@@ -37,17 +37,17 @@ impl<'a> Display for Name<'a> {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum Expr<'a> {
     Term(Term<'a>),
     App {
         func: Box<Expr<'a>>,
         argument: Box<Expr<'a>>,
     },
-    Unop {
-        operator: &'a str,
-        operand: Box<Expr<'a>>,
-    },
+    // Unop {
+    //     operator: &'a str,
+    //     operand: Box<Expr<'a>>,
+    // },
     Binop {
         operator: &'a str,
         lhs: Box<Expr<'a>>,
@@ -61,7 +61,7 @@ impl<'a> Display for Expr<'a> {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum Term<'a> {
     Numeral(&'a str),
     String(&'a str),
