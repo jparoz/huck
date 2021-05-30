@@ -32,7 +32,7 @@ impl<'a> Chunk<'a> {
 pub struct Name<'a>(pub &'a str);
 
 impl<'a> Display for Name<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
         unimplemented!()
     }
 }
@@ -67,7 +67,7 @@ pub enum Expr<'a> {
 }
 
 impl<'a> Display for Expr<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
         unimplemented!()
     }
 }
@@ -82,7 +82,7 @@ pub enum Term<'a> {
 }
 
 impl<'a> Display for Term<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
         unimplemented!()
     }
 }
