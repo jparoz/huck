@@ -4,7 +4,15 @@ shoutedGreetings = map toUpper ["hi", "hello"];
 
 num  = 1 + 2 * 3;
 num' = (1 + 2) * 3;
+num'' = 1 - 1;
 
 addOne n = n + 1;
 
 map f (x::xs) = f x :: map f xs;
+map f [] = [];
+
+isHello "Hello!" = True;
+isHello _ = False;
+
+isListOfHello ["Hello!"] = True;
+isListOfHello _ = False;

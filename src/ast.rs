@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::{self, Display};
 
-// @Todo: use these
+// @Todo: use these, or something similar
 //
 // #[derive(PartialEq, Debug)]
 // pub struct Spanned<T> {
@@ -46,7 +46,9 @@ pub struct Lhs<'a> {
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub enum Pattern<'a> {
     Name(Name<'a>),
-    Match {
+    List(Vec<Pattern<'a>>),
+    String(&'a str),
+    Destructure {
         constructor: Name<'a>,
         args: Vec<Pattern<'a>>,
     },

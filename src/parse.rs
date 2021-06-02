@@ -49,15 +49,20 @@ fn pattern(input: &str) -> IResult<&str, Pattern> {
         map(name, Pattern::Name),
         map(
             parens(tuple((pattern, operator, pattern))),
-            |(lhs, op, rhs)| Pattern::Match {
+            |(lhs, op, rhs)| Pattern::Destructure {
                 constructor: op,
                 args: vec![lhs, rhs],
             },
         ),
         map(
             parens(tuple((name, many0(pattern)))),
-            |(constructor, args)| Pattern::Match { constructor, args },
+            |(constructor, args)| Pattern::Destructure { constructor, args },
         ),
+        map(
+            delimited(ws(tag("[")), separated_list0(comma, pattern), ws(tag("]"))),
+            Pattern::List,
+        ),
+        map(string, Pattern::String),
     ))(input)
 }
 
@@ -122,8 +127,15 @@ fn numeral(input: &str) -> IResult<&str, &str> {
             alt((tag("0b"), tag("0B"))),
             many1(alt((char('0'), char('1')))),
         ))),
+        // @Fixme: negative numbers aren't handled properly. e.g.
+        //      1 - 1
+        //      1-1
+        // These two lines parse differently, but they should both be "one minus one",
+        // never "one applied to negative one".
         recognize_float,
-        digit1,
+        // @Note: I don't think the below is reachable,
+        // because the above will cover ints as well as floats.
+        // digit1,
     )))(input)
 }
 
