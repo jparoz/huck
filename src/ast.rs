@@ -18,16 +18,16 @@ use std::fmt::{self, Display};
 
 #[derive(Debug)]
 pub struct Chunk<'a> {
-    assignments: HashMap<Lhs<'a>, Expr<'a>>,
+    assignments: HashMap<Name<'a>, Vec<(Lhs<'a>, Expr<'a>)>>,
 }
 
 impl<'a> Chunk<'a> {
-    pub fn new(assignments: HashMap<Lhs<'a>, Expr<'a>>) -> Chunk<'a> {
+    pub fn new(assignments: HashMap<Name<'a>, Vec<(Lhs<'a>, Expr<'a>)>>) -> Chunk<'a> {
         Chunk { assignments }
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 // @Todo: path/scope i.e. `Foo::foo 123` instead of just `foo 123`
 pub struct Name<'a>(pub &'a str);
 

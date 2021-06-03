@@ -7,6 +7,8 @@ use nom::number::complete::recognize_float;
 use nom::sequence::{delimited, preceded, separated_pair, terminated, tuple};
 use nom::IResult;
 
+use std::collections::HashMap;
+
 use crate::ast::*;
 use crate::error::*;
 
@@ -27,8 +29,13 @@ pub fn parse(input: &str) -> Result<Chunk> {
 
 fn chunk(input: &str) -> IResult<&str, Chunk> {
     let (leftovers, assigns) = ws(many0(assign))(input)?;
+    let mut env = HashMap::new();
 
-    Ok((leftovers, Chunk::new(assigns.into_iter().collect())))
+    for (lhs, expr) in assigns {
+        env.entry(lhs.name).or_insert(Vec::new()).push((lhs, expr));
+    }
+
+    Ok((leftovers, Chunk::new(env)))
 }
 
 fn assign(input: &str) -> IResult<&str, (Lhs, Expr)> {
