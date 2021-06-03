@@ -1,6 +1,6 @@
 use nom::branch::alt;
 use nom::bytes::complete::{escaped, is_not, tag};
-use nom::character::complete::{char, digit1, hex_digit1, multispace0, one_of, satisfy};
+use nom::character::complete::{char, hex_digit1, multispace0, one_of, satisfy};
 use nom::combinator::{map, opt, recognize, success, verify};
 use nom::multi::{many0, many1, separated_list0};
 use nom::number::complete::recognize_float;
@@ -26,14 +26,12 @@ pub fn parse(input: &str) -> Result<Chunk> {
 }
 
 fn chunk(input: &str) -> IResult<&str, Chunk> {
-    // println!("chunk"); // @DebugParsing
     let (leftovers, assigns) = ws(many0(assign))(input)?;
 
     Ok((leftovers, Chunk::new(assigns.into_iter().collect())))
 }
 
 fn assign(input: &str) -> IResult<&str, (Lhs, Expr)> {
-    // println!("assign"); // @DebugParsing
     terminated(separated_pair(lhs, equals, expr), semi)(input)
 }
 
@@ -46,7 +44,9 @@ fn lhs(input: &str) -> IResult<&str, Lhs> {
 
 fn pattern(input: &str) -> IResult<&str, Pattern> {
     alt((
-        map(name, Pattern::Name),
+        map(name, Pattern::Var),
+        map(list(pattern), Pattern::List),
+        map(string, Pattern::String),
         map(
             parens(tuple((pattern, operator, pattern))),
             |(lhs, op, rhs)| Pattern::Destructure {
@@ -58,11 +58,6 @@ fn pattern(input: &str) -> IResult<&str, Pattern> {
             parens(tuple((name, many0(pattern)))),
             |(constructor, args)| Pattern::Destructure { constructor, args },
         ),
-        map(
-            delimited(ws(tag("[")), separated_list0(comma, pattern), ws(tag("]"))),
-            Pattern::List,
-        ),
-        map(string, Pattern::String),
     ))(input)
 }
 
@@ -98,18 +93,16 @@ fn app(input: &str) -> IResult<&str, Expr> {
 }
 
 fn term(input: &str) -> IResult<&str, Term> {
-    // println!("term"); // @DebugParsing
     alt((
         map(numeral, Term::Numeral),
         map(string, Term::String),
-        map(list, Term::List),
+        map(list(expr), Term::List),
         map(name, Term::Name),
         map(parens(expr), |e| Term::Parens(Box::new(e))),
     ))(input)
 }
 
 fn name(input: &str) -> IResult<&str, Name> {
-    // println!("name"); // @DebugParsing
     ws(map(
         recognize(tuple((
             satisfy(is_name_start_char),
@@ -120,7 +113,6 @@ fn name(input: &str) -> IResult<&str, Name> {
 }
 
 fn numeral(input: &str) -> IResult<&str, &str> {
-    // println!("numeral"); // @DebugParsing
     ws(alt((
         recognize(tuple((alt((tag("0x"), tag("0X"))), hex_digit1))),
         recognize(tuple((
@@ -140,7 +132,6 @@ fn numeral(input: &str) -> IResult<&str, &str> {
 }
 
 fn string(input: &str) -> IResult<&str, &str> {
-    // println!("string"); // @DebugParsing
     // "hello, world"
     ws(recognize(delimited(
         char('"'),
@@ -152,28 +143,26 @@ fn string(input: &str) -> IResult<&str, &str> {
     )))(input)
 }
 
-fn list(input: &str) -> IResult<&str, Vec<Expr>> {
-    // println!("list"); // @DebugParsing
-    delimited(ws(tag("[")), separated_list0(comma, expr), ws(tag("]")))(input)
+fn list<'a, F: 'a, O>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, Vec<O>>
+where
+    F: FnMut(&'a str) -> IResult<&'a str, O>,
+{
+    delimited(ws(tag("[")), separated_list0(comma, inner), ws(tag("]")))
 }
 
 fn operator(input: &str) -> IResult<&str, Name> {
-    // println!("operator"); // @DebugParsing
     map(ws(recognize(many1(one_of("=+-|!@#$%^&*:./~")))), Name)(input)
 }
 
 fn equals(input: &str) -> IResult<&str, Name> {
-    // println!("equals"); // @DebugParsing
     verify(operator, |name| name.0 == "=")(input)
 }
 
 fn semi(input: &str) -> IResult<&str, &str> {
-    // println!("semi"); // @DebugParsing
     ws(tag(";"))(input)
 }
 
 fn comma(input: &str) -> IResult<&str, &str> {
-    // println!("comma"); // @DebugParsing
     ws(tag(","))(input)
 }
 
@@ -181,7 +170,6 @@ fn ws<'a, F: 'a, O>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O>
 where
     F: FnMut(&'a str) -> IResult<&'a str, O>,
 {
-    // println!("ws"); // @DebugParsing
     // @Todo: comments
 
     // let short_comment = delimited(tag("--"), take_till(|c| c == '\n'), char('\n'));
@@ -199,7 +187,6 @@ fn parens<'a, F: 'a, O>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O>
 where
     F: FnMut(&'a str) -> IResult<&'a str, O>,
 {
-    // println!("parens"); // @DebugParsing
     delimited(ws(tag("(")), inner, ws(tag(")")))
 }
 

@@ -45,7 +45,7 @@ pub struct Lhs<'a> {
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub enum Pattern<'a> {
-    Name(Name<'a>),
+    Var(Name<'a>),
     List(Vec<Pattern<'a>>),
     String(&'a str),
     Destructure {
