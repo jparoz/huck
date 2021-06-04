@@ -1,8 +1,8 @@
 use nom::branch::alt;
 use nom::bytes::complete::{escaped, is_not, tag};
-use nom::character::complete::{char, hex_digit1, multispace0, one_of, satisfy};
-use nom::combinator::{map, not, opt, recognize, success, verify};
-use nom::multi::{many0, many1, separated_list0};
+use nom::character::complete::{anychar, char, hex_digit1, one_of, satisfy};
+use nom::combinator::{map, not, opt, recognize, success, value, verify};
+use nom::multi::{many0, many1, many_till, separated_list0};
 use nom::number::complete::recognize_float;
 use nom::sequence::{delimited, preceded, separated_pair, terminated, tuple};
 use nom::IResult;
@@ -173,15 +173,11 @@ fn ws<'a, F: 'a, O>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O>
 where
     F: FnMut(&'a str) -> IResult<&'a str, O>,
 {
-    // @Todo: comments
+    // @Fixme: this doesn't accept nested comments!
+    let comment = tuple((tag("(*"), many_till(anychar, tag("*)"))));
+    let space = satisfy(char::is_whitespace);
 
-    // let short_comment = delimited(tag("--"), take_till(|c| c == '\n'), char('\n'));
-    // let long_comment = preceded(tag("--"), long_string);
-
-    // let comment = alt((long_comment, short_comment));
-
-    // let whitespace = many0(alt((value((), multispace0), value((), comment))));
-    let whitespace = multispace0;
+    let whitespace = many0(alt((value((), comment), value((), space))));
 
     terminated(inner, whitespace)
 }
