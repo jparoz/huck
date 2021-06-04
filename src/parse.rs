@@ -83,19 +83,14 @@ fn binop(input: &str) -> IResult<&str, Expr> {
 }
 
 fn app(input: &str) -> IResult<&str, Expr> {
-    map(tuple((term, many0(term))), |(t, ts)| {
+    map(many1(term), |ts| {
         ts.into_iter()
             .map(Expr::Term)
-            // @Note: why doesn't .reduce() work here?? Rust can't find the method
-            // .reduce(|a, b| Expr::App {
-            //     func: Box::new(a),
-            //     argument: Box::new(b),
-            // })
-            // .unwrap() // safe unwrap because we're mapping over many1(term)
-            .fold(Expr::Term(t), |a, b| Expr::App {
+            .reduce(|a, b| Expr::App {
                 func: Box::new(a),
                 argument: Box::new(b),
             })
+            .unwrap() // safe unwrap because we're mapping over many1(term)
     })(input)
 }
 

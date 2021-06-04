@@ -1,5 +1,3 @@
-extern crate nom;
-
 mod ast;
 mod error;
 mod parse;
