@@ -1,0 +1,7 @@
+oneMinusOne = 1 - 1;
+oneMinusOne' = 1-1;
+onePlusMinusOne = 1+(-1);
+oneMinusMinusOne = 1.0-(-1.0);
+notOneMinusMinusOne = 1.0--1.0;
+binary = (-0b0101);
+hex = (-0xABCD);

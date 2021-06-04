@@ -1,7 +1,7 @@
 use nom::branch::alt;
 use nom::bytes::complete::{escaped, is_not, tag};
 use nom::character::complete::{char, hex_digit1, multispace0, one_of, satisfy};
-use nom::combinator::{map, opt, recognize, success, verify};
+use nom::combinator::{map, not, opt, recognize, success, verify};
 use nom::multi::{many0, many1, separated_list0};
 use nom::number::complete::recognize_float;
 use nom::sequence::{delimited, preceded, separated_pair, terminated, tuple};
@@ -101,7 +101,8 @@ fn app(input: &str) -> IResult<&str, Expr> {
 
 fn term(input: &str) -> IResult<&str, Term> {
     alt((
-        map(numeral, Term::Numeral),
+        map(numeral_positive, Term::Numeral),
+        map(parens(numeral_negative), Term::Numeral),
         map(string, Term::String),
         map(list(expr), Term::List),
         map(name, Term::Name),
@@ -126,16 +127,16 @@ fn numeral(input: &str) -> IResult<&str, &str> {
             alt((tag("0b"), tag("0B"))),
             many1(alt((char('0'), char('1')))),
         ))),
-        // @Fixme: negative numbers aren't handled properly. e.g.
-        //      1 - 1
-        //      1-1
-        // These two lines parse differently, but they should both be "one minus one",
-        // never "one applied to negative one".
         recognize_float,
-        // @Note: I don't think the below is reachable,
-        // because the above will cover ints as well as floats.
-        // digit1,
     )))(input)
+}
+
+fn numeral_positive(input: &str) -> IResult<&str, &str> {
+    preceded(not(tag("-")), numeral)(input)
+}
+
+fn numeral_negative(input: &str) -> IResult<&str, &str> {
+    recognize(tuple((tag("-"), numeral)))(input)
 }
 
 fn string(input: &str) -> IResult<&str, &str> {
