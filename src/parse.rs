@@ -1,8 +1,8 @@
 use nom::branch::alt;
-use nom::bytes::complete::{escaped, is_not, tag};
-use nom::character::complete::{anychar, char, hex_digit1, one_of, satisfy};
+use nom::bytes::complete::{escaped, is_not, tag, take_until};
+use nom::character::complete::{char, hex_digit1, one_of, satisfy};
 use nom::combinator::{map, not, opt, recognize, success, value, verify};
-use nom::multi::{many0, many1, many_till, separated_list0};
+use nom::multi::{many0, many1, separated_list0};
 use nom::number::complete::recognize_float;
 use nom::sequence::{delimited, preceded, separated_pair, terminated, tuple};
 use nom::IResult;
@@ -169,12 +169,19 @@ fn comma(input: &str) -> IResult<&str, &str> {
     ws(tag(","))(input)
 }
 
+fn comment(input: &str) -> IResult<&str, &str> {
+    recognize(tuple((
+        tag("(*"),
+        opt(tuple((take_until("(*"), comment))),
+        take_until("*)"),
+        tag("*)"),
+    )))(input)
+}
+
 fn ws<'a, F: 'a, O>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O>
 where
     F: FnMut(&'a str) -> IResult<&'a str, O>,
 {
-    // @Fixme: this doesn't accept nested comments!
-    let comment = tuple((tag("(*"), many_till(anychar, tag("*)"))));
     let space = satisfy(char::is_whitespace);
 
     let whitespace = many0(alt((value((), comment), value((), space))));
