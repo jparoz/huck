@@ -1,8 +1,8 @@
 use nom::branch::alt;
 use nom::bytes::complete::{escaped, is_not, tag, take_until};
-use nom::character::complete::{char, hex_digit1, one_of, satisfy};
-use nom::combinator::{map, not, opt, recognize, success, value, verify};
-use nom::multi::{many0, many1, separated_list0};
+use nom::character::complete::{anychar, char, hex_digit1, one_of, satisfy};
+use nom::combinator::{map, not, opt, peek, recognize, success, value, verify};
+use nom::multi::{many0, many0_count, many1, many_till, separated_list0};
 use nom::number::complete::recognize_float;
 use nom::sequence::{delimited, preceded, separated_pair, terminated, tuple};
 use nom::IResult;
@@ -172,8 +172,10 @@ fn comma(input: &str) -> IResult<&str, &str> {
 fn comment(input: &str) -> IResult<&str, &str> {
     recognize(tuple((
         tag("(*"),
-        opt(tuple((take_until("(*"), comment))),
-        take_until("*)"),
+        many0_count(alt((
+            value((), tuple((peek(tag("(*")), comment))),
+            value((), tuple((peek(not(tag("*)"))), anychar))),
+        ))),
         tag("*)"),
     )))(input)
 }
