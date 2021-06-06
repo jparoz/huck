@@ -18,7 +18,7 @@ use std::fmt::{self, Display};
 
 #[derive(Debug)]
 pub struct Chunk<'a> {
-    assignments: HashMap<Name<'a>, Vec<(Lhs<'a>, Expr<'a>)>>,
+    pub assignments: HashMap<Name<'a>, Vec<(Lhs<'a>, Expr<'a>)>>,
 }
 
 impl<'a> Chunk<'a> {
