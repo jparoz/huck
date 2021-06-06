@@ -1,8 +1,8 @@
 use nom::branch::alt;
-use nom::bytes::complete::{escaped, is_not, tag, take_until};
+use nom::bytes::complete::{escaped, is_not, tag};
 use nom::character::complete::{anychar, char, hex_digit1, one_of, satisfy};
 use nom::combinator::{map, not, opt, peek, recognize, success, value, verify};
-use nom::multi::{many0, many0_count, many1, many_till, separated_list0};
+use nom::multi::{many0, many0_count, many1, separated_list0};
 use nom::number::complete::recognize_float;
 use nom::sequence::{delimited, preceded, separated_pair, terminated, tuple};
 use nom::IResult;
