@@ -79,6 +79,7 @@ pub enum Term<'a> {
     Numeral(&'a str),
     String(&'a str),
     List(Vec<Expr<'a>>),
+    Tuple(Box<Expr<'a>>, Box<Expr<'a>>),
     Name(Name<'a>),
     Parens(Box<Expr<'a>>),
 }

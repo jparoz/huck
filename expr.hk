@@ -18,3 +18,10 @@ isHello _ = False;
 
 isListOfHello ["Hello!"] = True;
 isListOfHello _ = False;
+
+tuple = (1, True);
+threeTuple = (1, 2, 3);
+fourTuple = (1, 2, 3, 4);
+
+fst (x, _) = x;
+snd (_, y) = y;

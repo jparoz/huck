@@ -90,8 +90,20 @@ fn app(input: &str) -> IResult<&str, Expr> {
                 func: Box::new(a),
                 argument: Box::new(b),
             })
-            .unwrap() // safe unwrap because we're mapping over many1(term)
+            .unwrap() // safe unwrap because we're mapping over many1
     })(input)
+}
+
+fn tup(input: &str) -> IResult<&str, (Expr, Expr)> {
+    parens(tuple((
+        expr,
+        map(many1(preceded(comma, expr)), |es| {
+            es.into_iter()
+                .rev()
+                .reduce(|b, a| Expr::Term(Term::Tuple(Box::new(a), Box::new(b))))
+                .unwrap() // safe unwrap because we're mapping over many1
+        }),
+    )))(input)
 }
 
 fn term(input: &str) -> IResult<&str, Term> {
@@ -100,6 +112,7 @@ fn term(input: &str) -> IResult<&str, Term> {
         map(parens(numeral_negative), Term::Numeral),
         map(string, Term::String),
         map(list(expr), Term::List),
+        map(tup, |(x, y)| Term::Tuple(Box::new(x), Box::new(y))),
         map(name, Term::Name),
         map(parens(expr), |e| Term::Parens(Box::new(e))),
     ))(input)
