@@ -51,7 +51,7 @@ fn lhs(input: &str) -> IResult<&str, Lhs> {
 
 fn pattern(input: &str) -> IResult<&str, Pattern> {
     alt((
-        map(name, Pattern::Var),
+        map(var, Pattern::Bind),
         map(list(pattern), Pattern::List),
         map(
             parens(tuple((
@@ -130,14 +130,22 @@ fn term(input: &str) -> IResult<&str, Term> {
     ))(input)
 }
 
+fn var(input: &str) -> IResult<&str, &str> {
+    ws(recognize(tuple((
+        satisfy(is_var_start_char),
+        many0(satisfy(is_name_char)),
+    ))))(input)
+}
+
+fn upper_ident(input: &str) -> IResult<&str, &str> {
+    ws(recognize(tuple((
+        satisfy(char::is_uppercase),
+        many0(satisfy(is_name_char)),
+    ))))(input)
+}
+
 fn name(input: &str) -> IResult<&str, Name> {
-    ws(map(
-        recognize(tuple((
-            satisfy(is_name_start_char),
-            many0(satisfy(is_name_char)),
-        ))),
-        Name,
-    ))(input)
+    ws(map(alt((var, upper_ident)), Name))(input)
 }
 
 fn numeral(input: &str) -> IResult<&str, &str> {
@@ -224,9 +232,9 @@ where
 }
 
 fn is_name_char(c: char) -> bool {
-    is_name_start_char(c) || c.is_numeric() || c == '\''
+    c.is_alphanumeric() || c == '_' || c == '\''
 }
 
-fn is_name_start_char(c: char) -> bool {
-    c.is_alphabetic() || c == '_'
+fn is_var_start_char(c: char) -> bool {
+    c.is_lowercase() || c == '_'
 }

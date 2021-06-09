@@ -45,7 +45,7 @@ pub struct Lhs<'a> {
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub enum Pattern<'a> {
-    Var(Name<'a>),
+    Bind(&'a str),
     List(Vec<Pattern<'a>>),
     Tuple(Box<Pattern<'a>>, Box<Pattern<'a>>),
     String(&'a str),
