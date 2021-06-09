@@ -47,6 +47,7 @@ pub struct Lhs<'a> {
 pub enum Pattern<'a> {
     Var(Name<'a>),
     List(Vec<Pattern<'a>>),
+    Tuple(Box<Pattern<'a>>, Box<Pattern<'a>>),
     String(&'a str),
     Destructure {
         constructor: Name<'a>,

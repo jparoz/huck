@@ -53,6 +53,18 @@ fn pattern(input: &str) -> IResult<&str, Pattern> {
     alt((
         map(name, Pattern::Var),
         map(list(pattern), Pattern::List),
+        map(
+            parens(tuple((
+                pattern,
+                map(many1(preceded(comma, pattern)), |ps| {
+                    ps.into_iter()
+                        .rev()
+                        .reduce(|b, a| Pattern::Tuple(Box::new(a), Box::new(b)))
+                        .unwrap() // safe unwrap because we're mapping over many1
+                }),
+            ))),
+            |(x, y)| Pattern::Tuple(Box::new(x), Box::new(y)),
+        ),
         map(string, Pattern::String),
         map(
             parens(tuple((pattern, operator, pattern))),
