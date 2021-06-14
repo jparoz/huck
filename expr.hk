@@ -4,8 +4,8 @@ emptyList = [];
 
 shoutedGreetings = map toUpper ["hi", "hello"];
 
-num  = 1 + 2 * 3;
-num' = (1 + 2) * 3;
+num  = 1 * 2 + 3;
+num' = (1 * 2) + 3;
 num'' = 1 - 1;
 
 addOne n = n + 1;
