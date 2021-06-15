@@ -1,7 +1,6 @@
 mod ast;
 mod error;
 mod parse;
-mod precedence;
 
 fn main() {
     let filename = std::env::args().nth(1).unwrap();
@@ -11,7 +10,7 @@ fn main() {
 
     parsed.apply_precs(&std::collections::HashMap::new());
 
-    for (name, defs) in parsed.assignments {
+    for (_name, defs) in parsed.assignments {
         for (lhs, rhs) in defs {
             println!("{} = {};", lhs, rhs);
         }

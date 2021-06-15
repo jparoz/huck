@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::{self, Display};
 
-use crate::precedence::{Associativity, Precedence};
-
 // @Todo: use these, or something similar
 //
 // #[derive(PartialEq, Debug)]
@@ -270,6 +268,16 @@ impl<'a> Display for Term<'a> {
             }
         }
     }
+}
+
+#[derive(PartialEq, Clone, Copy, Debug)]
+pub struct Precedence(pub Associativity, pub u8);
+
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+pub enum Associativity {
+    Left,
+    Right,
+    None,
 }
 
 // Terminal colour escape codes, used to denote implicit parens
