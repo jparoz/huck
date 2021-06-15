@@ -12,9 +12,9 @@ fn main() {
     parsed.apply_precs(&std::collections::HashMap::new());
 
     for (name, defs) in parsed.assignments {
-        println!("{}:", name);
         for (lhs, rhs) in defs {
-            println!("    {:?} = {:?}", lhs, rhs);
+            println!("{} = {};", lhs, rhs);
         }
+        println!();
     }
 }

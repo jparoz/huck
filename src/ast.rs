@@ -65,6 +65,16 @@ pub struct Lhs<'a> {
     pub args: Vec<Pattern<'a>>,
 }
 
+impl<'a> Display for Lhs<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name)?;
+        for arg in self.args.iter() {
+            write!(f, " {}", arg)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub enum Pattern<'a> {
     Bind(&'a str),
@@ -75,6 +85,33 @@ pub enum Pattern<'a> {
         constructor: Name<'a>,
         args: Vec<Pattern<'a>>,
     },
+}
+
+impl<'a> Display for Pattern<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use Pattern::*;
+        match self {
+            Bind(n) => write!(f, "{}", n),
+            List(v) => write!(
+                f,
+                "[{}]",
+                v.iter()
+                    .map(|x| format!("{}", x))
+                    .collect::<Vec<std::string::String>>()
+                    .join(", ")
+            ),
+            Tuple(a, b) => write!(f, "({}, {})", a, b),
+            String(s) => write!(f, "{}", s),
+            Destructure { constructor, args } => {
+                // @Todo: write constructor binops properly
+                write!(f, "({}", constructor)?;
+                for arg in args {
+                    write!(f, " {}", arg)?;
+                }
+                write!(f, ")")
+            }
+        }
+    }
 }
 
 #[derive(PartialEq, Clone, Debug)]
@@ -151,8 +188,21 @@ impl<'a> Expr<'a> {
 }
 
 impl<'a> Display for Expr<'a> {
-    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        unimplemented!()
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use Expr::*;
+        match self {
+            App { func, argument } => {
+                write!(f, "{}({}", DIM, RESET)?;
+                write!(f, "{} {}", func, argument)?;
+                write!(f, "{}){}", DIM, RESET)
+            }
+            Binop { operator, lhs, rhs } => {
+                write!(f, "{}({}", DIM, RESET)?;
+                write!(f, "{} {} {}", lhs, operator, rhs)?;
+                write!(f, "{}){}", DIM, RESET)
+            }
+            Term(t) => write!(f, "{}", t),
+        }
     }
 }
 
@@ -167,7 +217,37 @@ pub enum Term<'a> {
 }
 
 impl<'a> Display for Term<'a> {
-    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        unimplemented!()
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use Term::*;
+        match self {
+            Numeral(n) => {
+                write!(f, "{}", n)
+            }
+            String(s) => {
+                write!(f, "{}", s)
+            }
+            List(v) => write!(
+                f,
+                "[{}]",
+                v.iter()
+                    .map(|x| format!("{}", x))
+                    .collect::<Vec<std::string::String>>()
+                    .join(", ")
+            ),
+
+            Tuple(a, b) => {
+                write!(f, "({}, {})", a, b)
+            }
+            Name(n) => {
+                write!(f, "{}", n)
+            }
+            Parens(e) => {
+                write!(f, "({})", e)
+            }
+        }
     }
 }
+
+// Terminal colour escape codes, used to denote implicit parens
+const DIM: &str = "\x1b[34;1m";
+const RESET: &str = "\x1b[0m";
