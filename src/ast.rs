@@ -32,10 +32,10 @@ impl<'a> Chunk<'a> {
         // @Note: These defaults should one day be replaced with source code.
 
         let mut defaults = HashMap::with_capacity(4);
-        defaults.insert(Name("*"), Precedence(Associativity::Left, 7));
-        defaults.insert(Name("/"), Precedence(Associativity::Left, 7));
-        defaults.insert(Name("+"), Precedence(Associativity::Left, 6));
-        defaults.insert(Name("-"), Precedence(Associativity::Left, 6));
+        defaults.insert(Name::binop("*"), Precedence(Associativity::Left, 7));
+        defaults.insert(Name::binop("/"), Precedence(Associativity::Left, 7));
+        defaults.insert(Name::binop("+"), Precedence(Associativity::Left, 6));
+        defaults.insert(Name::binop("-"), Precedence(Associativity::Left, 6));
 
         defaults.extend(precs);
 
@@ -51,11 +51,31 @@ type Assignment<'a> = (Lhs<'a>, Expr<'a>);
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 // @Todo: path/scope i.e. `Foo::foo 123` instead of just `foo 123`
-pub struct Name<'a>(pub &'a str);
+pub struct Name<'a> {
+    pub name: &'a str,
+    pub is_binop: bool,
+    // pub path: &'a str,
+}
+
+impl<'a> Name<'a> {
+    pub fn new(s: &str) -> Name {
+        Name {
+            name: s,
+            is_binop: false,
+        }
+    }
+
+    pub fn binop(s: &str) -> Name {
+        Name {
+            name: s,
+            is_binop: true,
+        }
+    }
+}
 
 impl<'a> Display for Name<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}", self.name)
     }
 }
 
@@ -103,12 +123,16 @@ impl<'a> Display for Pattern<'a> {
             Tuple(a, b) => write!(f, "({}, {})", a, b),
             String(s) => write!(f, "{}", s),
             Destructure { constructor, args } => {
-                // @Todo: write constructor binops properly
-                write!(f, "({}", constructor)?;
-                for arg in args {
-                    write!(f, " {}", arg)?;
+                if constructor.is_binop {
+                    assert!(args.len() == 2);
+                    write!(f, "({} {} {})", args[0], constructor, args[1])
+                } else {
+                    write!(f, "({}", constructor)?;
+                    for arg in args {
+                        write!(f, " {}", arg)?;
+                    }
+                    write!(f, ")")
                 }
-                write!(f, ")")
             }
         }
     }
