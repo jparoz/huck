@@ -74,9 +74,13 @@ fn pattern(input: &str) -> IResult<&str, Pattern> {
             },
         ),
         map(
-            parens(tuple((name, many0(pattern)))),
+            parens(tuple((constructor, many0(pattern)))),
             |(constructor, args)| Pattern::Destructure { constructor, args },
         ),
+        map(constructor, |c| Pattern::Destructure {
+            constructor: c,
+            args: Vec::new(),
+        }),
     ))(input)
 }
 
@@ -146,6 +150,10 @@ fn upper_ident(input: &str) -> IResult<&str, &str> {
 
 fn name(input: &str) -> IResult<&str, Name> {
     ws(map(alt((var, upper_ident)), Name::new))(input)
+}
+
+fn constructor(input: &str) -> IResult<&str, Name> {
+    ws(map(upper_ident, Name::new))(input)
 }
 
 fn numeral(input: &str) -> IResult<&str, &str> {

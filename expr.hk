@@ -27,3 +27,6 @@ fst (x, _) = x;
 snd (_, y) = y;
 
 thd (_, _, z) = z;
+
+not True = False;
+not False = True;
