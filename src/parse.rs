@@ -53,26 +53,7 @@ fn pattern(input: &str) -> IResult<&str, Pattern> {
     alt((
         map(ws(var), Pattern::Bind),
         map(list(pattern), Pattern::List),
-        map(
-            parens(tuple((
-                pattern,
-                map(many1(preceded(comma, pattern)), |ps| {
-                    ps.into_iter()
-                        .rev()
-                        .reduce(|b, a| Pattern::Tuple(Box::new(a), Box::new(b)))
-                        .unwrap() // safe unwrap because we're mapping over many1
-                }),
-            ))),
-            |(x, y)| Pattern::Tuple(Box::new(x), Box::new(y)),
-        ),
         map(string, Pattern::String),
-        map(
-            parens(tuple((pattern, operator, pattern))),
-            |(lhs, op, rhs)| Pattern::Destructure {
-                constructor: op,
-                args: vec![lhs, rhs],
-            },
-        ),
         map(
             parens(tuple((constructor, many0(pattern)))),
             |(constructor, args)| Pattern::Destructure { constructor, args },
@@ -81,7 +62,19 @@ fn pattern(input: &str) -> IResult<&str, Pattern> {
             constructor: c,
             args: Vec::new(),
         }),
+        // @Note: The below relies on first having checked the other possibilities above.
+        parens(pattern_binop),
     ))(input)
+}
+
+fn pattern_binop(input: &str) -> IResult<&str, Pattern> {
+    map(
+        tuple((pattern, operator, alt((pattern_binop, pattern)))),
+        |(lhs, operator, rhs)| Pattern::Destructure {
+            constructor: operator,
+            args: vec![lhs, rhs],
+        },
+    )(input)
 }
 
 fn expr(input: &str) -> IResult<&str, Expr> {
@@ -110,25 +103,12 @@ fn app(input: &str) -> IResult<&str, Expr> {
     })(input)
 }
 
-fn tup(input: &str) -> IResult<&str, (Expr, Expr)> {
-    parens(tuple((
-        expr,
-        map(many1(preceded(comma, expr)), |es| {
-            es.into_iter()
-                .rev()
-                .reduce(|b, a| Expr::Term(Term::Tuple(Box::new(a), Box::new(b))))
-                .unwrap() // safe unwrap because we're mapping over many1
-        }),
-    )))(input)
-}
-
 fn term(input: &str) -> IResult<&str, Term> {
     alt((
         map(numeral_positive, Term::Numeral),
         map(parens(numeral_negative), Term::Numeral),
         map(string, Term::String),
         map(list(expr), Term::List),
-        map(tup, |(x, y)| Term::Tuple(Box::new(x), Box::new(y))),
         map(name, Term::Name),
         map(parens(expr), |e| Term::Parens(Box::new(e))),
     ))(input)
@@ -197,7 +177,7 @@ where
 fn operator(input: &str) -> IResult<&str, Name> {
     map(
         ws(recognize(alt((
-            value((), many1(one_of("=+-|!@#$%^&*:./~"))),
+            value((), many1(one_of("=+-|!@#$%^&*:.,/~"))),
             value((), delimited(char('`'), alt((var, upper_ident)), char('`'))),
         )))),
         Name::binop,

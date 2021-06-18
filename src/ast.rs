@@ -29,16 +29,18 @@ impl<'a> Chunk<'a> {
     pub fn apply_precs(&mut self, precs: &HashMap<Name<'a>, Precedence>) {
         // @Note: These defaults should one day be replaced with source code.
 
-        let mut defaults = HashMap::with_capacity(4);
+        let mut defaults = HashMap::with_capacity(5);
         defaults.insert(Name::binop("*"), Precedence(Associativity::Left, 7));
         defaults.insert(Name::binop("/"), Precedence(Associativity::Left, 7));
         defaults.insert(Name::binop("+"), Precedence(Associativity::Left, 6));
         defaults.insert(Name::binop("-"), Precedence(Associativity::Left, 6));
+        defaults.insert(Name::binop(","), Precedence(Associativity::Right, 1));
 
         defaults.extend(precs);
 
         for (_name, defns) in &mut self.assignments {
-            for (_lhs, rhs) in defns.iter_mut() {
+            for (lhs, rhs) in defns.iter_mut() {
+                lhs.apply_precs(&defaults);
                 rhs.apply_precs(&defaults);
             }
         }
@@ -83,6 +85,12 @@ pub struct Lhs<'a> {
     pub args: Vec<Pattern<'a>>,
 }
 
+impl<'a> Lhs<'a> {
+    fn apply_precs(&mut self, precs: &HashMap<Name<'a>, Precedence>) {
+        // unimplemented!()
+    }
+}
+
 impl<'a> Display for Lhs<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.name)?;
@@ -97,7 +105,6 @@ impl<'a> Display for Lhs<'a> {
 pub enum Pattern<'a> {
     Bind(&'a str),
     List(Vec<Pattern<'a>>),
-    Tuple(Box<Pattern<'a>>, Box<Pattern<'a>>),
     String(&'a str),
     Destructure {
         constructor: Name<'a>,
@@ -118,7 +125,6 @@ impl<'a> Display for Pattern<'a> {
                     .collect::<Vec<std::string::String>>()
                     .join(", ")
             ),
-            Tuple(a, b) => write!(f, "({}, {})", a, b),
             String(s) => write!(f, "{}", s),
             Destructure { constructor, args } => {
                 if constructor.is_binop {
@@ -151,7 +157,7 @@ pub enum Expr<'a> {
 }
 
 impl<'a> Expr<'a> {
-    pub fn apply_precs(&mut self, precs: &HashMap<Name<'a>, Precedence>) {
+    fn apply_precs(&mut self, precs: &HashMap<Name<'a>, Precedence>) {
         match self {
             Expr::Binop {
                 operator: ref mut l_op,
@@ -198,10 +204,6 @@ impl<'a> Expr<'a> {
                         e.apply_precs(precs);
                     }
                 }
-                Term::Tuple(a, b) => {
-                    a.apply_precs(precs);
-                    b.apply_precs(precs);
-                }
                 Term::Parens(e) => e.apply_precs(precs),
                 _ => (),
             },
@@ -233,7 +235,6 @@ pub enum Term<'a> {
     Numeral(&'a str),
     String(&'a str),
     List(Vec<Expr<'a>>),
-    Tuple(Box<Expr<'a>>, Box<Expr<'a>>),
     Name(Name<'a>),
     Parens(Box<Expr<'a>>),
 }
@@ -257,9 +258,6 @@ impl<'a> Display for Term<'a> {
                     .join(", ")
             ),
 
-            Tuple(a, b) => {
-                write!(f, "({}, {})", a, b)
-            }
             Name(n) => {
                 write!(f, "{}", n)
             }

@@ -23,6 +23,8 @@ tuple = (1, True);
 threeTuple = (1, 2, 3);
 fourTuple = (1, 2, 3, 4);
 
+ten = 1 + 2 + 3 + 4;
+
 fst (x, _) = x;
 snd (_, y) = y;
 
