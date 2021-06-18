@@ -164,7 +164,6 @@ impl<'a> Expr<'a> {
                 lhs: ref mut a,
                 ref mut rhs,
             } => {
-                a.apply_precs(precs);
                 rhs.apply_precs(precs);
                 if let Expr::Binop {
                     operator: ref mut r_op,
@@ -193,6 +192,7 @@ impl<'a> Expr<'a> {
                         std::mem::swap(a, rhs);
                     }
                 }
+                a.apply_precs(precs);
             }
             Expr::App { func, argument } => {
                 func.apply_precs(precs);
