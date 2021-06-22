@@ -149,12 +149,24 @@ impl<'a> Pattern<'a> {
                         }
                         if rhs_cons.is_binop {
                             assert!(rhs_args.len() == 2);
+
                             let Precedence(l_assoc, l_pri) = precs
                                 .get(constructor)
                                 .unwrap_or(&Precedence(Associativity::Left, 9));
-                            let Precedence(_r_assoc, r_pri) = precs
+                            let Precedence(r_assoc, r_pri) = precs
                                 .get(rhs_cons)
                                 .unwrap_or(&Precedence(Associativity::Left, 9));
+
+                            if l_pri == r_pri
+                                && *l_assoc == Associativity::None
+                                && *r_assoc == Associativity::None
+                            {
+                                // @Todo @Errors: throw a proper parse error
+                                panic!(
+                            "Can't combine infix operators of same precedence and no associativity"
+                        );
+                            }
+
                             if l_pri >= r_pri && *l_assoc == Associativity::Left {
                                 let (b_slice, c_slice) = rhs_args.split_at_mut(1);
                                 let b = &mut b_slice[0];
@@ -249,9 +261,19 @@ impl<'a> Expr<'a> {
                     let Precedence(l_assoc, l_pri) = precs
                         .get(&l_op)
                         .unwrap_or(&Precedence(Associativity::Left, 9));
-                    let Precedence(_r_assoc, r_pri) = precs
+                    let Precedence(r_assoc, r_pri) = precs
                         .get(&r_op)
                         .unwrap_or(&Precedence(Associativity::Left, 9));
+
+                    if l_pri == r_pri
+                        && *l_assoc == Associativity::None
+                        && *r_assoc == Associativity::None
+                    {
+                        // @Todo @Errors: throw a proper parse error
+                        panic!(
+                            "Can't combine infix operators of same precedence and no associativity"
+                        );
+                    }
 
                     if l_pri >= r_pri && *l_assoc == Associativity::Left {
                         // Change from right-assoc to left-assoc

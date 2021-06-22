@@ -1,8 +1,1 @@
-head (x::xs) = x;
-head [] = undefined;
-
-secondHead (x::y::ys) = y;
-secondHead _ = undefined;
-
-nHead (a::b::c::d::e::f::g::rest) = g;
-nHead _ = undefined;
+boolean ((True == True) == False) = False;
