@@ -35,6 +35,14 @@ impl<'a> Chunk<'a> {
         defaults.insert(Name::binop("+"), Precedence(Associativity::Left, 6));
         defaults.insert(Name::binop("-"), Precedence(Associativity::Left, 6));
         defaults.insert(Name::binop(","), Precedence(Associativity::Right, 1));
+        defaults.insert(Name::binop("::"), Precedence(Associativity::Right, 5));
+        defaults.insert(Name::binop("$"), Precedence(Associativity::Right, 0));
+        defaults.insert(Name::binop("=="), Precedence(Associativity::None, 4));
+        defaults.insert(Name::binop("!="), Precedence(Associativity::None, 4));
+        defaults.insert(Name::binop("<"), Precedence(Associativity::None, 4));
+        defaults.insert(Name::binop("<="), Precedence(Associativity::None, 4));
+        defaults.insert(Name::binop(">"), Precedence(Associativity::None, 4));
+        defaults.insert(Name::binop(">="), Precedence(Associativity::None, 4));
 
         defaults.extend(precs);
 
@@ -87,7 +95,10 @@ pub struct Lhs<'a> {
 
 impl<'a> Lhs<'a> {
     fn apply_precs(&mut self, precs: &HashMap<Name<'a>, Precedence>) {
-        // unimplemented!()
+        let Lhs { args, .. } = self;
+        for arg in args {
+            arg.apply_precs(precs);
+        }
     }
 }
 
@@ -110,6 +121,66 @@ pub enum Pattern<'a> {
         constructor: Name<'a>,
         args: Vec<Pattern<'a>>,
     },
+}
+
+impl<'a> Pattern<'a> {
+    fn apply_precs(&mut self, precs: &HashMap<Name<'a>, Precedence>) {
+        match self {
+            Pattern::List(args) => {
+                for arg in args {
+                    arg.apply_precs(precs)
+                }
+            }
+            Pattern::Destructure { constructor, args } => {
+                if constructor.is_binop {
+                    assert!(args.len() == 2);
+
+                    let (a_slice, rhs_slice) = args.split_at_mut(1);
+                    let a = &mut a_slice[0];
+                    let rhs = &mut rhs_slice[0];
+                    rhs.apply_precs(precs);
+                    if let Pattern::Destructure {
+                        constructor: ref mut rhs_cons,
+                        args: ref mut rhs_args,
+                    } = rhs
+                    {
+                        for arg in rhs_args.iter_mut() {
+                            arg.apply_precs(precs);
+                        }
+                        if rhs_cons.is_binop {
+                            assert!(rhs_args.len() == 2);
+                            let Precedence(l_assoc, l_pri) = precs
+                                .get(constructor)
+                                .unwrap_or(&Precedence(Associativity::Left, 9));
+                            let Precedence(_r_assoc, r_pri) = precs
+                                .get(rhs_cons)
+                                .unwrap_or(&Precedence(Associativity::Left, 9));
+                            if l_pri >= r_pri && *l_assoc == Associativity::Left {
+                                let (b_slice, c_slice) = rhs_args.split_at_mut(1);
+                                let b = &mut b_slice[0];
+                                let c = &mut c_slice[0];
+
+                                // Change from right-assoc to left-assoc
+                                std::mem::swap(constructor, rhs_cons);
+
+                                std::mem::swap(c, b);
+                                std::mem::swap(b, a);
+
+                                std::mem::swap(a, rhs);
+                            }
+                        }
+                    }
+
+                    args[0].apply_precs(precs);
+                } else {
+                    for arg in args {
+                        arg.apply_precs(precs)
+                    }
+                }
+            }
+            _ => (),
+        }
+    }
 }
 
 impl<'a> Display for Pattern<'a> {

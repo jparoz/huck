@@ -1,4 +1,8 @@
-six = 1 + 2 + 3;
-ten = 1 + 2 + 3 + 4;
-fifteen = 1 + 2 + 3 + 4 + 5;
-twentyOne = 1 + 2 + 3 + 4 + 5 + 6;
+head (x::xs) = x;
+head [] = undefined;
+
+secondHead (x::y::ys) = y;
+secondHead _ = undefined;
+
+nHead (a::b::c::d::e::f::g::rest) = g;
+nHead _ = undefined;
