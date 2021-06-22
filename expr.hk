@@ -32,3 +32,5 @@ thd (_, _, z) = z;
 
 not True = False;
 not False = True;
+
+x == y = True; (* bad definition *)

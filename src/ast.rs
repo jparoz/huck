@@ -88,27 +88,55 @@ impl<'a> Display for Name<'a> {
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
-pub struct Lhs<'a> {
-    pub name: Name<'a>,
-    pub args: Vec<Pattern<'a>>,
+pub enum Lhs<'a> {
+    Func {
+        name: Name<'a>,
+        args: Vec<Pattern<'a>>,
+    },
+    Binop {
+        a: Pattern<'a>,
+        op: Name<'a>,
+        b: Pattern<'a>,
+    },
 }
 
 impl<'a> Lhs<'a> {
+    pub fn name(&self) -> Name<'a> {
+        match self {
+            Lhs::Func { name, .. } => *name,
+            Lhs::Binop { op, .. } => *op,
+        }
+    }
+
     fn apply_precs(&mut self, precs: &HashMap<Name<'a>, Precedence>) {
-        let Lhs { args, .. } = self;
-        for arg in args {
-            arg.apply_precs(precs);
+        match self {
+            Lhs::Func { args, .. } => {
+                for arg in args {
+                    arg.apply_precs(precs);
+                }
+            }
+            Lhs::Binop { a, op: _, b } => {
+                a.apply_precs(precs);
+                b.apply_precs(precs);
+            }
         }
     }
 }
 
 impl<'a> Display for Lhs<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.name)?;
-        for arg in self.args.iter() {
-            write!(f, " {}", arg)?;
+        match self {
+            Lhs::Func { name, args } => {
+                write!(f, "{}", name)?;
+                for arg in args.iter() {
+                    write!(f, " {}", arg)?;
+                }
+                Ok(())
+            }
+            Lhs::Binop { a, op, b } => {
+                write!(f, "{} {} {}", a, op, b)
+            }
         }
-        Ok(())
     }
 }
 

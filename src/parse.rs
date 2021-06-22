@@ -32,7 +32,9 @@ fn chunk(input: &str) -> IResult<&str, Chunk> {
     let mut env = HashMap::new();
 
     for (lhs, expr) in assigns {
-        env.entry(lhs.name).or_insert(Vec::new()).push((lhs, expr));
+        env.entry(lhs.name())
+            .or_insert(Vec::new())
+            .push((lhs, expr));
     }
 
     Ok((leftovers, Chunk::new(env)))
@@ -43,10 +45,15 @@ fn assign(input: &str) -> IResult<&str, (Lhs, Expr)> {
 }
 
 fn lhs(input: &str) -> IResult<&str, Lhs> {
-    map(tuple((name, many0(pattern))), |(name, args)| Lhs {
-        name,
-        args,
-    })(input)
+    alt((
+        map(tuple((pattern, operator, pattern)), |(a, op, b)| {
+            Lhs::Binop { a, op, b }
+        }),
+        map(tuple((name, many0(pattern))), |(name, args)| Lhs::Func {
+            name,
+            args,
+        }),
+    ))(input)
 }
 
 fn pattern(input: &str) -> IResult<&str, Pattern> {
