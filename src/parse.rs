@@ -139,11 +139,15 @@ fn upper_ident(input: &str) -> IResult<&str, &str> {
 }
 
 fn name(input: &str) -> IResult<&str, Name> {
-    ws(map(alt((var, upper_ident)), Name::new))(input)
+    ws(alt((
+        map(var, Name::Ident),
+        map(upper_ident, Name::Ident),
+        parens(operator),
+    )))(input)
 }
 
 fn constructor(input: &str) -> IResult<&str, Name> {
-    ws(map(upper_ident, Name::new))(input)
+    ws(map(upper_ident, Name::Ident))(input)
 }
 
 fn numeral(input: &str) -> IResult<&str, &str> {
@@ -197,7 +201,7 @@ fn operator(input: &str) -> IResult<&str, Name> {
             )))),
             |s| !is_reserved(s),
         ),
-        Name::binop,
+        Name::Binop,
     )(input)
 }
 

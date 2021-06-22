@@ -30,19 +30,19 @@ impl<'a> Chunk<'a> {
         // @Note: These defaults should one day be replaced with source code.
 
         let mut defaults = HashMap::with_capacity(5);
-        defaults.insert(Name::binop("*"), Precedence(Associativity::Left, 7));
-        defaults.insert(Name::binop("/"), Precedence(Associativity::Left, 7));
-        defaults.insert(Name::binop("+"), Precedence(Associativity::Left, 6));
-        defaults.insert(Name::binop("-"), Precedence(Associativity::Left, 6));
-        defaults.insert(Name::binop(","), Precedence(Associativity::Right, 1));
-        defaults.insert(Name::binop("::"), Precedence(Associativity::Right, 5));
-        defaults.insert(Name::binop("$"), Precedence(Associativity::Right, 0));
-        defaults.insert(Name::binop("=="), Precedence(Associativity::None, 4));
-        defaults.insert(Name::binop("!="), Precedence(Associativity::None, 4));
-        defaults.insert(Name::binop("<"), Precedence(Associativity::None, 4));
-        defaults.insert(Name::binop("<="), Precedence(Associativity::None, 4));
-        defaults.insert(Name::binop(">"), Precedence(Associativity::None, 4));
-        defaults.insert(Name::binop(">="), Precedence(Associativity::None, 4));
+        defaults.insert(Name::Binop("*"), Precedence(Associativity::Left, 7));
+        defaults.insert(Name::Binop("/"), Precedence(Associativity::Left, 7));
+        defaults.insert(Name::Binop("+"), Precedence(Associativity::Left, 6));
+        defaults.insert(Name::Binop("-"), Precedence(Associativity::Left, 6));
+        defaults.insert(Name::Binop(","), Precedence(Associativity::Right, 1));
+        defaults.insert(Name::Binop("::"), Precedence(Associativity::Right, 5));
+        defaults.insert(Name::Binop("$"), Precedence(Associativity::Right, 0));
+        defaults.insert(Name::Binop("=="), Precedence(Associativity::None, 4));
+        defaults.insert(Name::Binop("!="), Precedence(Associativity::None, 4));
+        defaults.insert(Name::Binop("<"), Precedence(Associativity::None, 4));
+        defaults.insert(Name::Binop("<="), Precedence(Associativity::None, 4));
+        defaults.insert(Name::Binop(">"), Precedence(Associativity::None, 4));
+        defaults.insert(Name::Binop(">="), Precedence(Associativity::None, 4));
 
         defaults.extend(precs);
 
@@ -58,32 +58,16 @@ impl<'a> Chunk<'a> {
 type Assignment<'a> = (Lhs<'a>, Expr<'a>);
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
-// @Todo: path/scope i.e. `Foo::foo 123` instead of just `foo 123`
-pub struct Name<'a> {
-    pub name: &'a str,
-    pub is_binop: bool,
-    // pub path: &'a str,
-}
-
-impl<'a> Name<'a> {
-    pub fn new(s: &str) -> Name {
-        Name {
-            name: s,
-            is_binop: false,
-        }
-    }
-
-    pub fn binop(s: &str) -> Name {
-        Name {
-            name: s,
-            is_binop: true,
-        }
-    }
+pub enum Name<'a> {
+    Ident(&'a str),
+    Binop(&'a str),
 }
 
 impl<'a> Display for Name<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.name)
+        match self {
+            Name::Ident(s) | Name::Binop(s) => write!(f, "{}", s),
+        }
     }
 }
 
@@ -160,7 +144,7 @@ impl<'a> Pattern<'a> {
                 }
             }
             Pattern::Destructure { constructor, args } => {
-                if constructor.is_binop {
+                if let Name::Binop(_) = constructor {
                     assert!(args.len() == 2);
 
                     let (a_slice, rhs_slice) = args.split_at_mut(1);
@@ -175,7 +159,7 @@ impl<'a> Pattern<'a> {
                         for arg in rhs_args.iter_mut() {
                             arg.apply_precs(precs);
                         }
-                        if rhs_cons.is_binop {
+                        if let Name::Binop(_) = rhs_cons {
                             assert!(rhs_args.len() == 2);
 
                             let Precedence(l_assoc, l_pri) = precs
@@ -238,7 +222,7 @@ impl<'a> Display for Pattern<'a> {
             ),
             String(s) => write!(f, "{}", s),
             Destructure { constructor, args } => {
-                if constructor.is_binop {
+                if let Name::Binop(_) = constructor {
                     assert!(args.len() == 2);
                     write!(f, "({} {} {})", args[0], constructor, args[1])
                 } else {
