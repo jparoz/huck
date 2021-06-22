@@ -39,7 +39,7 @@ fn chunk(input: &str) -> IResult<&str, Chunk> {
 }
 
 fn assign(input: &str) -> IResult<&str, (Lhs, Expr)> {
-    terminated(separated_pair(lhs, equals, expr), semi)(input)
+    terminated(separated_pair(lhs, reserved_op("="), expr), semi)(input)
 }
 
 fn lhs(input: &str) -> IResult<&str, Lhs> {
@@ -115,10 +115,13 @@ fn term(input: &str) -> IResult<&str, Term> {
 }
 
 fn var(input: &str) -> IResult<&str, &str> {
-    recognize(tuple((
-        satisfy(is_var_start_char),
-        many0(satisfy(is_name_char)),
-    )))(input)
+    verify(
+        recognize(tuple((
+            satisfy(is_var_start_char),
+            many0(satisfy(is_name_char)),
+        ))),
+        |s| !is_reserved(s),
+    )(input)
 }
 
 fn upper_ident(input: &str) -> IResult<&str, &str> {
@@ -171,29 +174,32 @@ fn list<'a, F: 'a, O>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, Vec<O
 where
     F: FnMut(&'a str) -> IResult<&'a str, O>,
 {
-    delimited(ws(tag("[")), separated_list0(comma, inner), ws(tag("]")))
+    delimited(
+        ws(tag("[")),
+        separated_list0(reserved_op(","), inner),
+        ws(tag("]")),
+    )
 }
 
 fn operator(input: &str) -> IResult<&str, Name> {
     map(
-        ws(recognize(alt((
-            value((), many1(one_of("=+-|!@#$%^&*:.,/~"))),
-            value((), delimited(char('`'), alt((var, upper_ident)), char('`'))),
-        )))),
+        verify(
+            ws(recognize(alt((
+                value((), many1(operator_char)),
+                value((), delimited(char('`'), alt((var, upper_ident)), char('`'))),
+            )))),
+            |s| !is_reserved(s),
+        ),
         Name::binop,
     )(input)
 }
 
-fn equals(input: &str) -> IResult<&str, Name> {
-    verify(operator, |name| name.name == "=")(input)
+fn operator_char(input: &str) -> IResult<&str, char> {
+    one_of("=+-|!@#$%^&*:.,/~")(input)
 }
 
 fn semi(input: &str) -> IResult<&str, &str> {
     ws(tag(";"))(input)
-}
-
-fn comma(input: &str) -> IResult<&str, &str> {
-    ws(tag(","))(input)
 }
 
 fn comment(input: &str) -> IResult<&str, &str> {
@@ -218,6 +224,10 @@ where
     terminated(inner, whitespace)
 }
 
+fn reserved_op<'a>(s: &'a str) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> {
+    ws(terminated(tag(s), peek(not(operator_char))))
+}
+
 fn parens<'a, F: 'a, O>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O>
 where
     F: FnMut(&'a str) -> IResult<&'a str, O>,
@@ -231,4 +241,13 @@ fn is_name_char(c: char) -> bool {
 
 fn is_var_start_char(c: char) -> bool {
     c.is_lowercase() || c == '_'
+}
+
+// @Note: In the definition of upper_ident, we assume there are no reserved words beginning with
+// an uppercase letter.
+fn is_reserved(word: &str) -> bool {
+    match word {
+        "module" | "=" | ":" => true,
+        _ => false,
+    }
 }

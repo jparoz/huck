@@ -1,1 +1,3 @@
-boolean ((True == True) == False) = False;
+foo = bar `modul` baz;
+
+foo = bar :: baz;
