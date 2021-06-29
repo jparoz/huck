@@ -1,1 +1,3 @@
 (++) a b = append a b;
+
+a ++ b = append a b;

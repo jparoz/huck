@@ -65,10 +65,7 @@ fn pattern(input: &str) -> IResult<&str, Pattern> {
             parens(tuple((constructor, many0(pattern)))),
             |(constructor, args)| Pattern::Destructure { constructor, args },
         ),
-        map(constructor, |c| Pattern::Destructure {
-            constructor: c,
-            args: Vec::new(),
-        }),
+        map(constructor, Pattern::BareConstructor),
         // @Note: The below relies on first having checked the other possibilities above.
         parens(pattern_binop),
     ))(input)
@@ -77,9 +74,10 @@ fn pattern(input: &str) -> IResult<&str, Pattern> {
 fn pattern_binop(input: &str) -> IResult<&str, Pattern> {
     map(
         tuple((pattern, operator, alt((pattern_binop, pattern)))),
-        |(lhs, operator, rhs)| Pattern::Destructure {
-            constructor: operator,
-            args: vec![lhs, rhs],
+        |(lhs, operator, rhs)| Pattern::Binop {
+            operator,
+            lhs: Box::new(lhs),
+            rhs: Box::new(rhs),
         },
     )(input)
 }

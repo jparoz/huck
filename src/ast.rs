@@ -111,7 +111,10 @@ impl<'a> Display for Lhs<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Lhs::Func { name, args } => {
-                write!(f, "{}", name)?;
+                match name {
+                    Name::Ident(s) => write!(f, "{}", s)?,
+                    Name::Binop(s) => write!(f, "({})", s)?,
+                }
                 for arg in args.iter() {
                     write!(f, " {}", arg)?;
                 }
@@ -129,6 +132,12 @@ pub enum Pattern<'a> {
     Bind(&'a str),
     List(Vec<Pattern<'a>>),
     String(&'a str),
+    Binop {
+        operator: Name<'a>,
+        lhs: Box<Pattern<'a>>,
+        rhs: Box<Pattern<'a>>,
+    },
+    BareConstructor(Name<'a>),
     Destructure {
         constructor: Name<'a>,
         args: Vec<Pattern<'a>>,
@@ -143,63 +152,52 @@ impl<'a> Pattern<'a> {
                     arg.apply_precs(precs)
                 }
             }
-            Pattern::Destructure { constructor, args } => {
-                if let Name::Binop(_) = constructor {
-                    assert!(args.len() == 2);
+            Pattern::Binop {
+                operator: ref mut l_op,
+                lhs: ref mut a,
+                ref mut rhs,
+            } => {
+                rhs.apply_precs(precs);
+                if let Pattern::Binop {
+                    operator: ref mut r_op,
+                    lhs: ref mut b,
+                    rhs: ref mut c,
+                } = rhs.as_mut()
+                {
+                    b.apply_precs(precs);
+                    c.apply_precs(precs);
 
-                    let (a_slice, rhs_slice) = args.split_at_mut(1);
-                    let a = &mut a_slice[0];
-                    let rhs = &mut rhs_slice[0];
-                    rhs.apply_precs(precs);
-                    if let Pattern::Destructure {
-                        constructor: ref mut rhs_cons,
-                        args: ref mut rhs_args,
-                    } = rhs
+                    let Precedence(l_assoc, l_pri) = precs
+                        .get(l_op)
+                        .unwrap_or(&Precedence(Associativity::Left, 9));
+                    let Precedence(r_assoc, r_pri) = precs
+                        .get(r_op)
+                        .unwrap_or(&Precedence(Associativity::Left, 9));
+
+                    if l_pri == r_pri
+                        && *l_assoc == Associativity::None
+                        && *r_assoc == Associativity::None
                     {
-                        for arg in rhs_args.iter_mut() {
-                            arg.apply_precs(precs);
-                        }
-                        if let Name::Binop(_) = rhs_cons {
-                            assert!(rhs_args.len() == 2);
-
-                            let Precedence(l_assoc, l_pri) = precs
-                                .get(constructor)
-                                .unwrap_or(&Precedence(Associativity::Left, 9));
-                            let Precedence(r_assoc, r_pri) = precs
-                                .get(rhs_cons)
-                                .unwrap_or(&Precedence(Associativity::Left, 9));
-
-                            if l_pri == r_pri
-                                && *l_assoc == Associativity::None
-                                && *r_assoc == Associativity::None
-                            {
-                                // @Todo @Errors: throw a proper parse error
-                                panic!(
+                        // @Todo @Errors: throw a proper parse error
+                        panic!(
                             "Can't combine infix operators of same precedence and no associativity"
                         );
-                            }
-
-                            if l_pri >= r_pri && *l_assoc == Associativity::Left {
-                                let (b_slice, c_slice) = rhs_args.split_at_mut(1);
-                                let b = &mut b_slice[0];
-                                let c = &mut c_slice[0];
-
-                                // Change from right-assoc to left-assoc
-                                std::mem::swap(constructor, rhs_cons);
-
-                                std::mem::swap(c, b);
-                                std::mem::swap(b, a);
-
-                                std::mem::swap(a, rhs);
-                            }
-                        }
                     }
 
-                    args[0].apply_precs(precs);
-                } else {
-                    for arg in args {
-                        arg.apply_precs(precs)
+                    if l_pri >= r_pri && *l_assoc == Associativity::Left {
+                        // Change from right-assoc to left-assoc
+                        std::mem::swap(l_op, r_op);
+
+                        std::mem::swap(c, b);
+                        std::mem::swap(b, a);
+
+                        std::mem::swap(a, rhs);
                     }
+                }
+            }
+            Pattern::Destructure { args, .. } => {
+                for arg in args {
+                    arg.apply_precs(precs)
                 }
             }
             _ => (),
@@ -221,17 +219,16 @@ impl<'a> Display for Pattern<'a> {
                     .join(", ")
             ),
             String(s) => write!(f, "{}", s),
+            Binop { operator, lhs, rhs } => {
+                write!(f, "({} {} {})", lhs, operator, rhs)
+            }
+            BareConstructor(name) => write!(f, "{}", name),
             Destructure { constructor, args } => {
-                if let Name::Binop(_) = constructor {
-                    assert!(args.len() == 2);
-                    write!(f, "({} {} {})", args[0], constructor, args[1])
-                } else {
-                    write!(f, "({}", constructor)?;
-                    for arg in args {
-                        write!(f, " {}", arg)?;
-                    }
-                    write!(f, ")")
+                write!(f, "{}", constructor)?;
+                for arg in args {
+                    write!(f, " {}", arg)?;
                 }
+                write!(f, ")")
             }
         }
     }
