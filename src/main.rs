@@ -32,5 +32,5 @@ fn main() {
     //     println!();
     // }
 
-    println!("ConstraintGenerator: {:?}", constraint_generator);
+    println!("{}", constraint_generator);
 }

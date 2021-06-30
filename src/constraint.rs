@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::{self, Display};
 
 use crate::ast::{Assignment, Expr, Lhs, Name, Pattern, Term};
 use crate::types::{Primitive, Type, TypeScheme, TypeVar};
@@ -23,7 +24,7 @@ impl ConstraintGenerator {
         let (lhs, expr) = subject;
         match lhs {
             Lhs::Func { name: _name, args } => {
-                args.iter().fold(self.generate(&expr), |acc, arg| {
+                args.iter().rev().fold(self.generate(&expr), |acc, arg| {
                     let beta = Type::Var(self.fresh());
 
                     match arg {
@@ -107,9 +108,44 @@ impl ConstraintGenerator {
     }
 }
 
+impl<'a> Display for ConstraintGenerator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Constraints:")?;
+        for constraint in self.constraints.iter() {
+            writeln!(f, "    {}", constraint)?;
+        }
+
+        if self.assumptions.len() > 0 {
+            writeln!(f, "Assumptions:")?;
+            for (name, vars) in self.assumptions.iter() {
+                for var in vars {
+                    writeln!(f, "    {} : {}", name, var)?;
+                }
+            }
+        }
+
+        write!(f, "Next typevar ID: {}", self.next_typevar_id)
+    }
+}
+
 #[derive(PartialEq, Eq, Debug)]
 enum Constraint {
     Equality(Type, Type),
     ExplicitInstance(Type, TypeScheme),
     ImplicitInstance(Type, Type, Vec<TypeVar>),
+}
+
+impl<'a> Display for Constraint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Constraint::Equality(a, b) => write!(f, "{} == {}", a, b),
+            Constraint::ExplicitInstance(tau, sigma) => {
+                write!(f, "{} is an instance of {}", tau, sigma)
+            }
+            Constraint::ImplicitInstance(a, b, m) => {
+                // write!(f, "{} is an instance of {}, generalized under {}", a, b, m)
+                unimplemented!()
+            }
+        }
+    }
 }

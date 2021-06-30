@@ -50,8 +50,24 @@ impl TypeScheme {
     }
 }
 
+impl Display for TypeScheme {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "∀")?;
+        for var in self.vars.iter() {
+            write!(f, " {}", var)?;
+        }
+        write!(f, ". {}", self.typ)
+    }
+}
+
 #[derive(Hash, PartialEq, Eq, Clone, Copy, Debug)]
 pub struct TypeVar(pub usize);
+
+impl Display for TypeVar {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "t{}", self.0)
+    }
+}
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Primitive {
