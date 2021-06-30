@@ -9,12 +9,12 @@ pub enum Type {
 }
 
 impl Type {
-    fn free_vars(&self) -> Vec<&TypeVar> {
+    pub fn free_vars(&self) -> Vec<TypeVar> {
         use Type::*;
 
         match self {
             Prim(_) => vec![],
-            Var(var) => vec![var],
+            Var(var) => vec![*var],
             Func(a, b) => {
                 let mut vars = a.free_vars();
                 vars.append(&mut b.free_vars());
@@ -28,7 +28,8 @@ impl Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Type::Var(TypeVar(id)) => write!(f, "t{}", id),
-            _ => unimplemented!(),
+            Type::Prim(p) => write!(f, "{:?}", p), // @Fixme: Display not Debug
+            Type::Func(a, b) => write!(f, "{} -> {}", a, b),
         }
     }
 }
@@ -40,7 +41,7 @@ pub struct TypeScheme {
 }
 
 impl TypeScheme {
-    fn free_vars(&self) -> Vec<&TypeVar> {
+    pub fn free_vars(&self) -> Vec<TypeVar> {
         self.typ
             .free_vars()
             .into_iter()

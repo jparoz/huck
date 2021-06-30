@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ast::{Expr, Name, Term};
+use crate::ast::{Assignment, Expr, Lhs, Name, Pattern, Term};
 use crate::types::{Primitive, Type, TypeScheme, TypeVar};
 
 #[derive(Debug)]
@@ -16,6 +16,36 @@ impl ConstraintGenerator {
             constraints: Vec::new(),
             assumptions: HashMap::new(),
             next_typevar_id: 0,
+        }
+    }
+
+    pub fn generate_assign(&mut self, subject: Assignment) -> Type {
+        let (lhs, expr) = subject;
+        match lhs {
+            Lhs::Func { name: _name, args } => {
+                args.iter().fold(self.generate(&expr), |acc, arg| {
+                    let beta = Type::Var(self.fresh());
+
+                    match arg {
+                        Pattern::Bind(s) => {
+                            if let Some(assumptions) =
+                                self.assumptions.remove(&Name::Ident(s.to_string()))
+                            {
+                                for assumed in assumptions {
+                                    self.constraints.push(Constraint::Equality(
+                                        Type::Var(assumed),
+                                        beta.clone(),
+                                    ));
+                                }
+                            }
+                        }
+                        _ => unimplemented!(),
+                    }
+
+                    Type::Func(Box::new(beta), Box::new(acc))
+                })
+            }
+            _ => unimplemented!(),
         }
     }
 

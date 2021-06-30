@@ -16,14 +16,21 @@ fn main() {
 
     let mut constraint_generator = ConstraintGenerator::new();
 
-    for (_name, defs) in parsed.assignments {
-        for (lhs, rhs) in defs {
-            // println!("{} = {};", lhs, rhs);
-            let typ = constraint_generator.generate(&rhs);
-            println!("rhs of {} has type {}", lhs, typ);
+    for (name, assigns) in parsed.assignments {
+        for assign in assigns {
+            let typ = constraint_generator.generate_assign(assign);
+            println!("{} has type {}", name, typ);
         }
-        println!();
     }
+
+    // for (_name, defs) in parsed.assignments {
+    //     for (lhs, rhs) in defs {
+    //         // println!("{} = {};", lhs, rhs);
+    //         let typ = constraint_generator.generate(&rhs);
+    //         println!("rhs of {} has type {}", lhs, typ);
+    //     }
+    //     println!();
+    // }
 
     println!("ConstraintGenerator: {:?}", constraint_generator);
 }
