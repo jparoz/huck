@@ -32,7 +32,7 @@ fn chunk(input: &str) -> IResult<&str, Chunk> {
     let mut env = HashMap::new();
 
     for (lhs, expr) in assigns {
-        env.entry(lhs.name())
+        env.entry(lhs.name().clone())
             .or_insert(Vec::new())
             .push((lhs, expr));
     }
@@ -138,14 +138,14 @@ fn upper_ident(input: &str) -> IResult<&str, &str> {
 
 fn name(input: &str) -> IResult<&str, Name> {
     ws(alt((
-        map(var, Name::Ident),
-        map(upper_ident, Name::Ident),
+        map(var, |s| Name::Ident(s.to_string())),
+        map(upper_ident, |s| Name::Ident(s.to_string())),
         parens(operator),
     )))(input)
 }
 
 fn constructor(input: &str) -> IResult<&str, Name> {
-    ws(map(upper_ident, Name::Ident))(input)
+    ws(map(upper_ident, |s| Name::Ident(s.to_string())))(input)
 }
 
 fn numeral(input: &str) -> IResult<&str, &str> {
@@ -199,7 +199,7 @@ fn operator(input: &str) -> IResult<&str, Name> {
             )))),
             |s| !is_reserved(s),
         ),
-        Name::Binop,
+        |s| Name::Binop(s.to_string()),
     )(input)
 }
 

@@ -1,6 +1,10 @@
 mod ast;
+mod constraint;
 mod error;
 mod parse;
+mod types;
+
+use constraint::ConstraintGenerator;
 
 fn main() {
     let filename = std::env::args().nth(1).unwrap();
@@ -10,10 +14,16 @@ fn main() {
 
     parsed.apply_precs(&std::collections::HashMap::new());
 
+    let mut constraint_generator = ConstraintGenerator::new();
+
     for (_name, defs) in parsed.assignments {
         for (lhs, rhs) in defs {
-            println!("{} = {};", lhs, rhs);
+            // println!("{} = {};", lhs, rhs);
+            let typ = constraint_generator.generate(&rhs);
+            println!("rhs of {} has type {}", lhs, typ);
         }
         println!();
     }
+
+    println!("ConstraintGenerator: {:?}", constraint_generator);
 }

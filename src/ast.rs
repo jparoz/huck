@@ -18,33 +18,74 @@ use std::fmt::{self, Display};
 
 #[derive(Debug)]
 pub struct Chunk<'a> {
-    pub assignments: HashMap<Name<'a>, Vec<Assignment<'a>>>,
+    pub assignments: HashMap<Name, Vec<Assignment<'a>>>,
 }
 
 impl<'a> Chunk<'a> {
-    pub fn new(assignments: HashMap<Name<'a>, Vec<Assignment<'a>>>) -> Chunk<'a> {
+    pub fn new(assignments: HashMap<Name, Vec<Assignment<'a>>>) -> Chunk<'a> {
         Chunk { assignments }
     }
 
-    pub fn apply_precs(&mut self, precs: &HashMap<Name<'a>, Precedence>) {
+    pub fn apply_precs(&mut self, precs: &HashMap<Name, Precedence>) {
         // @Note: These defaults should one day be replaced with source code.
 
-        let mut defaults = HashMap::with_capacity(5);
-        defaults.insert(Name::Binop("*"), Precedence(Associativity::Left, 7));
-        defaults.insert(Name::Binop("/"), Precedence(Associativity::Left, 7));
-        defaults.insert(Name::Binop("+"), Precedence(Associativity::Left, 6));
-        defaults.insert(Name::Binop("-"), Precedence(Associativity::Left, 6));
-        defaults.insert(Name::Binop(","), Precedence(Associativity::Right, 1));
-        defaults.insert(Name::Binop("::"), Precedence(Associativity::Right, 5));
-        defaults.insert(Name::Binop("$"), Precedence(Associativity::Right, 0));
-        defaults.insert(Name::Binop("=="), Precedence(Associativity::None, 4));
-        defaults.insert(Name::Binop("!="), Precedence(Associativity::None, 4));
-        defaults.insert(Name::Binop("<"), Precedence(Associativity::None, 4));
-        defaults.insert(Name::Binop("<="), Precedence(Associativity::None, 4));
-        defaults.insert(Name::Binop(">"), Precedence(Associativity::None, 4));
-        defaults.insert(Name::Binop(">="), Precedence(Associativity::None, 4));
+        let mut defaults: HashMap<Name, Precedence> = HashMap::with_capacity(13);
+        defaults.insert(
+            Name::Binop("*".to_string()),
+            Precedence(Associativity::Left, 7),
+        );
+        defaults.insert(
+            Name::Binop("/".to_string()),
+            Precedence(Associativity::Left, 7),
+        );
+        defaults.insert(
+            Name::Binop("+".to_string()),
+            Precedence(Associativity::Left, 6),
+        );
+        defaults.insert(
+            Name::Binop("-".to_string()),
+            Precedence(Associativity::Left, 6),
+        );
+        defaults.insert(
+            Name::Binop(",".to_string()),
+            Precedence(Associativity::Right, 1),
+        );
+        defaults.insert(
+            Name::Binop("::".to_string()),
+            Precedence(Associativity::Right, 5),
+        );
+        defaults.insert(
+            Name::Binop("$".to_string()),
+            Precedence(Associativity::Right, 0),
+        );
+        defaults.insert(
+            Name::Binop("==".to_string()),
+            Precedence(Associativity::None, 4),
+        );
+        defaults.insert(
+            Name::Binop("!=".to_string()),
+            Precedence(Associativity::None, 4),
+        );
+        defaults.insert(
+            Name::Binop("<".to_string()),
+            Precedence(Associativity::None, 4),
+        );
+        defaults.insert(
+            Name::Binop("<=".to_string()),
+            Precedence(Associativity::None, 4),
+        );
+        defaults.insert(
+            Name::Binop(">".to_string()),
+            Precedence(Associativity::None, 4),
+        );
+        defaults.insert(
+            Name::Binop(">=".to_string()),
+            Precedence(Associativity::None, 4),
+        );
 
-        defaults.extend(precs);
+        for (name, prec) in precs {
+            defaults.insert(name.clone(), *prec);
+        }
 
         for (_name, defns) in &mut self.assignments {
             for (lhs, rhs) in defns.iter_mut() {
@@ -55,15 +96,15 @@ impl<'a> Chunk<'a> {
     }
 }
 
-type Assignment<'a> = (Lhs<'a>, Expr<'a>);
+pub type Assignment<'a> = (Lhs<'a>, Expr<'a>);
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
-pub enum Name<'a> {
-    Ident(&'a str),
-    Binop(&'a str),
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+pub enum Name {
+    Ident(String),
+    Binop(String),
 }
 
-impl<'a> Display for Name<'a> {
+impl<'a> Display for Name {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Name::Ident(s) | Name::Binop(s) => write!(f, "{}", s),
@@ -74,25 +115,25 @@ impl<'a> Display for Name<'a> {
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub enum Lhs<'a> {
     Func {
-        name: Name<'a>,
+        name: Name,
         args: Vec<Pattern<'a>>,
     },
     Binop {
         a: Pattern<'a>,
-        op: Name<'a>,
+        op: Name,
         b: Pattern<'a>,
     },
 }
 
 impl<'a> Lhs<'a> {
-    pub fn name(&self) -> Name<'a> {
+    pub fn name(&self) -> &Name {
         match self {
-            Lhs::Func { name, .. } => *name,
-            Lhs::Binop { op, .. } => *op,
+            Lhs::Func { name, .. } => name,
+            Lhs::Binop { op, .. } => op,
         }
     }
 
-    fn apply_precs(&mut self, precs: &HashMap<Name<'a>, Precedence>) {
+    fn apply_precs(&mut self, precs: &HashMap<Name, Precedence>) {
         match self {
             Lhs::Func { args, .. } => {
                 for arg in args {
@@ -133,19 +174,19 @@ pub enum Pattern<'a> {
     List(Vec<Pattern<'a>>),
     String(&'a str),
     Binop {
-        operator: Name<'a>,
+        operator: Name,
         lhs: Box<Pattern<'a>>,
         rhs: Box<Pattern<'a>>,
     },
-    BareConstructor(Name<'a>),
+    BareConstructor(Name),
     Destructure {
-        constructor: Name<'a>,
+        constructor: Name,
         args: Vec<Pattern<'a>>,
     },
 }
 
 impl<'a> Pattern<'a> {
-    fn apply_precs(&mut self, precs: &HashMap<Name<'a>, Precedence>) {
+    fn apply_precs(&mut self, precs: &HashMap<Name, Precedence>) {
         match self {
             Pattern::List(args) => {
                 for arg in args {
@@ -242,14 +283,14 @@ pub enum Expr<'a> {
         argument: Box<Expr<'a>>,
     },
     Binop {
-        operator: Name<'a>,
+        operator: Name,
         lhs: Box<Expr<'a>>,
         rhs: Box<Expr<'a>>,
     },
 }
 
 impl<'a> Expr<'a> {
-    fn apply_precs(&mut self, precs: &HashMap<Name<'a>, Precedence>) {
+    fn apply_precs(&mut self, precs: &HashMap<Name, Precedence>) {
         match self {
             Expr::Binop {
                 operator: ref mut l_op,
@@ -337,7 +378,7 @@ pub enum Term<'a> {
     Numeral(&'a str),
     String(&'a str),
     List(Vec<Expr<'a>>),
-    Name(Name<'a>),
+    Name(Name),
     Parens(Box<Expr<'a>>),
 }
 
