@@ -3,8 +3,8 @@
 (* destructure : Structure -> X; *)
 (* destructure (Structure x) = x; *)
 
-isTrue True = True;
-isTrue _ = False;
+(* isTrue True = True; *)
+(* isTrue _ = False; *)
 
 (* isFive 5 = True; *)
 (* isFive _ = False; *)
@@ -26,4 +26,4 @@ isTrue _ = False;
 (* isSingleton [x] = True; *)
 (* isSingleton _ = False; *)
 
-(* a + b = add a b; *)
+a + b = add a b;

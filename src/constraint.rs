@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::{self, Display};
+use std::iter;
 
 use crate::ast::{Assignment, Expr, Lhs, Name, Pattern, Term};
 use crate::types::{Primitive, Type, TypeScheme, TypeVar};
@@ -75,8 +76,8 @@ impl ConstraintGenerator {
             Pattern::Binop { operator, lhs, rhs } => {
                 let cons_type = Type::Var(self.assume(operator.clone()));
 
-                std::iter::once(lhs)
-                    .chain(std::iter::once(rhs))
+                iter::once(lhs)
+                    .chain(iter::once(rhs))
                     // @Cleanup: DRY: see below
                     .fold(cons_type, |acc, arg| {
                         let arg_type = self.bind(arg);
@@ -139,14 +140,22 @@ impl<'a> GenerateConstraints for Assignment<'a> {
     fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
         let (lhs, expr) = self;
         match lhs {
-            Lhs::Func { name: _name, args } => {
+            Lhs::Func { args, name: _name } => {
+                // @Cleanup: DRY
                 args.iter().rev().fold(expr.generate(cg), |acc, arg| {
                     let beta = cg.bind(arg);
-
                     Type::Func(Box::new(beta), Box::new(acc))
                 })
             }
-            _ => unimplemented!(),
+            Lhs::Binop { a, b, op: _op } => {
+                // @Cleanup: DRY
+                iter::once(b)
+                    .chain(iter::once(a))
+                    .fold(expr.generate(cg), |acc, arg| {
+                        let beta = cg.bind(arg);
+                        Type::Func(Box::new(beta), Box::new(acc))
+                    })
+            }
         }
     }
 }
