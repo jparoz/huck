@@ -6,6 +6,12 @@
 (* isTrue True = True; *)
 (* isTrue _ = False; *)
 
+isFive 5 = True;
+isFive _ = False;
+
+isHello ("Hello!") = True;
+isHello _ = False;
+
 (* Cons : A -> B -> Cons; *)
 (* head : Cons -> A; *)
 head (Cons x xs) = x;
@@ -14,7 +20,10 @@ head Nil = undefined;
 head (x::xs) = x;
 head [] = undefined;
 
-(* isSingleton [x] = True; *)
-(* isSingleton _ = False; *)
+length (x::xs) = 1 + length xs;
+length [] = 0;
+
+isSingleton [x] = True;
+isSingleton _ = False;
 
 (* a + b = add a b; *)

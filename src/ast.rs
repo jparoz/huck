@@ -172,7 +172,7 @@ impl<'a> Display for Lhs<'a> {
 pub enum Pattern<'a> {
     Bind(&'a str),
     List(Vec<Pattern<'a>>),
-    // @Todo: Numeral(_),
+    Numeral(&'a str),
     String(&'a str),
     Binop {
         operator: Name,
@@ -260,12 +260,13 @@ impl<'a> Display for Pattern<'a> {
                     .collect::<Vec<std::string::String>>()
                     .join(", ")
             ),
-            String(s) => write!(f, "{}", s),
+            String(s) | Numeral(s) => write!(f, "{}", s),
             Binop { operator, lhs, rhs } => {
                 write!(f, "({} {} {})", lhs, operator, rhs)
             }
             BareConstructor(name) => write!(f, "{}", name),
             Destructure { constructor, args } => {
+                write!(f, "(")?;
                 write!(f, "{}", constructor)?;
                 for arg in args {
                     write!(f, " {}", arg)?;

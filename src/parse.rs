@@ -60,6 +60,7 @@ fn pattern(input: &str) -> IResult<&str, Pattern> {
     alt((
         map(ws(var), Pattern::Bind),
         map(list(pattern), Pattern::List),
+        map(numeral, Pattern::Numeral),
         map(string, Pattern::String),
         map(
             parens(tuple((constructor, many0(pattern)))),
@@ -68,6 +69,7 @@ fn pattern(input: &str) -> IResult<&str, Pattern> {
         map(constructor, Pattern::BareConstructor),
         // @Note: The below relies on first having checked the other possibilities above.
         parens(pattern_binop),
+        parens(pattern),
     ))(input)
 }
 

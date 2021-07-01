@@ -68,6 +68,10 @@ impl ConstraintGenerator {
                 Type::List(Box::new(beta))
             }
 
+            Pattern::Numeral(_) => Type::Prim(Primitive::Int), // @Fixme: Int/Float???
+
+            Pattern::String(_) => Type::Prim(Primitive::String),
+
             Pattern::Binop { operator, lhs, rhs } => {
                 let cons_type = Type::Var(self.assume(operator.clone()));
 

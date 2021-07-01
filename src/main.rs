@@ -17,8 +17,12 @@ fn main() {
     let mut cg = ConstraintGenerator::new();
 
     for (name, defns) in parsed.assignments {
+        for (lhs, expr) in defns.iter() {
+            println!("{} = {};", lhs, expr);
+        }
         let typ = defns.generate(&mut cg);
-        println!("{} has type {}", name, typ);
+        println!("{} : {}", name, typ);
+        println!();
     }
 
     println!("{}", cg);
