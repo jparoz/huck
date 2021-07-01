@@ -1,14 +1,15 @@
 (* foo f g = g (f 1); *)
 
-(* Cons : A -> B -> Cons; *)
-(* head : Cons -> A; *)
-(* head (Cons x xs) = x; *)
-
 (* destructure : Structure -> X; *)
 (* destructure (Structure x) = x; *)
 
 (* isTrue True = True; *)
 (* isTrue _ = False; *)
+
+(* Cons : A -> B -> Cons; *)
+(* head : Cons -> A; *)
+head (Cons x xs) = x;
+head Nil = undefined;
 
 head (x::xs) = x;
 head [] = undefined;

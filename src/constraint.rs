@@ -24,14 +24,18 @@ impl ConstraintGenerator {
         }
     }
 
-    fn fresh(&mut self) -> TypeVar {
+    fn fresh(&mut self) -> Type {
+        Type::Var(self.fresh_var())
+    }
+
+    fn fresh_var(&mut self) -> TypeVar {
         let id = self.next_typevar_id;
         self.next_typevar_id += 1;
         TypeVar(id)
     }
 
     fn assume(&mut self, name: Name) -> TypeVar {
-        let beta = self.fresh();
+        let beta = self.fresh_var();
         self.assumptions
             .entry(name)
             .or_insert(Vec::with_capacity(1))
@@ -39,17 +43,21 @@ impl ConstraintGenerator {
         beta
     }
 
+    fn constrain(&mut self, constraint: Constraint) {
+        self.constraints.push(constraint);
+    }
+
     // Returns the type of the whole pattern item, as well as emitting constraints for sub-items.
     fn bind(&mut self, pat: &Pattern) -> Type {
         match pat {
             Pattern::Bind(s) => {
-                let beta = Type::Var(self.fresh());
+                let beta = self.fresh();
                 self.bind_name(&Name::Ident(s.to_string()), &beta);
                 beta
             }
 
             Pattern::List(pats) => {
-                let beta = Type::Var(self.fresh());
+                let beta = self.fresh();
 
                 for pat in pats {
                     let typ = self.bind(pat);
@@ -65,13 +73,16 @@ impl ConstraintGenerator {
 
                 std::iter::once(lhs)
                     .chain(std::iter::once(rhs))
+                    // @Cleanup: DRY: see below
                     .fold(cons_type, |acc, arg| {
                         let arg_type = self.bind(arg);
-                        let partial_res_type = Type::Var(self.fresh());
+                        let partial_res_type = self.fresh();
                         let partial_cons_type =
                             Type::Func(Box::new(arg_type), Box::new(partial_res_type.clone()));
+
                         self.constraints
                             .push(Constraint::Equality(acc, partial_cons_type));
+
                         partial_res_type
                     })
             }
@@ -80,13 +91,16 @@ impl ConstraintGenerator {
             Pattern::Destructure { constructor, args } => {
                 let cons_type = Type::Var(self.assume(constructor.clone()));
 
+                // @Cleanup: DRY: see above
                 args.iter().fold(cons_type, |acc, arg| {
                     let arg_type = self.bind(arg);
-                    let partial_res_type = Type::Var(self.fresh());
+                    let partial_res_type = self.fresh();
                     let partial_cons_type =
                         Type::Func(Box::new(arg_type), Box::new(partial_res_type.clone()));
+
                     self.constraints
                         .push(Constraint::Equality(acc, partial_cons_type));
+
                     partial_res_type
                 })
             }
@@ -108,14 +122,14 @@ impl ConstraintGenerator {
 // This impl assumes that each assignment is a definition of the same function.
 impl<'a> GenerateConstraints for Vec<Assignment<'a>> {
     fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
+        let beta = cg.fresh();
+
         let typs: Vec<Type> = self.iter().map(|defn| defn.generate(cg)).collect();
-        typs.into_iter()
-            .reduce(|a, b| {
-                // @Checkme: maybe this shouldn't be an equality constraint
-                cg.constraints.push(Constraint::Equality(a, b.clone()));
-                b
-            })
-            .unwrap() // safe unwrap because we always immediately push something to a vec during parsing of a chunk
+        for typ in typs {
+            cg.constrain(Constraint::Equality(beta.clone(), typ));
+        }
+
+        beta
     }
 }
 
@@ -142,7 +156,7 @@ impl<'a> GenerateConstraints for Expr<'a> {
             Expr::Term(Term::String(_)) => Type::Prim(Primitive::String),
             Expr::Term(Term::Parens(e)) => e.generate(cg),
             Expr::Term(Term::List(es)) => {
-                let beta = Type::Var(cg.fresh());
+                let beta = cg.fresh();
                 for e in es {
                     let e_type = e.generate(cg);
                     cg.constraints
@@ -156,9 +170,9 @@ impl<'a> GenerateConstraints for Expr<'a> {
             Expr::App { func, argument } => {
                 let t1 = func.generate(cg);
                 let t2 = argument.generate(cg);
-                let beta = Type::Var(cg.fresh());
+                let beta = cg.fresh();
 
-                cg.constraints.push(Constraint::Equality(
+                cg.constrain(Constraint::Equality(
                     t1,
                     Type::Func(Box::new(t2), Box::new(beta.clone())),
                 ));
@@ -169,14 +183,14 @@ impl<'a> GenerateConstraints for Expr<'a> {
                 let t1 = Type::Var(cg.assume(operator.clone()));
                 let t2 = lhs.generate(cg);
                 let t3 = rhs.generate(cg);
-                let beta1 = Type::Var(cg.fresh());
-                let beta2 = Type::Var(cg.fresh());
+                let beta1 = cg.fresh();
+                let beta2 = cg.fresh();
 
-                cg.constraints.push(Constraint::Equality(
+                cg.constrain(Constraint::Equality(
                     t1,
                     Type::Func(Box::new(t2), Box::new(beta1.clone())),
                 ));
-                cg.constraints.push(Constraint::Equality(
+                cg.constrain(Constraint::Equality(
                     beta1,
                     Type::Func(Box::new(t3), Box::new(beta2.clone())),
                 ));
