@@ -14,23 +14,12 @@ fn main() {
 
     parsed.apply_precs(&std::collections::HashMap::new());
 
-    let mut constraint_generator = ConstraintGenerator::new();
+    let mut cg = ConstraintGenerator::new();
 
-    for (name, assigns) in parsed.assignments {
-        for assign in assigns {
-            let typ = assign.generate(&mut constraint_generator);
-            println!("{} has type {}", name, typ);
-        }
+    for (name, defns) in parsed.assignments {
+        let typ = defns.generate(&mut cg);
+        println!("{} has type {}", name, typ);
     }
 
-    // for (_name, defs) in parsed.assignments {
-    //     for (lhs, rhs) in defs {
-    //         // println!("{} = {};", lhs, rhs);
-    //         let typ = constraint_generator.generate(&rhs);
-    //         println!("rhs of {} has type {}", lhs, typ);
-    //     }
-    //     println!();
-    // }
-
-    println!("{}", constraint_generator);
+    println!("{}", cg);
 }

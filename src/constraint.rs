@@ -74,6 +74,20 @@ impl ConstraintGenerator {
     }
 }
 
+// This impl assumes that each assignment is a definition of the same function.
+impl<'a> GenerateConstraints for Vec<Assignment<'a>> {
+    fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
+        let typs: Vec<Type> = self.iter().map(|defn| defn.generate(cg)).collect();
+        typs.into_iter()
+            .reduce(|a, b| {
+                // @Checkme: maybe this shouldn't be an equality constraint
+                cg.constraints.push(Constraint::Equality(a, b.clone()));
+                b
+            })
+            .unwrap() // safe unwrap because we always immediately push something to a vec during parsing of a chunk
+    }
+}
+
 impl<'a> GenerateConstraints for Assignment<'a> {
     fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
         let (lhs, expr) = self;
