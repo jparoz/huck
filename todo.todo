@@ -1,0 +1,22 @@
+x Distinguish between parsing name types (i.e. types vs constructors vs variables)
+x Modify Chunk to instead have a type something like HashMap<Name<'a>, (Lhs<'a>, Expr<'a>)>
+x Fix numeral parsing (1 - 1, 1-1, 1 -1, 1- 1)
+x Binop precedence
+    x More thorough testing
+x Display impls for Expr, Term, Lhs, Pattern
+x Change Tuple to be implemented as a type constructor operator (doesn't need special syntax)
+x Fix associativity not being respected (see expr.hk: ten)
+x `infix` functions can currently be parsed as destructure patterns. Think about this.
+    x Should be okay, because we'd like to be able to do:  x `Cons` y
+x Apply precedence to Patterns
+x Reject True == True == False (two ops of Associativity::None with same precedence)
+x Check if an operator is :, and parse error there??
+x Parse operators on the LHS of a definition
+x Parse LHS correctly in e.g.:   (++) = append;
+x Fix the assert! calls by using enum instead of vecs
+- Accept numbers as patterns
+- Do HM type inference
+- Scoping/shadowing
+- Add type declarations
+    x Special syntax required for tuple types written like (Int, Int, Int), because the type is actually (Int, (Int, Int))?? I don't think so, because the type operator will have the same fixity as the value operator.
+- Add operator precedence declarations
