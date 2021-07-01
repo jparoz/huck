@@ -1,3 +1,10 @@
-foo f g = g (f 1);
+(* foo f g = g (f 1); *)
 
-bar = foo;
+(* Cons : A -> B -> Cons; *)
+(* head : Cons -> A; *)
+head (Cons x xs) = x;
+
+(* destructure : Structure -> X; *)
+(* destructure (Structure x) = x; *)
+
+(* a + b = add a b; *)

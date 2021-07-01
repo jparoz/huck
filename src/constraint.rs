@@ -25,23 +25,7 @@ impl ConstraintGenerator {
         match lhs {
             Lhs::Func { name: _name, args } => {
                 args.iter().rev().fold(self.generate(&expr), |acc, arg| {
-                    let beta = Type::Var(self.fresh());
-
-                    match arg {
-                        Pattern::Bind(s) => {
-                            if let Some(assumptions) =
-                                self.assumptions.remove(&Name::Ident(s.to_string()))
-                            {
-                                for assumed in assumptions {
-                                    self.constraints.push(Constraint::Equality(
-                                        Type::Var(assumed),
-                                        beta.clone(),
-                                    ));
-                                }
-                            }
-                        }
-                        _ => unimplemented!(),
-                    }
+                    let beta = self.bind(arg);
 
                     Type::Func(Box::new(beta), Box::new(acc))
                 })
@@ -106,6 +90,43 @@ impl ConstraintGenerator {
             .push(beta);
         beta
     }
+
+    // Returns the type of the whole pattern item, as well as emitting constraints for sub-items.
+    fn bind(&mut self, pat: &Pattern) -> Type {
+        match pat {
+            Pattern::Bind(s) => {
+                let beta = Type::Var(self.fresh());
+                self.bind_name(&Name::Ident(s.to_string()), &beta);
+                beta
+            }
+            Pattern::Destructure { constructor, args } => {
+                let cons_type = Type::Var(self.fresh());
+
+                // @Checkme: should this be bind_name, or should it make an assumption??
+                self.bind_name(&constructor, &cons_type);
+
+                args.iter().fold(cons_type, |acc, arg| {
+                    let arg_type = self.bind(arg);
+                    let partial_res_type = Type::Var(self.fresh());
+                    let partial_cons_type =
+                        Type::Func(Box::new(arg_type), Box::new(partial_res_type.clone()));
+                    self.constraints
+                        .push(Constraint::Equality(acc, partial_cons_type));
+                    partial_res_type
+                })
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    fn bind_name(&mut self, name: &Name, beta: &Type) {
+        if let Some(assumptions) = self.assumptions.remove(name) {
+            for assumed in assumptions {
+                self.constraints
+                    .push(Constraint::Equality(Type::Var(assumed), beta.clone()));
+            }
+        }
+    }
 }
 
 impl<'a> Display for ConstraintGenerator {
@@ -124,7 +145,7 @@ impl<'a> Display for ConstraintGenerator {
             }
         }
 
-        write!(f, "Next typevar ID: {}", self.next_typevar_id)
+        Ok(())
     }
 }
 
