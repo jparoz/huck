@@ -4,7 +4,7 @@ mod error;
 mod parse;
 mod types;
 
-use constraint::ConstraintGenerator;
+use constraint::{ConstraintGenerator, GenerateConstraints};
 
 fn main() {
     let filename = std::env::args().nth(1).unwrap();
@@ -18,7 +18,7 @@ fn main() {
 
     for (name, assigns) in parsed.assignments {
         for assign in assigns {
-            let typ = constraint_generator.generate_assign(assign);
+            let typ = assign.generate(&mut constraint_generator);
             println!("{} has type {}", name, typ);
         }
     }

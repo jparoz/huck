@@ -4,6 +4,10 @@ use std::fmt::{self, Display};
 use crate::ast::{Assignment, Expr, Lhs, Name, Pattern, Term};
 use crate::types::{Primitive, Type, TypeScheme, TypeVar};
 
+pub trait GenerateConstraints {
+    fn generate(&self, cg: &mut ConstraintGenerator) -> Type;
+}
+
 #[derive(Debug)]
 pub struct ConstraintGenerator {
     constraints: Vec<Constraint>,
@@ -17,62 +21,6 @@ impl ConstraintGenerator {
             constraints: Vec::new(),
             assumptions: HashMap::new(),
             next_typevar_id: 0,
-        }
-    }
-
-    pub fn generate_assign(&mut self, subject: Assignment) -> Type {
-        let (lhs, expr) = subject;
-        match lhs {
-            Lhs::Func { name: _name, args } => {
-                args.iter().rev().fold(self.generate(&expr), |acc, arg| {
-                    let beta = self.bind(arg);
-
-                    Type::Func(Box::new(beta), Box::new(acc))
-                })
-            }
-            _ => unimplemented!(),
-        }
-    }
-
-    pub fn generate(&mut self, subject: &Expr) -> Type {
-        match subject {
-            Expr::Term(Term::Numeral(_)) => Type::Prim(Primitive::Int), // @Fixme: Int/Float???
-            Expr::Term(Term::String(_)) => Type::Prim(Primitive::String),
-            Expr::Term(Term::List(_)) => unimplemented!(), // @Todo
-            Expr::Term(Term::Parens(e)) => self.generate(e),
-
-            Expr::Term(Term::Name(name)) => Type::Var(self.assume(name.clone())),
-
-            Expr::App { func, argument } => {
-                let t1 = self.generate(func);
-                let t2 = self.generate(argument);
-                let beta = Type::Var(self.fresh());
-
-                self.constraints.push(Constraint::Equality(
-                    t1,
-                    Type::Func(Box::new(t2), Box::new(beta.clone())),
-                ));
-
-                beta
-            }
-            Expr::Binop { operator, lhs, rhs } => {
-                let t1 = Type::Var(self.assume(operator.clone()));
-                let t2 = self.generate(lhs);
-                let t3 = self.generate(rhs);
-                let beta1 = Type::Var(self.fresh());
-                let beta2 = Type::Var(self.fresh());
-
-                self.constraints.push(Constraint::Equality(
-                    t1,
-                    Type::Func(Box::new(t2), Box::new(beta1.clone())),
-                ));
-                self.constraints.push(Constraint::Equality(
-                    beta1,
-                    Type::Func(Box::new(t3), Box::new(beta2.clone())),
-                ));
-
-                beta2
-            }
         }
     }
 
@@ -121,6 +69,66 @@ impl ConstraintGenerator {
             for assumed in assumptions {
                 self.constraints
                     .push(Constraint::Equality(Type::Var(assumed), beta.clone()));
+            }
+        }
+    }
+}
+
+impl<'a> GenerateConstraints for Assignment<'a> {
+    fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
+        let (lhs, expr) = self;
+        match lhs {
+            Lhs::Func { name: _name, args } => {
+                args.iter().rev().fold(expr.generate(cg), |acc, arg| {
+                    let beta = cg.bind(arg);
+
+                    Type::Func(Box::new(beta), Box::new(acc))
+                })
+            }
+            _ => unimplemented!(),
+        }
+    }
+}
+
+impl<'a> GenerateConstraints for Expr<'a> {
+    fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
+        match self {
+            Expr::Term(Term::Numeral(_)) => Type::Prim(Primitive::Int), // @Fixme: Int/Float???
+            Expr::Term(Term::String(_)) => Type::Prim(Primitive::String),
+            Expr::Term(Term::List(_)) => unimplemented!(), // @Todo
+            Expr::Term(Term::Parens(e)) => e.generate(cg),
+
+            Expr::Term(Term::Name(name)) => Type::Var(cg.assume(name.clone())),
+
+            Expr::App { func, argument } => {
+                let t1 = func.generate(cg);
+                let t2 = argument.generate(cg);
+                let beta = Type::Var(cg.fresh());
+
+                cg.constraints.push(Constraint::Equality(
+                    t1,
+                    Type::Func(Box::new(t2), Box::new(beta.clone())),
+                ));
+
+                beta
+            }
+            Expr::Binop { operator, lhs, rhs } => {
+                let t1 = Type::Var(cg.assume(operator.clone()));
+                let t2 = lhs.generate(cg);
+                let t3 = rhs.generate(cg);
+                let beta1 = Type::Var(cg.fresh());
+                let beta2 = Type::Var(cg.fresh());
+
+                cg.constraints.push(Constraint::Equality(
+                    t1,
+                    Type::Func(Box::new(t2), Box::new(beta1.clone())),
+                ));
+                cg.constraints.push(Constraint::Equality(
+                    beta1,
+                    Type::Func(Box::new(t3), Box::new(beta2.clone())),
+                ));
+
+                beta2
             }
         }
     }
