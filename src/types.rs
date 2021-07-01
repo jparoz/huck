@@ -6,9 +6,11 @@ pub enum Type {
     Prim(Primitive),
     Var(TypeVar),
     Func(Box<Type>, Box<Type>), // @Checkme: needs to be boxed???
+    List(Box<Type>),
 }
 
 impl Type {
+    /*
     pub fn free_vars(&self) -> Vec<TypeVar> {
         use Type::*;
 
@@ -20,8 +22,10 @@ impl Type {
                 vars.append(&mut b.free_vars());
                 vars
             }
+            List(_) => unimplemented!(),
         }
     }
+    */
 }
 
 impl Display for Type {
@@ -30,6 +34,9 @@ impl Display for Type {
             Type::Var(TypeVar(id)) => write!(f, "t{}", id),
             Type::Prim(p) => write!(f, "{:?}", p), // @Fixme: Display not Debug
             Type::Func(a, b) => write!(f, "{} -> {}", a, b),
+            Type::List(inner) => {
+                write!(f, "[{}]", inner)
+            }
         }
     }
 }
@@ -41,6 +48,7 @@ pub struct TypeScheme {
 }
 
 impl TypeScheme {
+    /*
     pub fn free_vars(&self) -> Vec<TypeVar> {
         self.typ
             .free_vars()
@@ -48,6 +56,7 @@ impl TypeScheme {
             .filter(|v| !self.vars.contains(v))
             .collect()
     }
+    */
 }
 
 impl Display for TypeScheme {

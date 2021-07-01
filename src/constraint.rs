@@ -60,6 +60,17 @@ impl ConstraintGenerator {
                     partial_res_type
                 })
             }
+            Pattern::List(pats) => {
+                let beta = Type::Var(self.fresh());
+
+                for pat in pats {
+                    let typ = self.bind(pat);
+                    self.constraints
+                        .push(Constraint::Equality(beta.clone(), typ));
+                }
+
+                Type::List(Box::new(beta))
+            }
             _ => unimplemented!(),
         }
     }
@@ -109,8 +120,16 @@ impl<'a> GenerateConstraints for Expr<'a> {
         match self {
             Expr::Term(Term::Numeral(_)) => Type::Prim(Primitive::Int), // @Fixme: Int/Float???
             Expr::Term(Term::String(_)) => Type::Prim(Primitive::String),
-            Expr::Term(Term::List(_)) => unimplemented!(), // @Todo
             Expr::Term(Term::Parens(e)) => e.generate(cg),
+            Expr::Term(Term::List(es)) => {
+                let beta = Type::Var(cg.fresh());
+                for e in es {
+                    let e_type = e.generate(cg);
+                    cg.constraints
+                        .push(Constraint::Equality(beta.clone(), e_type));
+                }
+                Type::List(Box::new(beta))
+            }
 
             Expr::Term(Term::Name(name)) => Type::Var(cg.assume(name.clone())),
 
@@ -182,7 +201,7 @@ impl<'a> Display for Constraint {
             Constraint::ExplicitInstance(tau, sigma) => {
                 write!(f, "{} is an instance of {}", tau, sigma)
             }
-            Constraint::ImplicitInstance(a, b, m) => {
+            Constraint::ImplicitInstance(_a, _b, _m) => {
                 // write!(f, "{} is an instance of {}, generalized under {}", a, b, m)
                 unimplemented!()
             }
