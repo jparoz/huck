@@ -63,11 +63,10 @@ fn pattern(input: &str) -> IResult<&str, Pattern> {
         map(numeral, Pattern::Numeral),
         map(string, Pattern::String),
         map(
-            parens(tuple((constructor, many0(pattern)))),
+            parens(tuple((constructor, many1(pattern)))),
             |(constructor, args)| Pattern::Destructure { constructor, args },
         ),
-        map(constructor, Pattern::BareConstructor),
-        // @Note: The below relies on first having checked the other possibilities above.
+        map(constructor, Pattern::UnaryConstructor),
         parens(pattern_binop),
         parens(pattern),
     ))(input)

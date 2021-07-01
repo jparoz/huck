@@ -14,7 +14,7 @@ x Check if an operator is :, and parse error there??
 x Parse operators on the LHS of a definition
 x Parse LHS correctly in e.g.:   (++) = append;
 x Fix the assert! calls by using enum instead of vecs
-- Accept numbers as patterns
+x Accept numbers as patterns
 - Do HM type inference
 - Scoping/shadowing
 - Add type declarations

@@ -179,7 +179,7 @@ pub enum Pattern<'a> {
         lhs: Box<Pattern<'a>>,
         rhs: Box<Pattern<'a>>,
     },
-    BareConstructor(Name),
+    UnaryConstructor(Name),
     Destructure {
         constructor: Name,
         args: Vec<Pattern<'a>>,
@@ -264,7 +264,7 @@ impl<'a> Display for Pattern<'a> {
             Binop { operator, lhs, rhs } => {
                 write!(f, "({} {} {})", lhs, operator, rhs)
             }
-            BareConstructor(name) => write!(f, "{}", name),
+            UnaryConstructor(name) => write!(f, "{}", name),
             Destructure { constructor, args } => {
                 write!(f, "(")?;
                 write!(f, "{}", constructor)?;

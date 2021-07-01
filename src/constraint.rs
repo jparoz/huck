@@ -91,7 +91,7 @@ impl ConstraintGenerator {
                     })
             }
 
-            Pattern::BareConstructor(name) => Type::Var(self.assume(name.clone())),
+            Pattern::UnaryConstructor(name) => Type::Var(self.assume(name.clone())),
             Pattern::Destructure { constructor, args } => {
                 let cons_type = Type::Var(self.assume(constructor.clone()));
 

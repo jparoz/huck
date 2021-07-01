@@ -3,27 +3,27 @@
 (* destructure : Structure -> X; *)
 (* destructure (Structure x) = x; *)
 
-(* isTrue True = True; *)
-(* isTrue _ = False; *)
+isTrue True = True;
+isTrue _ = False;
 
-isFive 5 = True;
-isFive _ = False;
+(* isFive 5 = True; *)
+(* isFive _ = False; *)
 
-isHello ("Hello!") = True;
-isHello _ = False;
+(* isHello ("Hello!") = True; *)
+(* isHello _ = False; *)
 
 (* Cons : A -> B -> Cons; *)
 (* head : Cons -> A; *)
-head (Cons x xs) = x;
-head Nil = undefined;
+(* head (Cons x xs) = x; *)
+(* head Nil = undefined; *)
 
-head (x::xs) = x;
-head [] = undefined;
+(* head (x::xs) = x; *)
+(* head [] = undefined; *)
 
-length (x::xs) = 1 + length xs;
-length [] = 0;
+(* length (x::xs) = 1 + length xs; *)
+(* length [] = 0; *)
 
-isSingleton [x] = True;
-isSingleton _ = False;
+(* isSingleton [x] = True; *)
+(* isSingleton _ = False; *)
 
 (* a + b = add a b; *)
