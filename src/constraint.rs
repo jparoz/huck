@@ -47,6 +47,36 @@ impl ConstraintGenerator {
                 self.bind_name(&Name::Ident(s.to_string()), &beta);
                 beta
             }
+
+            Pattern::List(pats) => {
+                let beta = Type::Var(self.fresh());
+
+                for pat in pats {
+                    let typ = self.bind(pat);
+                    self.constraints
+                        .push(Constraint::Equality(beta.clone(), typ));
+                }
+
+                Type::List(Box::new(beta))
+            }
+
+            Pattern::Binop { operator, lhs, rhs } => {
+                let cons_type = Type::Var(self.assume(operator.clone()));
+
+                std::iter::once(lhs)
+                    .chain(std::iter::once(rhs))
+                    .fold(cons_type, |acc, arg| {
+                        let arg_type = self.bind(arg);
+                        let partial_res_type = Type::Var(self.fresh());
+                        let partial_cons_type =
+                            Type::Func(Box::new(arg_type), Box::new(partial_res_type.clone()));
+                        self.constraints
+                            .push(Constraint::Equality(acc, partial_cons_type));
+                        partial_res_type
+                    })
+            }
+
+            Pattern::BareConstructor(name) => Type::Var(self.assume(name.clone())),
             Pattern::Destructure { constructor, args } => {
                 let cons_type = Type::Var(self.assume(constructor.clone()));
 
@@ -60,18 +90,7 @@ impl ConstraintGenerator {
                     partial_res_type
                 })
             }
-            Pattern::BareConstructor(name) => Type::Var(self.assume(name.clone())),
-            Pattern::List(pats) => {
-                let beta = Type::Var(self.fresh());
 
-                for pat in pats {
-                    let typ = self.bind(pat);
-                    self.constraints
-                        .push(Constraint::Equality(beta.clone(), typ));
-                }
-
-                Type::List(Box::new(beta))
-            }
             _ => unimplemented!(),
         }
     }

@@ -7,11 +7,11 @@
 (* destructure : Structure -> X; *)
 (* destructure (Structure x) = x; *)
 
-isTrue True = True;
-isTrue _ = False;
+(* isTrue True = True; *)
+(* isTrue _ = False; *)
 
-(* head (x::xs) = x; *)
-(* head [] = undefined; *)
+head (x::xs) = x;
+head [] = undefined;
 
 (* isSingleton [x] = True; *)
 (* isSingleton _ = False; *)

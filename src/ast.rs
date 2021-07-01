@@ -172,6 +172,7 @@ impl<'a> Display for Lhs<'a> {
 pub enum Pattern<'a> {
     Bind(&'a str),
     List(Vec<Pattern<'a>>),
+    // @Todo: Numeral(_),
     String(&'a str),
     Binop {
         operator: Name,
