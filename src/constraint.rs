@@ -60,6 +60,7 @@ impl ConstraintGenerator {
                     partial_res_type
                 })
             }
+            Pattern::BareConstructor(name) => Type::Var(self.assume(name.clone())),
             Pattern::List(pats) => {
                 let beta = Type::Var(self.fresh());
 
