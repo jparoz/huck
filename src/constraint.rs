@@ -108,8 +108,6 @@ impl ConstraintGenerator {
                     partial_res_type
                 })
             }
-
-            _ => unimplemented!(),
         }
     }
 
