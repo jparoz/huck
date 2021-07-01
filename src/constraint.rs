@@ -100,10 +100,7 @@ impl ConstraintGenerator {
                 beta
             }
             Pattern::Destructure { constructor, args } => {
-                let cons_type = Type::Var(self.fresh());
-
-                // @Checkme: should this be bind_name, or should it make an assumption??
-                self.bind_name(&constructor, &cons_type);
+                let cons_type = Type::Var(self.assume(constructor.clone()));
 
                 args.iter().fold(cons_type, |acc, arg| {
                     let arg_type = self.bind(arg);
