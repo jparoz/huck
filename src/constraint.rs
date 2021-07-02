@@ -50,6 +50,22 @@ impl ConstraintGenerator {
 
     // Returns the type of the whole pattern item, as well as emitting constraints for sub-items.
     fn bind(&mut self, pat: &Pattern) -> Type {
+        macro_rules! bind {
+            ($iter:expr, $cons_type:expr) => {
+                $iter.fold($cons_type, |acc, arg| {
+                    let arg_type = self.bind(arg);
+                    let partial_res_type = self.fresh();
+                    let partial_cons_type =
+                        Type::Func(Box::new(arg_type), Box::new(partial_res_type.clone()));
+
+                    self.constraints
+                        .push(Constraint::Equality(acc, partial_cons_type));
+
+                    partial_res_type
+                })
+            };
+        }
+
         match pat {
             Pattern::Bind(s) => {
                 let beta = self.fresh();
@@ -75,39 +91,13 @@ impl ConstraintGenerator {
 
             Pattern::Binop { operator, lhs, rhs } => {
                 let cons_type = Type::Var(self.assume(operator.clone()));
-
-                iter::once(lhs)
-                    .chain(iter::once(rhs))
-                    // @Cleanup: DRY: see below
-                    .fold(cons_type, |acc, arg| {
-                        let arg_type = self.bind(arg);
-                        let partial_res_type = self.fresh();
-                        let partial_cons_type =
-                            Type::Func(Box::new(arg_type), Box::new(partial_res_type.clone()));
-
-                        self.constraints
-                            .push(Constraint::Equality(acc, partial_cons_type));
-
-                        partial_res_type
-                    })
+                bind!(iter::once(lhs).chain(iter::once(rhs)), cons_type)
             }
 
             Pattern::UnaryConstructor(name) => Type::Var(self.assume(name.clone())),
             Pattern::Destructure { constructor, args } => {
                 let cons_type = Type::Var(self.assume(constructor.clone()));
-
-                // @Cleanup: DRY: see above
-                args.iter().fold(cons_type, |acc, arg| {
-                    let arg_type = self.bind(arg);
-                    let partial_res_type = self.fresh();
-                    let partial_cons_type =
-                        Type::Func(Box::new(arg_type), Box::new(partial_res_type.clone()));
-
-                    self.constraints
-                        .push(Constraint::Equality(acc, partial_cons_type));
-
-                    partial_res_type
-                })
+                bind!(args.iter(), cons_type)
             }
         }
     }
@@ -139,22 +129,22 @@ impl<'a> GenerateConstraints for Vec<Assignment<'a>> {
 impl<'a> GenerateConstraints for Assignment<'a> {
     fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
         let (lhs, expr) = self;
-        match lhs {
-            Lhs::Func { args, name: _name } => {
-                // @Cleanup: DRY
-                args.iter().rev().fold(expr.generate(cg), |acc, arg| {
+
+        macro_rules! bind {
+            ($iter:expr) => {
+                $iter.fold(expr.generate(cg), |acc, arg| {
                     let beta = cg.bind(arg);
                     Type::Func(Box::new(beta), Box::new(acc))
                 })
+            };
+        }
+
+        match lhs {
+            Lhs::Func { args, name: _name } => {
+                bind!(args.iter().rev())
             }
             Lhs::Binop { a, b, op: _op } => {
-                // @Cleanup: DRY
-                iter::once(b)
-                    .chain(iter::once(a))
-                    .fold(expr.generate(cg), |acc, arg| {
-                        let beta = cg.bind(arg);
-                        Type::Func(Box::new(beta), Box::new(acc))
-                    })
+                bind!(iter::once(b).chain(iter::once(a)))
             }
         }
     }
