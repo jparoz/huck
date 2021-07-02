@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fmt::{self, Display};
 use std::iter;
 
-use crate::ast::{Assignment, Expr, Lhs, Name, Pattern, Term};
+use crate::ast::{Assignment, Expr, Lhs, Name, Numeral, Pattern, Term};
 use crate::types::{Primitive, Type, TypeScheme, TypeVar};
 
 pub trait GenerateConstraints {
@@ -85,7 +85,8 @@ impl ConstraintGenerator {
                 Type::List(Box::new(beta))
             }
 
-            Pattern::Numeral(_) => Type::Prim(Primitive::Int), // @Fixme: Int/Float???
+            Pattern::Numeral(Numeral::Int(_)) => Type::Prim(Primitive::Int),
+            Pattern::Numeral(Numeral::Float(_)) => Type::Prim(Primitive::Float),
 
             Pattern::String(_) => Type::Prim(Primitive::String),
 
@@ -153,7 +154,8 @@ impl<'a> GenerateConstraints for Assignment<'a> {
 impl<'a> GenerateConstraints for Expr<'a> {
     fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
         match self {
-            Expr::Term(Term::Numeral(_)) => Type::Prim(Primitive::Int), // @Fixme: Int/Float???
+            Expr::Term(Term::Numeral(Numeral::Int(_))) => Type::Prim(Primitive::Int),
+            Expr::Term(Term::Numeral(Numeral::Float(_))) => Type::Prim(Primitive::Float),
             Expr::Term(Term::String(_)) => Type::Prim(Primitive::String),
             Expr::Term(Term::Parens(e)) => e.generate(cg),
             Expr::Term(Term::List(es)) => {

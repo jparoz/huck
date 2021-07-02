@@ -172,7 +172,7 @@ impl<'a> Display for Lhs<'a> {
 pub enum Pattern<'a> {
     Bind(&'a str),
     List(Vec<Pattern<'a>>),
-    Numeral(&'a str),
+    Numeral(Numeral<'a>),
     String(&'a str),
     Binop {
         operator: Name,
@@ -260,7 +260,8 @@ impl<'a> Display for Pattern<'a> {
                     .collect::<Vec<std::string::String>>()
                     .join(", ")
             ),
-            String(s) | Numeral(s) => write!(f, "{}", s),
+            Numeral(n) => write!(f, "{}", n),
+            String(s) => write!(f, "{}", s),
             Binop { operator, lhs, rhs } => {
                 write!(f, "({} {} {})", lhs, operator, rhs)
             }
@@ -377,7 +378,7 @@ impl<'a> Display for Expr<'a> {
 
 #[derive(PartialEq, Clone, Debug)]
 pub enum Term<'a> {
-    Numeral(&'a str),
+    Numeral(Numeral<'a>),
     String(&'a str),
     List(Vec<Expr<'a>>),
     Name(Name),
@@ -388,12 +389,8 @@ impl<'a> Display for Term<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use Term::*;
         match self {
-            Numeral(n) => {
-                write!(f, "{}", n)
-            }
-            String(s) => {
-                write!(f, "{}", s)
-            }
+            Numeral(n) => write!(f, "{}", n),
+            String(s) => write!(f, "{}", s),
             List(v) => write!(
                 f,
                 "[{}]",
@@ -413,7 +410,22 @@ impl<'a> Display for Term<'a> {
     }
 }
 
-#[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
+pub enum Numeral<'a> {
+    Int(&'a str),
+    Float(&'a str),
+}
+
+impl<'a> Display for Numeral<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use Numeral::*;
+        match self {
+            Int(s) | Float(s) => write!(f, "{}", s),
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub struct Precedence(pub Associativity, pub u8);
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]

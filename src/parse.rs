@@ -111,8 +111,7 @@ fn app(input: &str) -> IResult<&str, Expr> {
 
 fn term(input: &str) -> IResult<&str, Term> {
     alt((
-        map(numeral_positive, Term::Numeral),
-        map(parens(numeral_negative), Term::Numeral),
+        map(numeral, Term::Numeral),
         map(string, Term::String),
         map(list(expr), Term::List),
         map(name, Term::Name),
@@ -149,7 +148,17 @@ fn constructor(input: &str) -> IResult<&str, Name> {
     ws(map(upper_ident, |s| Name::Ident(s.to_string())))(input)
 }
 
-fn numeral(input: &str) -> IResult<&str, &str> {
+fn numeral(input: &str) -> IResult<&str, Numeral> {
+    map(alt((numeral_positive, parens(numeral_negative))), |s| {
+        if s.contains(&['.', 'e', 'E'][..]) {
+            Numeral::Float(s)
+        } else {
+            Numeral::Int(s)
+        }
+    })(input)
+}
+
+fn numeral_string(input: &str) -> IResult<&str, &str> {
     ws(alt((
         recognize(tuple((alt((tag("0x"), tag("0X"))), hex_digit1))),
         recognize(tuple((
@@ -161,11 +170,11 @@ fn numeral(input: &str) -> IResult<&str, &str> {
 }
 
 fn numeral_positive(input: &str) -> IResult<&str, &str> {
-    preceded(not(tag("-")), numeral)(input)
+    preceded(not(tag("-")), numeral_string)(input)
 }
 
 fn numeral_negative(input: &str) -> IResult<&str, &str> {
-    recognize(tuple((tag("-"), numeral)))(input)
+    recognize(tuple((tag("-"), numeral_string)))(input)
 }
 
 fn string(input: &str) -> IResult<&str, &str> {

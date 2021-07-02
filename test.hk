@@ -26,4 +26,13 @@
 (* isSingleton [x] = True; *)
 (* isSingleton _ = False; *)
 
-a + b = add a b;
+(* a + b = add a b; *)
+
+oneInt = 1;
+oneFloat = 1.0;
+
+takesInt 1 = True;
+takesInt _ = False;
+
+takesFloat 1.0 = True;
+takesFloat _ = False;

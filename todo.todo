@@ -15,7 +15,7 @@ x Parse operators on the LHS of a definition
 x Parse LHS correctly in e.g.:   (++) = append;
 x Fix the assert! calls by using enum instead of vecs
 x Accept numbers as patterns
-- Parse numerals separately as Int/Float literals
+x Parse numerals separately as Int/Float literals
 - Do HM type inference
 - Scoping/shadowing
 - Add type declarations
