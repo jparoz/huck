@@ -22,7 +22,7 @@ impl Type {
                 vars.append(&mut b.free_vars());
                 vars
             }
-            List(_) => unimplemented!(),
+            List(_) => todo!(),
         }
     }
     */

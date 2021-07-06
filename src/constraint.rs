@@ -240,7 +240,7 @@ impl<'a> Display for Constraint {
             }
             Constraint::ImplicitInstance(_a, _b, _m) => {
                 // write!(f, "{} is an instance of {}, generalized under {}", a, b, m)
-                unimplemented!()
+                todo!()
             }
         }
     }
