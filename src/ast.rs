@@ -290,6 +290,10 @@ pub enum Expr<'a> {
         lhs: Box<Expr<'a>>,
         rhs: Box<Expr<'a>>,
     },
+    Let {
+        assignments: HashMap<Name, Vec<Assignment<'a>>>,
+        in_expr: Box<Expr<'a>>,
+    },
 }
 
 impl<'a> Expr<'a> {
@@ -353,6 +357,18 @@ impl<'a> Expr<'a> {
                 Term::Parens(e) => e.apply_precs(precs),
                 _ => (),
             },
+            Expr::Let {
+                assignments,
+                in_expr,
+            } => {
+                for (_name, defns) in assignments {
+                    for (lhs, rhs) in defns.iter_mut() {
+                        lhs.apply_precs(precs);
+                        rhs.apply_precs(precs);
+                    }
+                }
+                in_expr.apply_precs(precs);
+            }
         }
     }
 }
@@ -372,6 +388,18 @@ impl<'a> Display for Expr<'a> {
                 write!(f, "{}){}", DIM, RESET)
             }
             Term(t) => write!(f, "{}", t),
+            Let {
+                assignments,
+                in_expr,
+            } => {
+                write!(f, "let")?;
+                for (_name, defns) in assignments {
+                    for (lhs, rhs) in defns {
+                        write!(f, " {} = {};", lhs, rhs)?;
+                    }
+                }
+                write!(f, " in {}", in_expr)
+            }
         }
     }
 }

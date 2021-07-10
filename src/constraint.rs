@@ -118,8 +118,10 @@ impl<'a> GenerateConstraints for Vec<Assignment<'a>> {
     fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
         let beta = cg.fresh();
 
+        // @Cleanup: can this be merged into a single expression to avoid collect()?
         let typs: Vec<Type> = self.iter().map(|defn| defn.generate(cg)).collect();
         for typ in typs {
+            // @Fixme: This sometimes needs to be other types of constraint
             cg.constrain(Constraint::Equality(beta.clone(), typ));
         }
 
@@ -199,6 +201,28 @@ impl<'a> GenerateConstraints for Expr<'a> {
                 ));
 
                 beta2
+            }
+
+            Expr::Let {
+                assignments,
+                in_expr,
+            } => {
+                let beta = in_expr.generate(cg);
+
+                for (name, defns) in assignments {
+                    // @Fixme @Scope: these should be local to the in_expr, obviously!
+                    let typ = defns.generate(cg);
+                    cg.bind_name(name, &typ);
+                }
+
+                // @Todo @Fixme @Scope: remove the let bindings???
+
+                // @Note: It's possible that the above comments about scope aren't actually
+                // necessary. That is, when a variable is bound, its assumptions are removed from
+                // the assumption set; this means that e.g. two separate variables both named `f` in
+                // separate let bindings will be assigned separate types.
+
+                beta
             }
         }
     }

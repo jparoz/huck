@@ -2,7 +2,7 @@ use nom::branch::alt;
 use nom::bytes::complete::{escaped, is_not, tag};
 use nom::character::complete::{anychar, char, hex_digit1, one_of, satisfy};
 use nom::combinator::{map, not, opt, peek, recognize, success, value, verify};
-use nom::multi::{many0, many0_count, many1, separated_list0};
+use nom::multi::{many0, many0_count, many1, separated_list0, separated_list1};
 use nom::number::complete::recognize_float;
 use nom::sequence::{delimited, preceded, separated_pair, terminated, tuple};
 use nom::IResult;
@@ -81,7 +81,7 @@ fn pattern_binop(input: &str) -> IResult<&str, Pattern> {
 }
 
 fn expr(input: &str) -> IResult<&str, Expr> {
-    alt((binop, app))(input)
+    alt((binop, app, let_in))(input)
 }
 
 fn binop(input: &str) -> IResult<&str, Expr> {
@@ -104,6 +104,31 @@ fn app(input: &str) -> IResult<&str, Expr> {
             })
             .unwrap() // safe unwrap because we're mapping over many1
     })(input)
+}
+
+fn let_in(input: &str) -> IResult<&str, Expr> {
+    map(
+        tuple((
+            reserved("let"),
+            separated_list1(semi, separated_pair(lhs, reserved_op("="), expr)),
+            opt(semi),
+            reserved("in"),
+            expr,
+        )),
+        |(_, assigns, _, _, in_expr)| {
+            let mut local_env = HashMap::new();
+            for (lhs, expr) in assigns {
+                local_env
+                    .entry(lhs.name().clone())
+                    .or_insert(Vec::new())
+                    .push((lhs, expr));
+            }
+            Expr::Let {
+                assignments: local_env,
+                in_expr: Box::new(in_expr),
+            }
+        },
+    )(input)
 }
 
 fn term(input: &str) -> IResult<&str, Term> {
@@ -240,6 +265,11 @@ where
     terminated(inner, whitespace)
 }
 
+fn reserved<'a>(s: &'a str) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> {
+    debug_assert!(is_reserved(s));
+    ws(terminated(tag(s), peek(not(satisfy(is_name_char)))))
+}
+
 fn reserved_op<'a>(s: &'a str) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> {
     ws(terminated(tag(s), peek(not(operator_char))))
 }
@@ -263,7 +293,7 @@ fn is_var_start_char(c: char) -> bool {
 // an uppercase letter.
 fn is_reserved(word: &str) -> bool {
     match word {
-        "module" | "=" | ":" => true,
+        "module" | "let" | "in" | "do" | "=" | ":" => true,
         _ => false,
     }
 }

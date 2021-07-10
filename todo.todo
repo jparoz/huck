@@ -16,8 +16,13 @@ x Parse LHS correctly in e.g.:   (++) = append;
 x Fix the assert! calls by using enum instead of vecs
 x Accept numbers as patterns
 x Parse numerals separately as Int/Float literals
+- Add let bindings
+    x Add the basics
+    - Change from emitting equality constraints to emitting the other kind of constraint thingy. Consider how to do this with global declarations in mind as well.
 - Do HM type inference
-- Scoping/shadowing
+- Refactor apply_precs(precs)
+- Scoping/shadowing @Scope
+    - Maybe this simply means that we ban shadowing variable names, because local types are already separated. We can add other stuff later.
 - Add type declarations
     x Special syntax required for tuple types written like (Int, Int, Int), because the type is actually (Int, (Int, Int))?? I don't think so, because the type operator will have the same fixity as the value operator.
 - Add operator precedence declarations

@@ -17,13 +17,18 @@ fn main() {
     let mut cg = ConstraintGenerator::new();
 
     for (name, defns) in parsed.assignments {
+        // Print type of defined function
+        let typ = defns.generate(&mut cg);
+        println!("{} : {}", name, typ);
+
+        // Print parsed definitions
         for (lhs, expr) in defns.iter() {
             println!("{} = {};", lhs, expr);
         }
-        let typ = defns.generate(&mut cg);
-        println!("{} : {}", name, typ);
+
         println!();
     }
 
+    // Print state of constraint generator
     println!("{}", cg);
 }
