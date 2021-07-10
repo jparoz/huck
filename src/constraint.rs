@@ -258,13 +258,12 @@ enum Constraint {
 impl<'a> Display for Constraint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Constraint::Equality(a, b) => write!(f, "{} == {}", a, b),
+            Constraint::Equality(a, b) => write!(f, "{} ≡ {}", a, b),
             Constraint::ExplicitInstance(tau, sigma) => {
-                write!(f, "{} is an instance of {}", tau, sigma)
+                write!(f, "{} ≼ {}", tau, sigma)
             }
-            Constraint::ImplicitInstance(_a, _b, _m) => {
-                // write!(f, "{} is an instance of {}, generalized under {}", a, b, m)
-                todo!()
+            Constraint::ImplicitInstance(a, b, _m) => {
+                write!(f, "{} ≤M {}", a, b) //, where M is {}", a, b, m)
             }
         }
     }
