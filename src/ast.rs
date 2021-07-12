@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::fmt::{self, Display};
 
+use crate::types::Type;
+
 // @Todo: use these, or something similar
 //
 // #[derive(PartialEq, Debug)]
@@ -91,6 +93,15 @@ impl<'a> Chunk<'a> {
             for (lhs, rhs) in defns.iter_mut() {
                 lhs.apply_precs(&defaults);
                 rhs.apply_precs(&defaults);
+            }
+        }
+    }
+
+    pub fn compute_mono_type_vars(&mut self) {
+        for (_name, defns) in &mut self.assignments {
+            for (_lhs, rhs) in defns.iter_mut() {
+                rhs.m = Some(vec![]);
+                rhs.compute_mono_type_vars(vec![]);
             }
         }
     }
@@ -279,7 +290,56 @@ impl<'a> Display for Pattern<'a> {
 }
 
 #[derive(PartialEq, Clone, Debug)]
-pub enum Expr<'a> {
+pub struct Expr<'a> {
+    pub node: ExprNode<'a>,
+    pub m: Option<Vec<Type>>,
+}
+
+impl<'a> Expr<'a> {
+    pub fn new(node: ExprNode) -> Expr {
+        Expr { node, m: None }
+    }
+
+    pub fn compute_mono_type_vars(&mut self, from_parent: Vec<Type>) {
+        match &mut self.node {
+            ExprNode::Term(_) => (),
+            ExprNode::App { func, argument } => {
+                func.compute_mono_type_vars(from_parent.clone());
+                argument.compute_mono_type_vars(from_parent.clone());
+            }
+            ExprNode::Binop {
+                operator: _operator,
+                lhs,
+                rhs,
+            } => {
+                lhs.compute_mono_type_vars(from_parent.clone());
+                rhs.compute_mono_type_vars(from_parent.clone());
+            }
+            ExprNode::Let {
+                assignments,
+                in_expr,
+            } => {
+                for (_name, defns) in assignments {
+                    for (_lhs, rhs) in defns {
+                        // @Note: _lhs contains poly type vars, not mono
+                        rhs.compute_mono_type_vars(from_parent.clone());
+                    }
+                }
+                in_expr.compute_mono_type_vars(from_parent.clone());
+            } // @Todo: lambdas should do something like the following:
+              // ExprNode::Lambda { vars, rhs } => {
+              //     rhs.compute_mono_type_vars(from_parent
+              //        .clone()
+              //        .extend(vars.iter().map(|var| var.get_mono_types());
+              // }
+        }
+
+        self.m = Some(from_parent);
+    }
+}
+
+#[derive(PartialEq, Clone, Debug)]
+pub enum ExprNode<'a> {
     Term(Term<'a>),
     App {
         func: Box<Expr<'a>>,
@@ -298,18 +358,18 @@ pub enum Expr<'a> {
 
 impl<'a> Expr<'a> {
     fn apply_precs(&mut self, precs: &HashMap<Name, Precedence>) {
-        match self {
-            Expr::Binop {
+        match &mut self.node {
+            ExprNode::Binop {
                 operator: ref mut l_op,
                 lhs: ref mut a,
                 ref mut rhs,
             } => {
                 rhs.apply_precs(precs);
-                if let Expr::Binop {
+                if let ExprNode::Binop {
                     operator: ref mut r_op,
                     lhs: ref mut b,
                     rhs: ref mut c,
-                } = rhs.as_mut()
+                } = rhs.as_mut().node
                 {
                     b.apply_precs(precs);
                     c.apply_precs(precs);
@@ -344,11 +404,11 @@ impl<'a> Expr<'a> {
                 }
                 a.apply_precs(precs);
             }
-            Expr::App { func, argument } => {
+            ExprNode::App { func, argument } => {
                 func.apply_precs(precs);
                 argument.apply_precs(precs);
             }
-            Expr::Term(t) => match t {
+            ExprNode::Term(t) => match t {
                 Term::List(v) => {
                     for e in v {
                         e.apply_precs(precs);
@@ -357,7 +417,7 @@ impl<'a> Expr<'a> {
                 Term::Parens(e) => e.apply_precs(precs),
                 _ => (),
             },
-            Expr::Let {
+            ExprNode::Let {
                 assignments,
                 in_expr,
             } => {
@@ -375,8 +435,8 @@ impl<'a> Expr<'a> {
 
 impl<'a> Display for Expr<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use Expr::*;
-        match self {
+        use ExprNode::*;
+        match &self.node {
             App { func, argument } => {
                 write!(f, "{}({}", DIM, RESET)?;
                 write!(f, "{} {}", func, argument)?;
@@ -401,6 +461,10 @@ impl<'a> Display for Expr<'a> {
                 write!(f, " in {}", in_expr)
             }
         }
+        // @Debug: below is nonsense
+
+        // ?;
+        // write!(f, "<<M: {:?}>>", self.m)
     }
 }
 
