@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+// use std::collections::HashSet;
 use std::fmt::{self, Display};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -7,6 +7,7 @@ pub enum Type {
     Var(TypeVar),
     Func(Box<Type>, Box<Type>), // @Checkme: needs to be boxed???
     List(Box<Type>),
+    Scheme(Vec<TypeVar>, Box<Type>),
 }
 
 impl Type {
@@ -31,16 +32,24 @@ impl Type {
 impl Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Type::Var(TypeVar(id)) => write!(f, "t{}", id),
+            Type::Var(var) => write!(f, "{}", var),
             Type::Prim(p) => write!(f, "{:?}", p), // @Fixme: Display not Debug
             Type::Func(a, b) => write!(f, "{} -> {}", a, b),
             Type::List(inner) => {
                 write!(f, "[{}]", inner)
             }
+            Type::Scheme(vars, typ) => {
+                write!(f, "∀")?;
+                for var in vars.iter() {
+                    write!(f, " {}", var)?;
+                }
+                write!(f, ". {}", typ)
+            }
         }
     }
 }
 
+/*
 #[derive(PartialEq, Eq, Debug)]
 pub struct TypeScheme {
     vars: HashSet<TypeVar>,
@@ -68,6 +77,7 @@ impl Display for TypeScheme {
         write!(f, ". {}", self.typ)
     }
 }
+*/
 
 #[derive(Hash, PartialEq, Eq, Clone, Copy, Debug)]
 pub struct TypeVar(pub usize);

@@ -3,7 +3,7 @@ use std::fmt::{self, Display};
 use std::iter;
 
 use crate::ast::{Assignment, Expr, ExprNode, Lhs, Name, Numeral, Pattern, Term};
-use crate::types::{Primitive, Type, TypeScheme, TypeVar};
+use crate::types::{Primitive, Type, TypeVar};
 
 pub trait GenerateConstraints {
     fn generate(&self, cg: &mut ConstraintGenerator) -> Type;
@@ -69,7 +69,7 @@ impl ConstraintGenerator {
         match pat {
             Pattern::Bind(s) => {
                 let beta = self.fresh();
-                self.bind_name(&Name::Ident(s.to_string()), &beta);
+                self.bind_name_mono(&Name::Ident(s.to_string()), &beta);
                 beta
             }
 
@@ -103,11 +103,24 @@ impl ConstraintGenerator {
         }
     }
 
-    fn bind_name(&mut self, name: &Name, beta: &Type) {
+    fn bind_name_mono(&mut self, name: &Name, beta: &Type) {
         if let Some(assumptions) = self.assumptions.remove(name) {
             for assumed in assumptions {
                 self.constraints
                     .push(Constraint::Equality(Type::Var(assumed), beta.clone()));
+            }
+        }
+    }
+
+    fn bind_name_poly(&mut self, name: &Name, beta: &Type, m: &Vec<TypeVar>) {
+        if let Some(assumptions) = self.assumptions.remove(name) {
+            for assumed in assumptions {
+                // @Fixme
+                self.constraints.push(Constraint::ImplicitInstance(
+                    Type::Var(assumed),
+                    beta.clone(),
+                    m.clone(),
+                ));
             }
         }
     }
@@ -118,10 +131,10 @@ impl<'a> GenerateConstraints for Vec<Assignment<'a>> {
     fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
         let beta = cg.fresh();
 
-        // @Cleanup: can this be merged into a single expression to avoid collect()?
         let typs: Vec<Type> = self.iter().map(|defn| defn.generate(cg)).collect();
         for typ in typs {
             // @Fixme: This sometimes needs to be other types of constraint
+            // @Note: I don't think the above is true? @RemoveMe: the comment
             cg.constrain(Constraint::Equality(beta.clone(), typ));
         }
 
@@ -212,7 +225,7 @@ impl<'a> GenerateConstraints for Expr<'a> {
                 for (name, defns) in assignments {
                     // @Fixme @Scope: these should be local to the in_expr, obviously!
                     let typ = defns.generate(cg);
-                    cg.bind_name(&name, &typ);
+                    cg.bind_name_poly(&name, &typ, &in_expr.m);
                 }
 
                 // @Todo @Fixme @Scope: remove the let bindings???
@@ -251,7 +264,7 @@ impl<'a> Display for ConstraintGenerator {
 #[derive(PartialEq, Eq, Debug)]
 enum Constraint {
     Equality(Type, Type),
-    ExplicitInstance(Type, TypeScheme),
+    ExplicitInstance(Type, Type),
     ImplicitInstance(Type, Type, Vec<TypeVar>),
 }
 
@@ -262,8 +275,8 @@ impl<'a> Display for Constraint {
             Constraint::ExplicitInstance(tau, sigma) => {
                 write!(f, "{} ≼ {}", tau, sigma)
             }
-            Constraint::ImplicitInstance(a, b, _m) => {
-                write!(f, "{} ≤M {}", a, b) //, where M is {}", a, b, m)
+            Constraint::ImplicitInstance(a, b, m) => {
+                write!(f, "{} ≤M {} where M is {:?}", a, b, m) // @Fixme: Display not Debug
             }
         }
     }

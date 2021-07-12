@@ -37,4 +37,6 @@
 (* takesFloat 1.0 = True; *)
 (* takesFloat _ = False; *)
 
-three = let x = 3 in x;
+(* three = let x = 3 in x; *)
+
+someTuple = let f = id in (f 3, f True);

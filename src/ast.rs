@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::{self, Display};
 
-use crate::types::Type;
+use crate::types::{Type, TypeVar};
 
 // @Todo: use these, or something similar
 //
@@ -100,7 +100,7 @@ impl<'a> Chunk<'a> {
     pub fn compute_mono_type_vars(&mut self) {
         for (_name, defns) in &mut self.assignments {
             for (_lhs, rhs) in defns.iter_mut() {
-                rhs.m = Some(vec![]);
+                rhs.m = vec![];
                 rhs.compute_mono_type_vars(vec![]);
             }
         }
@@ -292,15 +292,18 @@ impl<'a> Display for Pattern<'a> {
 #[derive(PartialEq, Clone, Debug)]
 pub struct Expr<'a> {
     pub node: ExprNode<'a>,
-    pub m: Option<Vec<Type>>,
+    pub m: Vec<TypeVar>,
 }
 
 impl<'a> Expr<'a> {
     pub fn new(node: ExprNode) -> Expr {
-        Expr { node, m: None }
+        Expr {
+            node,
+            m: Vec::new(),
+        }
     }
 
-    pub fn compute_mono_type_vars(&mut self, from_parent: Vec<Type>) {
+    pub fn compute_mono_type_vars(&mut self, from_parent: Vec<TypeVar>) {
         match &mut self.node {
             ExprNode::Term(_) => (),
             ExprNode::App { func, argument } => {
@@ -334,7 +337,7 @@ impl<'a> Expr<'a> {
               // }
         }
 
-        self.m = Some(from_parent);
+        self.m = from_parent;
     }
 }
 
