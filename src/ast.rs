@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::{self, Display};
 
-use crate::types::{Type, TypeVar};
+use crate::types::TypeVar;
 
 // @Todo: use these, or something similar
 //

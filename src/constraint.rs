@@ -3,7 +3,7 @@ use std::fmt::{self, Display};
 use std::iter;
 
 use crate::ast::{Assignment, Expr, ExprNode, Lhs, Name, Numeral, Pattern, Term};
-use crate::types::{Primitive, Type, TypeVar};
+use crate::types::{Primitive, Type, TypeScheme, TypeVar};
 
 pub trait GenerateConstraints {
     fn generate(&self, cg: &mut ConstraintGenerator) -> Type;
@@ -264,7 +264,7 @@ impl<'a> Display for ConstraintGenerator {
 #[derive(PartialEq, Eq, Debug)]
 enum Constraint {
     Equality(Type, Type),
-    ExplicitInstance(Type, Type),
+    ExplicitInstance(Type, TypeScheme),
     ImplicitInstance(Type, Type, Vec<TypeVar>),
 }
 

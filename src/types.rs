@@ -7,7 +7,7 @@ pub enum Type {
     Var(TypeVar),
     Func(Box<Type>, Box<Type>), // @Checkme: needs to be boxed???
     List(Box<Type>),
-    Scheme(Vec<TypeVar>, Box<Type>),
+    // Scheme(Vec<TypeVar>, Box<Type>),
 }
 
 impl Type {
@@ -37,22 +37,20 @@ impl Display for Type {
             Type::Func(a, b) => write!(f, "{} -> {}", a, b),
             Type::List(inner) => {
                 write!(f, "[{}]", inner)
-            }
-            Type::Scheme(vars, typ) => {
-                write!(f, "∀")?;
-                for var in vars.iter() {
-                    write!(f, " {}", var)?;
-                }
-                write!(f, ". {}", typ)
-            }
+            } // Type::Scheme(vars, typ) => {
+              //     write!(f, "∀")?;
+              //     for var in vars.iter() {
+              //         write!(f, " {}", var)?;
+              //     }
+              //     write!(f, ". {}", typ)
+              // }
         }
     }
 }
 
-/*
 #[derive(PartialEq, Eq, Debug)]
 pub struct TypeScheme {
-    vars: HashSet<TypeVar>,
+    vars: Vec<TypeVar>,
     typ: Type,
 }
 
@@ -77,7 +75,6 @@ impl Display for TypeScheme {
         write!(f, ". {}", self.typ)
     }
 }
-*/
 
 #[derive(Hash, PartialEq, Eq, Clone, Copy, Debug)]
 pub struct TypeVar(pub usize);
