@@ -18,7 +18,7 @@ x Accept numbers as patterns
 x Parse numerals separately as Int/Float literals
 - Add let bindings
     x Add the basics
-    - Change from emitting equality constraints to emitting the other kind of constraint thingy. Consider how to do this with global declarations in mind as well.
+    x Change from emitting equality constraints to emitting the other kind of constraint thingy. Consider how to do this with global declarations in mind as well.
 - Do HM type inference
 - Refactor apply_precs(precs)
 - Scoping/shadowing @Scope

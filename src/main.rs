@@ -14,7 +14,7 @@ fn main() {
 
     parsed.apply_precs(&std::collections::HashMap::new());
 
-    parsed.compute_mono_type_vars();
+    // parsed.compute_mono_type_vars();
 
     let mut cg = ConstraintGenerator::new();
 

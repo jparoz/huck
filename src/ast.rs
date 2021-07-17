@@ -96,15 +96,6 @@ impl<'a> Chunk<'a> {
             }
         }
     }
-
-    pub fn compute_mono_type_vars(&mut self) {
-        for (_name, defns) in &mut self.assignments {
-            for (_lhs, rhs) in defns.iter_mut() {
-                rhs.m = vec![];
-                rhs.compute_mono_type_vars(vec![]);
-            }
-        }
-    }
 }
 
 pub type Assignment<'a> = (Lhs<'a>, Expr<'a>);
@@ -302,43 +293,6 @@ impl<'a> Expr<'a> {
             m: Vec::new(),
         }
     }
-
-    pub fn compute_mono_type_vars(&mut self, from_parent: Vec<TypeVar>) {
-        match &mut self.node {
-            ExprNode::Term(_) => (),
-            ExprNode::App { func, argument } => {
-                func.compute_mono_type_vars(from_parent.clone());
-                argument.compute_mono_type_vars(from_parent.clone());
-            }
-            ExprNode::Binop {
-                operator: _operator,
-                lhs,
-                rhs,
-            } => {
-                lhs.compute_mono_type_vars(from_parent.clone());
-                rhs.compute_mono_type_vars(from_parent.clone());
-            }
-            ExprNode::Let {
-                assignments,
-                in_expr,
-            } => {
-                for (_name, defns) in assignments {
-                    for (_lhs, rhs) in defns {
-                        // @Note: _lhs contains poly type vars, not mono
-                        rhs.compute_mono_type_vars(from_parent.clone());
-                    }
-                }
-                in_expr.compute_mono_type_vars(from_parent.clone());
-            } // @Todo: lambdas should do something like the following:
-              // ExprNode::Lambda { vars, rhs } => {
-              //     rhs.compute_mono_type_vars(from_parent
-              //        .clone()
-              //        .extend(vars.iter().map(|var| var.get_mono_types());
-              // }
-        }
-
-        self.m = from_parent;
-    }
 }
 
 #[derive(PartialEq, Clone, Debug)]
@@ -356,6 +310,10 @@ pub enum ExprNode<'a> {
     Let {
         assignments: HashMap<Name, Vec<Assignment<'a>>>,
         in_expr: Box<Expr<'a>>,
+    },
+    Lambda {
+        args: Vec<Pattern<'a>>,
+        rhs: Box<Expr<'a>>,
     },
 }
 
@@ -432,6 +390,12 @@ impl<'a> Expr<'a> {
                 }
                 in_expr.apply_precs(precs);
             }
+            ExprNode::Lambda { args: pats, rhs } => {
+                for pat in pats {
+                    pat.apply_precs(precs);
+                }
+                rhs.apply_precs(precs);
+            }
         }
     }
 }
@@ -458,10 +422,18 @@ impl<'a> Display for Expr<'a> {
                 write!(f, "let")?;
                 for (_name, defns) in assignments {
                     for (lhs, rhs) in defns {
-                        write!(f, " {} = {};", lhs, rhs)?;
+                        write!(f, " {} = {}", lhs, rhs)?;
+                        write!(f, "{};{}", DIM, RESET)?;
                     }
                 }
                 write!(f, " in {}", in_expr)
+            }
+            Lambda { args: pats, rhs } => {
+                write!(f, "\\")?;
+                for pat in pats {
+                    write!(f, "{} ", pat)?;
+                }
+                write!(f, "-> {}", rhs)
             }
         }
         // @Debug: below is nonsense

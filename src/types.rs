@@ -1,4 +1,3 @@
-// use std::collections::HashSet;
 use std::fmt::{self, Display};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -11,22 +10,18 @@ pub enum Type {
 }
 
 impl Type {
-    /*
-    pub fn free_vars(&self) -> Vec<TypeVar> {
-        use Type::*;
-
+    pub fn get_mono_type_vars(&self) -> Vec<TypeVar> {
         match self {
-            Prim(_) => vec![],
-            Var(var) => vec![*var],
-            Func(a, b) => {
-                let mut vars = a.free_vars();
-                vars.append(&mut b.free_vars());
-                vars
+            Type::Var(var) => vec![*var],
+            Type::Prim(_) => vec![],
+            Type::List(typ) => typ.get_mono_type_vars(),
+            Type::Func(a, b) => {
+                let mut res = a.get_mono_type_vars();
+                res.extend(b.get_mono_type_vars());
+                res
             }
-            List(_) => todo!(),
         }
     }
-    */
 }
 
 impl Display for Type {

@@ -14,6 +14,7 @@ pub struct ConstraintGenerator {
     constraints: Vec<Constraint>,
     assumptions: HashMap<Name, Vec<TypeVar>>,
     next_typevar_id: usize,
+    m_stack: Vec<TypeVar>,
 }
 
 impl ConstraintGenerator {
@@ -22,6 +23,7 @@ impl ConstraintGenerator {
             constraints: Vec::new(),
             assumptions: HashMap::new(),
             next_typevar_id: 0,
+            m_stack: Vec::new(),
         }
     }
 
@@ -106,20 +108,18 @@ impl ConstraintGenerator {
     fn bind_name_mono(&mut self, name: &Name, beta: &Type) {
         if let Some(assumptions) = self.assumptions.remove(name) {
             for assumed in assumptions {
-                self.constraints
-                    .push(Constraint::Equality(Type::Var(assumed), beta.clone()));
+                self.constrain(Constraint::Equality(Type::Var(assumed), beta.clone()));
             }
         }
     }
 
-    fn bind_name_poly(&mut self, name: &Name, beta: &Type, m: &Vec<TypeVar>) {
+    fn bind_name_poly(&mut self, name: &Name, beta: &Type) {
         if let Some(assumptions) = self.assumptions.remove(name) {
             for assumed in assumptions {
-                // @Fixme
-                self.constraints.push(Constraint::ImplicitInstance(
+                self.constrain(Constraint::ImplicitInstance(
                     Type::Var(assumed),
                     beta.clone(),
-                    m.clone(),
+                    self.m_stack.clone(),
                 ));
             }
         }
@@ -135,6 +135,9 @@ impl<'a> GenerateConstraints for Vec<Assignment<'a>> {
         for typ in typs {
             // @Fixme: This sometimes needs to be other types of constraint
             // @Note: I don't think the above is true? @RemoveMe: the comment
+            // @Note: It might be true if we want polymorphic bindings at top level.
+            //        If this is the case, then I think this function will just go away,
+            //        and we'll decide at the callsite which type of constraint to use.
             cg.constrain(Constraint::Equality(beta.clone(), typ));
         }
 
@@ -225,7 +228,7 @@ impl<'a> GenerateConstraints for Expr<'a> {
                 for (name, defns) in assignments {
                     // @Fixme @Scope: these should be local to the in_expr, obviously!
                     let typ = defns.generate(cg);
-                    cg.bind_name_poly(&name, &typ, &in_expr.m);
+                    cg.bind_name_poly(&name, &typ);
                 }
 
                 // @Todo @Fixme @Scope: remove the let bindings???
@@ -236,6 +239,30 @@ impl<'a> GenerateConstraints for Expr<'a> {
                 // separate let bindings will be assigned separate types.
 
                 beta
+            }
+
+            ExprNode::Lambda { args, rhs } => {
+                // let types = args.iter().map(|arg| cg.bind(arg));
+                // let typevars = types.iter().flat_map(|typ| typ.get_mono_type_vars());
+
+                // let type_count = args.len();
+                // for arg in args {
+                //     cg.m_stack.extend(arg.get_mono_type_vars())
+                // }
+
+                args.iter().rev().fold(rhs.generate(cg), |acc, arg| {
+                    let beta = cg.bind(arg);
+
+                    // @CheckMe: should this be before or after the rhs.generate(cg)'s?
+                    // let type_var = if let Type::Var(type_var) = beta {
+                    //     type_var
+                    // } else {
+                    //     panic!()
+                    // };
+                    cg.m_stack.extend(beta.get_mono_type_vars());
+
+                    Type::Func(Box::new(beta), Box::new(acc))
+                })
             }
         }
     }
@@ -276,7 +303,11 @@ impl<'a> Display for Constraint {
                 write!(f, "{} ≼ {}", tau, sigma)
             }
             Constraint::ImplicitInstance(a, b, m) => {
-                write!(f, "{} ≤M {} where M is {:?}", a, b, m) // @Fixme: Display not Debug
+                write!(f, "{} ≤ {} where M is {{ ", a, b)?;
+                for var in m {
+                    write!(f, "{} ", var)?;
+                }
+                write!(f, "}}")
             }
         }
     }

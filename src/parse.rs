@@ -81,7 +81,7 @@ fn pattern_binop(input: &str) -> IResult<&str, Pattern> {
 }
 
 fn expr(input: &str) -> IResult<&str, Expr> {
-    alt((binop, app, let_in))(input)
+    alt((binop, app, let_in, lambda))(input)
 }
 
 fn binop(input: &str) -> IResult<&str, Expr> {
@@ -128,6 +128,18 @@ fn let_in(input: &str) -> IResult<&str, Expr> {
             Expr::new(ExprNode::Let {
                 assignments: local_env,
                 in_expr: Box::new(in_expr),
+            })
+        },
+    )(input)
+}
+
+fn lambda(input: &str) -> IResult<&str, Expr> {
+    map(
+        tuple((reserved_op("\\"), many1(pattern), reserved_op("->"), expr)),
+        |(_, args, _, rhs)| {
+            Expr::new(ExprNode::Lambda {
+                args,
+                rhs: Box::new(rhs),
             })
         },
     )(input)
@@ -219,7 +231,7 @@ where
 {
     delimited(
         ws(tag("[")),
-        separated_list0(reserved_op(","), inner),
+        separated_list0(ws(tag(",")), inner),
         ws(tag("]")),
     )
 }
@@ -273,6 +285,7 @@ fn reserved<'a>(s: &'a str) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> 
 }
 
 fn reserved_op<'a>(s: &'a str) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> {
+    debug_assert!(is_reserved(s));
     ws(terminated(tag(s), peek(not(operator_char))))
 }
 
@@ -295,7 +308,7 @@ fn is_var_start_char(c: char) -> bool {
 // an uppercase letter.
 fn is_reserved(word: &str) -> bool {
     match word {
-        "module" | "let" | "in" | "do" | "=" | ":" => true,
+        "module" | "let" | "in" | "do" | "=" | ":" | "\\" | "->" | "<-" => true,
         _ => false,
     }
 }

@@ -39,4 +39,11 @@
 
 (* three = let x = 3 in x; *)
 
-someTuple = let f = id in (f 3, f True);
+(* someTuple = let f = id in (f 3, f True); *)
+
+(* lambda = \x -> x; *)
+
+example1 =
+    let id = \x ->
+        let y = x in y
+    in id id;
