@@ -86,23 +86,21 @@ fn expr(input: &str) -> IResult<&str, Expr> {
 
 fn binop(input: &str) -> IResult<&str, Expr> {
     map(tuple((app, operator, expr)), |(lhs, operator, rhs)| {
-        Expr::new(ExprNode::Binop {
+        Expr::Binop {
             operator,
             lhs: Box::new(lhs),
             rhs: Box::new(rhs),
-        })
+        }
     })(input)
 }
 
 fn app(input: &str) -> IResult<&str, Expr> {
     map(many1(term), |ts| {
         ts.into_iter()
-            .map(|t| Expr::new(ExprNode::Term(t)))
-            .reduce(|a, b| {
-                Expr::new(ExprNode::App {
-                    func: Box::new(a),
-                    argument: Box::new(b),
-                })
+            .map(|t| Expr::Term(t))
+            .reduce(|a, b| Expr::App {
+                func: Box::new(a),
+                argument: Box::new(b),
             })
             .unwrap() // safe unwrap because we're mapping over many1
     })(input)
@@ -125,10 +123,10 @@ fn let_in(input: &str) -> IResult<&str, Expr> {
                     .or_insert(Vec::new())
                     .push((lhs, expr));
             }
-            Expr::new(ExprNode::Let {
+            Expr::Let {
                 assignments: local_env,
                 in_expr: Box::new(in_expr),
-            })
+            }
         },
     )(input)
 }
@@ -136,11 +134,9 @@ fn let_in(input: &str) -> IResult<&str, Expr> {
 fn lambda(input: &str) -> IResult<&str, Expr> {
     map(
         tuple((reserved_op("\\"), many1(pattern), reserved_op("->"), expr)),
-        |(_, args, _, rhs)| {
-            Expr::new(ExprNode::Lambda {
-                args,
-                rhs: Box::new(rhs),
-            })
+        |(_, args, _, rhs)| Expr::Lambda {
+            args,
+            rhs: Box::new(rhs),
         },
     )(input)
 }

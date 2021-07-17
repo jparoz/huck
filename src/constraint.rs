@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fmt::{self, Display};
 use std::iter;
 
-use crate::ast::{Assignment, Expr, ExprNode, Lhs, Name, Numeral, Pattern, Term};
+use crate::ast::{Assignment, Expr, Lhs, Name, Numeral, Pattern, Term};
 use crate::types::{Primitive, Type, TypeScheme, TypeVar};
 
 pub trait GenerateConstraints {
@@ -171,12 +171,12 @@ impl<'a> GenerateConstraints for Assignment<'a> {
 
 impl<'a> GenerateConstraints for Expr<'a> {
     fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
-        match &self.node {
-            ExprNode::Term(Term::Numeral(Numeral::Int(_))) => Type::Prim(Primitive::Int),
-            ExprNode::Term(Term::Numeral(Numeral::Float(_))) => Type::Prim(Primitive::Float),
-            ExprNode::Term(Term::String(_)) => Type::Prim(Primitive::String),
-            ExprNode::Term(Term::Parens(e)) => e.generate(cg),
-            ExprNode::Term(Term::List(es)) => {
+        match self {
+            Expr::Term(Term::Numeral(Numeral::Int(_))) => Type::Prim(Primitive::Int),
+            Expr::Term(Term::Numeral(Numeral::Float(_))) => Type::Prim(Primitive::Float),
+            Expr::Term(Term::String(_)) => Type::Prim(Primitive::String),
+            Expr::Term(Term::Parens(e)) => e.generate(cg),
+            Expr::Term(Term::List(es)) => {
                 let beta = cg.fresh();
                 for e in es {
                     let e_type = e.generate(cg);
@@ -186,9 +186,9 @@ impl<'a> GenerateConstraints for Expr<'a> {
                 Type::List(Box::new(beta))
             }
 
-            ExprNode::Term(Term::Name(name)) => Type::Var(cg.assume(name.clone())),
+            Expr::Term(Term::Name(name)) => Type::Var(cg.assume(name.clone())),
 
-            ExprNode::App { func, argument } => {
+            Expr::App { func, argument } => {
                 let t1 = func.generate(cg);
                 let t2 = argument.generate(cg);
                 let beta = cg.fresh();
@@ -200,7 +200,7 @@ impl<'a> GenerateConstraints for Expr<'a> {
 
                 beta
             }
-            ExprNode::Binop { operator, lhs, rhs } => {
+            Expr::Binop { operator, lhs, rhs } => {
                 let t1 = Type::Var(cg.assume(operator.clone()));
                 let t2 = lhs.generate(cg);
                 let t3 = rhs.generate(cg);
@@ -219,7 +219,7 @@ impl<'a> GenerateConstraints for Expr<'a> {
                 beta2
             }
 
-            ExprNode::Let {
+            Expr::Let {
                 assignments,
                 in_expr,
             } => {
@@ -241,7 +241,7 @@ impl<'a> GenerateConstraints for Expr<'a> {
                 beta
             }
 
-            ExprNode::Lambda { args, rhs } => {
+            Expr::Lambda { args, rhs } => {
                 // let types = args.iter().map(|arg| cg.bind(arg));
                 // let typevars = types.iter().flat_map(|typ| typ.get_mono_type_vars());
 

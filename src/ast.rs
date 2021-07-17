@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::{self, Display};
 
-use crate::types::TypeVar;
-
 // @Todo: use these, or something similar
 //
 // #[derive(PartialEq, Debug)]
@@ -281,22 +279,7 @@ impl<'a> Display for Pattern<'a> {
 }
 
 #[derive(PartialEq, Clone, Debug)]
-pub struct Expr<'a> {
-    pub node: ExprNode<'a>,
-    pub m: Vec<TypeVar>,
-}
-
-impl<'a> Expr<'a> {
-    pub fn new(node: ExprNode) -> Expr {
-        Expr {
-            node,
-            m: Vec::new(),
-        }
-    }
-}
-
-#[derive(PartialEq, Clone, Debug)]
-pub enum ExprNode<'a> {
+pub enum Expr<'a> {
     Term(Term<'a>),
     App {
         func: Box<Expr<'a>>,
@@ -319,18 +302,18 @@ pub enum ExprNode<'a> {
 
 impl<'a> Expr<'a> {
     fn apply_precs(&mut self, precs: &HashMap<Name, Precedence>) {
-        match &mut self.node {
-            ExprNode::Binop {
+        match self {
+            Expr::Binop {
                 operator: ref mut l_op,
                 lhs: ref mut a,
                 ref mut rhs,
             } => {
                 rhs.apply_precs(precs);
-                if let ExprNode::Binop {
+                if let Expr::Binop {
                     operator: ref mut r_op,
                     lhs: ref mut b,
                     rhs: ref mut c,
-                } = rhs.as_mut().node
+                } = rhs.as_mut()
                 {
                     b.apply_precs(precs);
                     c.apply_precs(precs);
@@ -365,11 +348,11 @@ impl<'a> Expr<'a> {
                 }
                 a.apply_precs(precs);
             }
-            ExprNode::App { func, argument } => {
+            Expr::App { func, argument } => {
                 func.apply_precs(precs);
                 argument.apply_precs(precs);
             }
-            ExprNode::Term(t) => match t {
+            Expr::Term(t) => match t {
                 Term::List(v) => {
                     for e in v {
                         e.apply_precs(precs);
@@ -378,7 +361,7 @@ impl<'a> Expr<'a> {
                 Term::Parens(e) => e.apply_precs(precs),
                 _ => (),
             },
-            ExprNode::Let {
+            Expr::Let {
                 assignments,
                 in_expr,
             } => {
@@ -390,7 +373,7 @@ impl<'a> Expr<'a> {
                 }
                 in_expr.apply_precs(precs);
             }
-            ExprNode::Lambda { args: pats, rhs } => {
+            Expr::Lambda { args: pats, rhs } => {
                 for pat in pats {
                     pat.apply_precs(precs);
                 }
@@ -402,8 +385,8 @@ impl<'a> Expr<'a> {
 
 impl<'a> Display for Expr<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use ExprNode::*;
-        match &self.node {
+        use Expr::*;
+        match self {
             App { func, argument } => {
                 write!(f, "{}({}", DIM, RESET)?;
                 write!(f, "{} {}", func, argument)?;
