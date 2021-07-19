@@ -2,9 +2,11 @@ mod ast;
 mod constraint;
 mod error;
 mod parse;
+mod precedence;
 mod types;
 
 use constraint::{ConstraintGenerator, GenerateConstraints};
+use precedence::ApplyPrecedence;
 
 fn main() {
     let filename = std::env::args().nth(1).unwrap();
@@ -12,9 +14,10 @@ fn main() {
 
     let mut parsed = parse::parse(&contents).unwrap();
 
-    parsed.apply_precs(&std::collections::HashMap::new());
+    // let precs = PrecTable::new();
+    // precs.apply(&mut parsed);
 
-    // parsed.compute_mono_type_vars();
+    parsed.apply(&std::collections::HashMap::new());
 
     let mut cg = ConstraintGenerator::new();
 
