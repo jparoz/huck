@@ -43,7 +43,16 @@
 
 (* lambda = \x -> x; *)
 
+(*
 example1 =
     let id = \x ->
         let y = x in y
     in id id;
+*)
+
+example2 =
+    \m ->
+        let y = m in
+            let x = y True in x;
+
+foo = \x -> \y -> let z = y in z;

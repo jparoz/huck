@@ -242,27 +242,41 @@ impl<'a> GenerateConstraints for Expr<'a> {
             }
 
             Expr::Lambda { args, rhs } => {
-                // let types = args.iter().map(|arg| cg.bind(arg));
-                // let typevars = types.iter().flat_map(|typ| typ.get_mono_type_vars());
+                let types: Vec<Type> = args.iter().map(|_| cg.fresh()).collect();
+                let typevars: Vec<TypeVar> = types
+                    .iter()
+                    .flat_map(|typ| typ.get_mono_type_vars())
+                    .collect();
+                let typevar_count = typevars.len();
 
-                // let type_count = args.len();
-                // for arg in args {
-                //     cg.m_stack.extend(arg.get_mono_type_vars())
-                // }
+                cg.m_stack.extend(typevars);
 
-                args.iter().rev().fold(rhs.generate(cg), |acc, arg| {
-                    let beta = cg.bind(arg);
+                let res = types.iter().rev().fold(rhs.generate(cg), |acc, beta| {
+                    Type::Func(Box::new(beta.clone()), Box::new(acc))
+                });
 
-                    // @CheckMe: should this be before or after the rhs.generate(cg)'s?
-                    // let type_var = if let Type::Var(type_var) = beta {
-                    //     type_var
-                    // } else {
-                    //     panic!()
-                    // };
-                    cg.m_stack.extend(beta.get_mono_type_vars());
+                let total_len = cg.m_stack.len();
+                cg.m_stack.truncate(total_len - typevar_count);
 
-                    Type::Func(Box::new(beta), Box::new(acc))
-                })
+                for (arg, lambda_type) in args.iter().zip(types.into_iter()) {
+                    // @Hack: There is a circular dependency in the logic here.
+                    //        First we need some types to put into cg.m_stack, so that they can
+                    //        appear in the context of implicit instance constraints in rhs.
+                    //        But then, after rhs.generate(cg), we need to bind the args to types.
+                    //        This removes assumptions, and we can't do this until after
+                    //        rhs.generate(cg).
+                    //        So, we need access to the types both before and after
+                    //        rhs.generate(cg). To get around this, we simply make a fresh type for
+                    //        each argument first; then later on we bind the argument to another
+                    //        type (often being totally redundant); and finally we make another
+                    //        equality constraint, which will later unify the two types.
+                    //        Really, we would like to not generate another constraint, but instead
+                    //        somehow provide the type to cg.bind. e.g. cg.bind_with_type(arg, typ)
+                    let actual_type = cg.bind(arg);
+                    cg.constrain(Constraint::Equality(actual_type, lambda_type))
+                }
+
+                res
             }
         }
     }
