@@ -23,13 +23,17 @@ impl Type {
         }
     }
 
-    pub fn free_vars(&self) -> HashSet<TypeVar> {
+    pub fn free_vars(&self) -> TypeVarSet {
         match self {
-            Type::Prim(_) => HashSet::new(),
-            Type::Var(var) => HashSet::from([*var]),
-            Type::Func(a, b) => a.free_vars().union(&b.free_vars()).cloned().collect(),
+            Type::Prim(_) => TypeVarSet::empty(),
+            Type::Var(var) => TypeVarSet::single(*var),
+            Type::Func(a, b) => a.free_vars().union(&b.free_vars()),
             Type::List(t) => t.free_vars(),
         }
+    }
+
+    pub fn generalize(&self, type_set: TypeVarSet) -> TypeScheme {
+        todo!()
     }
 }
 
@@ -48,17 +52,13 @@ impl Display for Type {
 
 #[derive(PartialEq, Eq, Debug)]
 pub struct TypeScheme {
-    vars: HashSet<TypeVar>,
+    vars: TypeVarSet,
     typ: Type,
 }
 
 impl TypeScheme {
-    pub fn free_vars(&self) -> HashSet<TypeVar> {
-        self.typ
-            .free_vars()
-            .difference(&self.vars)
-            .cloned()
-            .collect()
+    pub fn free_vars(&self) -> TypeVarSet {
+        self.typ.free_vars().difference(&self.vars)
     }
 }
 
@@ -78,6 +78,41 @@ pub struct TypeVar(pub usize);
 impl Display for TypeVar {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "t{}", self.0)
+    }
+}
+
+#[derive(PartialEq, Eq, Debug)]
+pub struct TypeVarSet(HashSet<TypeVar>);
+
+impl TypeVarSet {
+    pub fn empty() -> TypeVarSet {
+        TypeVarSet(HashSet::new())
+    }
+
+    pub fn single(elem: TypeVar) -> TypeVarSet {
+        TypeVarSet(HashSet::from([elem]))
+    }
+
+    pub fn union(&self, other: &TypeVarSet) -> TypeVarSet {
+        self.0.union(&other.0).cloned().collect()
+    }
+
+    pub fn intersection(&self, other: &TypeVarSet) -> TypeVarSet {
+        self.0.intersection(&other.0).cloned().collect()
+    }
+
+    pub fn difference(&self, other: &TypeVarSet) -> TypeVarSet {
+        self.0.difference(&other.0).cloned().collect()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &TypeVar> {
+        self.0.iter()
+    }
+}
+
+impl FromIterator<TypeVar> for TypeVarSet {
+    fn from_iter<I: IntoIterator<Item = TypeVar>>(iter: I) -> Self {
+        TypeVarSet(HashSet::from_iter(iter))
     }
 }
 

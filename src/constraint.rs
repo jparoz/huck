@@ -1,9 +1,9 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt::{self, Display};
 use std::iter;
 
 use crate::ast::{Assignment, Expr, Lhs, Name, Numeral, Pattern, Term};
-use crate::types::{Primitive, Type, TypeScheme, TypeVar};
+use crate::types::{Primitive, Type, TypeScheme, TypeVar, TypeVarSet};
 
 pub trait GenerateConstraints {
     fn generate(&self, cg: &mut ConstraintGenerator) -> Type;
@@ -305,23 +305,17 @@ impl<'a> Display for ConstraintGenerator {
 enum Constraint {
     Equality(Type, Type),
     ExplicitInstance(Type, TypeScheme),
-    ImplicitInstance(Type, Type, HashSet<TypeVar>),
+    ImplicitInstance(Type, Type, TypeVarSet),
 }
 
 impl Constraint {
-    pub fn active_vars(&self) -> Vec<TypeVar> {
+    pub fn active_vars(&self) -> TypeVarSet {
         match self {
-            Constraint::Equality(t1, t2) => {
-                t1.free_vars().union(&t2.free_vars()).cloned().collect()
+            Constraint::Equality(t1, t2) => t1.free_vars().union(&t2.free_vars()),
+            Constraint::ExplicitInstance(t, sigma) => t.free_vars().union(&sigma.free_vars()),
+            Constraint::ImplicitInstance(t1, t2, m) => {
+                t1.free_vars().union(&m.intersection(&t2.free_vars()))
             }
-            Constraint::ExplicitInstance(t, sigma) => {
-                t.free_vars().union(&sigma.free_vars()).cloned().collect()
-            }
-            Constraint::ImplicitInstance(t1, t2, m) => t1
-                .free_vars()
-                .union(&m.intersection(&t2.free_vars()).cloned().collect())
-                .cloned()
-                .collect(),
         }
     }
 }
@@ -335,7 +329,7 @@ impl<'a> Display for Constraint {
             }
             Constraint::ImplicitInstance(a, b, m) => {
                 write!(f, "{} ≤ {} where M is {{ ", a, b)?;
-                for var in m {
+                for var in m.iter() {
                     write!(f, "{} ", var)?;
                 }
                 write!(f, "}}")
