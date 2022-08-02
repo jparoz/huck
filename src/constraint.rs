@@ -126,7 +126,7 @@ impl ConstraintGenerator {
     }
 }
 
-// This impl assumes that each assignment is a definition of the same function.
+// This impl assumes that each assignment in the Vec is a definition of the same function.
 impl<'a> GenerateConstraints for Vec<Assignment<'a>> {
     fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
         let beta = cg.fresh();
@@ -180,8 +180,7 @@ impl<'a> GenerateConstraints for Expr<'a> {
                 let beta = cg.fresh();
                 for e in es {
                     let e_type = e.generate(cg);
-                    cg.constraints
-                        .push(Constraint::Equality(beta.clone(), e_type));
+                    cg.constrain(Constraint::Equality(beta.clone(), e_type));
                 }
                 Type::List(Box::new(beta))
             }
