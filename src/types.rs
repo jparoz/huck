@@ -32,8 +32,11 @@ impl Type {
         }
     }
 
-    pub fn generalize(&self, type_set: TypeVarSet) -> TypeScheme {
-        todo!()
+    pub fn generalize(&self, type_set: &TypeVarSet) -> TypeScheme {
+        TypeScheme {
+            vars: self.free_vars().difference(&type_set),
+            typ: self.clone(),
+        }
     }
 }
 
