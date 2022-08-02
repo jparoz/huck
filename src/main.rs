@@ -14,9 +14,6 @@ fn main() {
 
     let mut parsed = parse::parse(&contents).unwrap();
 
-    // let precs = PrecTable::new();
-    // precs.apply(&mut parsed);
-
     parsed.apply(&std::collections::HashMap::new());
 
     let mut cg = ConstraintGenerator::new();

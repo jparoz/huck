@@ -5,6 +5,43 @@ use std::iter;
 use crate::ast::{Assignment, Expr, Lhs, Name, Numeral, Pattern, Term};
 use crate::types::{Primitive, Type, TypeScheme, TypeVar, TypeVarSet};
 
+#[derive(PartialEq, Eq, Debug)]
+enum Constraint {
+    Equality(Type, Type),
+    ImplicitInstance(Type, Type, TypeVarSet),
+    ExplicitInstance(Type, TypeScheme),
+}
+
+impl Constraint {
+    pub fn active_vars(&self) -> TypeVarSet {
+        match self {
+            Constraint::Equality(t1, t2) => t1.free_vars().union(&t2.free_vars()),
+            Constraint::ExplicitInstance(t, sigma) => t.free_vars().union(&sigma.free_vars()),
+            Constraint::ImplicitInstance(t1, t2, m) => {
+                t1.free_vars().union(&m.intersection(&t2.free_vars()))
+            }
+        }
+    }
+}
+
+impl<'a> Display for Constraint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Constraint::Equality(a, b) => write!(f, "{} ≡ {}", a, b),
+            Constraint::ImplicitInstance(a, b, m) => {
+                write!(f, "{} ≤ {} where M is {{ ", a, b)?;
+                for var in m.iter() {
+                    write!(f, "{} ", var)?;
+                }
+                write!(f, "}}")
+            }
+            Constraint::ExplicitInstance(tau, sigma) => {
+                write!(f, "{} ≼ {}", tau, sigma)
+            }
+        }
+    }
+}
+
 pub trait GenerateConstraints {
     fn generate(&self, cg: &mut ConstraintGenerator) -> Type;
 }
@@ -12,7 +49,7 @@ pub trait GenerateConstraints {
 #[derive(Debug)]
 pub struct ConstraintGenerator {
     constraints: Vec<Constraint>,
-    assumptions: HashMap<Name, Vec<TypeVar>>,
+    assumptions: HashMap<Name, Vec<Type>>,
     next_typevar_id: usize,
     m_stack: Vec<TypeVar>,
 }
@@ -28,21 +65,17 @@ impl ConstraintGenerator {
     }
 
     fn fresh(&mut self) -> Type {
-        Type::Var(self.fresh_var())
-    }
-
-    fn fresh_var(&mut self) -> TypeVar {
         let id = self.next_typevar_id;
         self.next_typevar_id += 1;
-        TypeVar(id)
+        Type::Var(TypeVar(id))
     }
 
-    fn assume(&mut self, name: Name) -> TypeVar {
-        let beta = self.fresh_var();
+    fn assume(&mut self, name: Name) -> Type {
+        let beta = self.fresh();
         self.assumptions
             .entry(name)
             .or_insert(Vec::with_capacity(1))
-            .push(beta);
+            .push(beta.clone());
         beta
     }
 
@@ -60,8 +93,7 @@ impl ConstraintGenerator {
                     let partial_cons_type =
                         Type::Func(Box::new(arg_type), Box::new(partial_res_type.clone()));
 
-                    self.constraints
-                        .push(Constraint::Equality(acc, partial_cons_type));
+                    self.constrain(Constraint::Equality(acc, partial_cons_type));
 
                     partial_res_type
                 })
@@ -93,13 +125,13 @@ impl ConstraintGenerator {
             Pattern::String(_) => Type::Prim(Primitive::String),
 
             Pattern::Binop { operator, lhs, rhs } => {
-                let cons_type = Type::Var(self.assume(operator.clone()));
+                let cons_type = self.assume(operator.clone());
                 bind!(iter::once(lhs).chain(iter::once(rhs)), cons_type)
             }
 
-            Pattern::UnaryConstructor(name) => Type::Var(self.assume(name.clone())),
+            Pattern::UnaryConstructor(name) => self.assume(name.clone()),
             Pattern::Destructure { constructor, args } => {
-                let cons_type = Type::Var(self.assume(constructor.clone()));
+                let cons_type = self.assume(constructor.clone());
                 bind!(args.iter(), cons_type)
             }
         }
@@ -108,7 +140,7 @@ impl ConstraintGenerator {
     fn bind_name_mono(&mut self, name: &Name, beta: &Type) {
         if let Some(assumptions) = self.assumptions.remove(name) {
             for assumed in assumptions {
-                self.constrain(Constraint::Equality(Type::Var(assumed), beta.clone()));
+                self.constrain(Constraint::Equality(assumed, beta.clone()));
             }
         }
     }
@@ -117,7 +149,7 @@ impl ConstraintGenerator {
         if let Some(assumptions) = self.assumptions.remove(name) {
             for assumed in assumptions {
                 self.constrain(Constraint::ImplicitInstance(
-                    Type::Var(assumed),
+                    assumed,
                     beta.clone(),
                     self.m_stack.iter().cloned().collect(),
                 ));
@@ -185,7 +217,7 @@ impl<'a> GenerateConstraints for Expr<'a> {
                 Type::List(Box::new(beta))
             }
 
-            Expr::Term(Term::Name(name)) => Type::Var(cg.assume(name.clone())),
+            Expr::Term(Term::Name(name)) => cg.assume(name.clone()),
 
             Expr::App { func, argument } => {
                 let t1 = func.generate(cg);
@@ -200,7 +232,7 @@ impl<'a> GenerateConstraints for Expr<'a> {
                 beta
             }
             Expr::Binop { operator, lhs, rhs } => {
-                let t1 = Type::Var(cg.assume(operator.clone()));
+                let t1 = cg.assume(operator.clone());
                 let t2 = lhs.generate(cg);
                 let t3 = rhs.generate(cg);
                 let beta1 = cg.fresh();
@@ -298,42 +330,5 @@ impl<'a> Display for ConstraintGenerator {
         }
 
         Ok(())
-    }
-}
-
-#[derive(PartialEq, Eq, Debug)]
-enum Constraint {
-    Equality(Type, Type),
-    ExplicitInstance(Type, TypeScheme),
-    ImplicitInstance(Type, Type, TypeVarSet),
-}
-
-impl Constraint {
-    pub fn active_vars(&self) -> TypeVarSet {
-        match self {
-            Constraint::Equality(t1, t2) => t1.free_vars().union(&t2.free_vars()),
-            Constraint::ExplicitInstance(t, sigma) => t.free_vars().union(&sigma.free_vars()),
-            Constraint::ImplicitInstance(t1, t2, m) => {
-                t1.free_vars().union(&m.intersection(&t2.free_vars()))
-            }
-        }
-    }
-}
-
-impl<'a> Display for Constraint {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Constraint::Equality(a, b) => write!(f, "{} ≡ {}", a, b),
-            Constraint::ExplicitInstance(tau, sigma) => {
-                write!(f, "{} ≼ {}", tau, sigma)
-            }
-            Constraint::ImplicitInstance(a, b, m) => {
-                write!(f, "{} ≤ {} where M is {{ ", a, b)?;
-                for var in m.iter() {
-                    write!(f, "{} ", var)?;
-                }
-                write!(f, "}}")
-            }
-        }
     }
 }
