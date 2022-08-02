@@ -3,7 +3,7 @@ use std::fmt::{self, Display};
 use std::iter;
 
 use crate::ast::{Assignment, Expr, Lhs, Name, Numeral, Pattern, Term};
-use crate::types::{Primitive, Type, TypeScheme, TypeVar};
+use crate::types::{intersection_vars, union_vars, Primitive, Type, TypeScheme, TypeVar};
 
 pub trait GenerateConstraints {
     fn generate(&self, cg: &mut ConstraintGenerator) -> Type;
@@ -306,6 +306,21 @@ enum Constraint {
     Equality(Type, Type),
     ExplicitInstance(Type, TypeScheme),
     ImplicitInstance(Type, Type, Vec<TypeVar>),
+}
+
+impl Constraint {
+    pub fn active_vars(&self) -> Vec<TypeVar> {
+        match self {
+            Constraint::Equality(t1, t2) => union_vars!(t1.free_vars(), t2.free_vars()),
+            Constraint::ExplicitInstance(t, sigma) => union_vars!(t.free_vars(), sigma.free_vars()),
+            Constraint::ImplicitInstance(t1, t2, m) => {
+                union_vars!(
+                    t1.free_vars(),
+                    intersection_vars!(m.clone(), t2.free_vars())
+                )
+            }
+        }
+    }
 }
 
 impl<'a> Display for Constraint {

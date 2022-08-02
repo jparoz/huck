@@ -22,15 +22,11 @@ impl Type {
         }
     }
 
-    fn free_vars(&self) -> Vec<TypeVar> {
+    pub fn free_vars(&self) -> Vec<TypeVar> {
         match self {
             Type::Prim(_) => vec![],
             Type::Var(var) => vec![*var],
-            Type::Func(a, b) => {
-                let mut vars = a.free_vars();
-                vars.append(&mut b.free_vars());
-                vars
-            }
+            Type::Func(a, b) => union_vars!(a.free_vars(), b.free_vars()),
             Type::List(t) => t.free_vars(),
         }
     }
@@ -90,3 +86,21 @@ pub enum Primitive {
     Float,
     String,
 }
+
+macro_rules! union_vars {
+    ($a:expr, $b:expr) => {{
+        let mut vars = $a;
+        vars.append(&mut $b);
+        vars
+    }};
+}
+pub(crate) use union_vars;
+
+macro_rules! intersection_vars {
+    ($a:expr, $b:expr) => {{
+        let mut vars = $a;
+        vars.retain(|v| $b.contains(v));
+        vars
+    }};
+}
+pub(crate) use intersection_vars;
