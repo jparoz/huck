@@ -42,8 +42,29 @@ impl<'a> Display for Constraint {
     }
 }
 
-pub trait GenerateConstraints {
-    fn generate(&self, cg: &mut ConstraintGenerator) -> Type;
+#[derive(Debug)]
+struct Substitution(HashMap<Type, Type>);
+
+impl Substitution {
+    /// s1.then(s2) == s2 . s1
+    // @Note @Checkme: this method could be wrong, I haven't tested it at all and am a bit confused.
+    fn then(self, mut next: Self) -> Self {
+        for (fr, to) in self.0 {
+            // if next contains to as a key, then we need to join these. e.g.:
+            //      next      self
+            //      a2->Bool; a1->a2
+            // should result in:
+            //      next      self
+            //      a1->Bool; ---
+            if let Some(next_to) = next.0.remove(&to) {
+                next.0.insert(fr, next_to);
+            } else {
+                // Otherwise, we can safely add the key-value pair.
+                next.0.insert(fr, to);
+            }
+        }
+        next
+    }
 }
 
 #[derive(Debug)]
@@ -156,6 +177,10 @@ impl ConstraintGenerator {
             }
         }
     }
+}
+
+pub trait GenerateConstraints {
+    fn generate(&self, cg: &mut ConstraintGenerator) -> Type;
 }
 
 // This impl assumes that each assignment in the Vec is a definition of the same function.

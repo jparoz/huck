@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::fmt::{self, Display};
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Hash, Debug)]
 pub enum Type {
     Prim(Primitive),
     Var(TypeVar),
@@ -119,7 +119,7 @@ impl FromIterator<TypeVar> for TypeVarSet {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Hash, Debug)]
 pub enum Primitive {
     Int,
     Float,
