@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fmt::{self, Display};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -22,11 +23,11 @@ impl Type {
         }
     }
 
-    pub fn free_vars(&self) -> Vec<TypeVar> {
+    pub fn free_vars(&self) -> HashSet<TypeVar> {
         match self {
-            Type::Prim(_) => vec![],
-            Type::Var(var) => vec![*var],
-            Type::Func(a, b) => union_vars!(a.free_vars(), b.free_vars()),
+            Type::Prim(_) => HashSet::new(),
+            Type::Var(var) => HashSet::from([*var]),
+            Type::Func(a, b) => a.free_vars().union(&b.free_vars()).cloned().collect(),
             Type::List(t) => t.free_vars(),
         }
     }
@@ -47,16 +48,16 @@ impl Display for Type {
 
 #[derive(PartialEq, Eq, Debug)]
 pub struct TypeScheme {
-    vars: Vec<TypeVar>,
+    vars: HashSet<TypeVar>,
     typ: Type,
 }
 
 impl TypeScheme {
-    pub fn free_vars(&self) -> Vec<TypeVar> {
+    pub fn free_vars(&self) -> HashSet<TypeVar> {
         self.typ
             .free_vars()
-            .into_iter()
-            .filter(|v| !self.vars.contains(v))
+            .difference(&self.vars)
+            .cloned()
             .collect()
     }
 }
@@ -86,21 +87,3 @@ pub enum Primitive {
     Float,
     String,
 }
-
-macro_rules! union_vars {
-    ($a:expr, $b:expr) => {{
-        let mut vars = $a;
-        vars.append(&mut $b);
-        vars
-    }};
-}
-pub(crate) use union_vars;
-
-macro_rules! intersection_vars {
-    ($a:expr, $b:expr) => {{
-        let mut vars = $a;
-        vars.retain(|v| $b.contains(v));
-        vars
-    }};
-}
-pub(crate) use intersection_vars;
