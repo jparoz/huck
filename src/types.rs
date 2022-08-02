@@ -4,9 +4,8 @@ use std::fmt::{self, Display};
 pub enum Type {
     Prim(Primitive),
     Var(TypeVar),
-    Func(Box<Type>, Box<Type>), // @Checkme: needs to be boxed???
+    Func(Box<Type>, Box<Type>),
     List(Box<Type>),
-    // Scheme(Vec<TypeVar>, Box<Type>),
 }
 
 impl Type {
@@ -22,6 +21,19 @@ impl Type {
             }
         }
     }
+
+    fn free_vars(&self) -> Vec<TypeVar> {
+        match self {
+            Type::Prim(_) => vec![],
+            Type::Var(var) => vec![*var],
+            Type::Func(a, b) => {
+                let mut vars = a.free_vars();
+                vars.append(&mut b.free_vars());
+                vars
+            }
+            Type::List(t) => t.free_vars(),
+        }
+    }
 }
 
 impl Display for Type {
@@ -32,13 +44,7 @@ impl Display for Type {
             Type::Func(a, b) => write!(f, "{} -> {}", a, b),
             Type::List(inner) => {
                 write!(f, "[{}]", inner)
-            } // Type::Scheme(vars, typ) => {
-              //     write!(f, "∀")?;
-              //     for var in vars.iter() {
-              //         write!(f, " {}", var)?;
-              //     }
-              //     write!(f, ". {}", typ)
-              // }
+            }
         }
     }
 }
@@ -50,7 +56,6 @@ pub struct TypeScheme {
 }
 
 impl TypeScheme {
-    /*
     pub fn free_vars(&self) -> Vec<TypeVar> {
         self.typ
             .free_vars()
@@ -58,7 +63,6 @@ impl TypeScheme {
             .filter(|v| !self.vars.contains(v))
             .collect()
     }
-    */
 }
 
 impl Display for TypeScheme {
