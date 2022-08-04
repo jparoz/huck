@@ -108,6 +108,10 @@ impl TypeVarSet {
         self.0.difference(&other.0).cloned().collect()
     }
 
+    pub fn contains(&self, elem: &TypeVar) -> bool {
+        self.0.contains(elem)
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = &TypeVar> {
         self.0.iter()
     }

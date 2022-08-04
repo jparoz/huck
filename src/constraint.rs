@@ -43,12 +43,20 @@ impl<'a> Display for Constraint {
 }
 
 #[derive(Debug)]
-struct Substitution(HashMap<Type, Type>);
+pub struct Substitution(HashMap<TypeVar, Type>);
 
 impl Substitution {
+    pub fn empty() -> Self {
+        Substitution(HashMap::new())
+    }
+
+    pub fn single(fr: TypeVar, to: Type) -> Self {
+        Substitution(HashMap::from([(fr, to)]))
+    }
+
     /// s1.then(s2) == s2 . s1
     // @Note @Checkme: this method could be wrong, I haven't tested it at all and am a bit confused.
-    fn then(self, mut next: Self) -> Self {
+    pub fn then(self, mut next: Self) -> Self {
         for (fr, to) in self.0 {
             // if next contains to as a key, then we need to join these. e.g.:
             //      next      self
@@ -57,14 +65,36 @@ impl Substitution {
             //      next
             //      a2->Bool
             //      a1->Bool
-            if let Some(next_to) = next.0.get(&to) {
-                next.0.insert(fr, next_to.clone());
+            if let Type::Var(var) = to {
+                if let Some(next_to) = next.0.get(&var) {
+                    let next_to = next_to.clone();
+                    next.0.insert(fr, next_to);
+                } else {
+                    // Otherwise, we can safely add the key-value pair.
+                    next.0.insert(fr, to);
+                }
             } else {
                 // Otherwise, we can safely add the key-value pair.
                 next.0.insert(fr, to);
             }
         }
         next
+    }
+
+    /// Applies the substitution to the given type.
+    pub fn apply(&self, t: Type) -> Type {
+        match t {
+            Type::Var(var) => {
+                if let Some(replacement) = self.0.get(&var) {
+                    replacement.clone()
+                } else {
+                    t
+                }
+            }
+            Type::Func(a, b) => Type::Func(Box::new(self.apply(*a)), Box::new(self.apply(*b))),
+            Type::List(list_t) => self.apply(*list_t),
+            Type::Prim(_) => t,
+        }
     }
 }
 
