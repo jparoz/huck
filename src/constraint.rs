@@ -54,10 +54,11 @@ impl Substitution {
             //      next      self
             //      a2->Bool; a1->a2
             // should result in:
-            //      next      self
-            //      a1->Bool; ---
-            if let Some(next_to) = next.0.remove(&to) {
-                next.0.insert(fr, next_to);
+            //      next
+            //      a2->Bool
+            //      a1->Bool
+            if let Some(next_to) = next.0.get(&to) {
+                next.0.insert(fr, next_to.clone());
             } else {
                 // Otherwise, we can safely add the key-value pair.
                 next.0.insert(fr, to);
