@@ -41,8 +41,9 @@ fn main() {
         // Print solution substitution
         println!("Solution: {}", soln);
 
-        for (name, typ) in types {
-            println!("{} : {}", name, soln.apply(typ));
+        for (name, typ) in types.iter_mut() {
+            soln.apply(typ);
+            println!("{} : {}", name, typ);
         }
     } else {
         println!("No solution found!");

@@ -76,45 +76,30 @@ impl Substitution {
     }
 
     /// s1.then(s2) == s2 . s1
-    // @Note @Checkme: this method could be wrong, I haven't tested it at all and am a bit confused.
     pub fn then(self, mut next: Self) -> Self {
         for (fr, to) in self.0 {
-            // if next contains to as a key, then we need to join these. e.g.:
-            //      next      self
-            //      a2->Bool; a1->a2
-            // should result in:
-            //      next
-            //      a2->Bool
-            //      a1->Bool
-            if let Type::Var(var) = to {
-                if let Some(next_to) = next.0.get(&var) {
-                    let next_to = next_to.clone();
-                    next.0.insert(fr, next_to);
-                } else {
-                    // Otherwise, we can safely add the key-value pair.
-                    next.0.insert(fr, to);
-                }
-            } else {
-                // Otherwise, we can safely add the key-value pair.
-                next.0.insert(fr, to);
+            for (_, b) in next.0.iter_mut() {
+                Substitution::single(fr, to.clone()).apply(b);
             }
+            next.0.insert(fr, to);
         }
         next
     }
 
     /// Applies the substitution to the given type.
-    pub fn apply(&self, t: Type) -> Type {
+    pub fn apply(&self, t: &mut Type) {
         match t {
             Type::Var(var) => {
                 if let Some(replacement) = self.0.get(&var) {
-                    replacement.clone()
-                } else {
-                    t
+                    *t = replacement.clone();
                 }
             }
-            Type::Func(a, b) => Type::Func(Box::new(self.apply(*a)), Box::new(self.apply(*b))),
-            Type::List(list_t) => self.apply(*list_t),
-            Type::Prim(_) => t,
+            Type::Func(a, b) => {
+                self.apply(a);
+                self.apply(b);
+            }
+            Type::List(list_t) => self.apply(list_t),
+            Type::Prim(_) => (),
         }
     }
 }
@@ -230,13 +215,12 @@ impl ConstraintGenerator {
         }
     }
 
-    pub fn instantiate(&mut self, ts: TypeScheme) -> Type {
-        ts.vars
-            .into_iter()
-            .fold(Substitution::empty(), |sub, var| {
-                sub.then(Substitution::single(var, self.fresh()))
-            })
-            .apply(ts.typ)
+    pub fn instantiate(&mut self, mut ts: TypeScheme) -> Type {
+        let sub = ts.vars.into_iter().fold(Substitution::empty(), |sub, var| {
+            sub.then(Substitution::single(var, self.fresh()))
+        });
+        sub.apply(&mut ts.typ);
+        ts.typ
     }
 
     pub fn solve(&mut self) -> Option<Substitution> {

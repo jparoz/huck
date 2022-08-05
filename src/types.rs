@@ -57,8 +57,8 @@ impl Type {
                     } else {
                         let s = Substitution::single(var.clone(), t.clone());
                         for (a2, b2) in pairs.iter_mut() {
-                            *a2 = s.apply(a2.clone());
-                            *b2 = s.apply(b2.clone());
+                            s.apply(a2);
+                            s.apply(b2);
                         }
                         sub = sub.then(s);
                     }
