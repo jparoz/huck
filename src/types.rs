@@ -89,10 +89,10 @@ impl Display for Type {
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct TypeScheme {
-    vars: TypeVarSet,
-    typ: Type,
+    pub vars: TypeVarSet,
+    pub typ: Type,
 }
 
 impl TypeScheme {
@@ -120,7 +120,7 @@ impl Display for TypeVar {
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct TypeVarSet(HashSet<TypeVar>);
 
 impl TypeVarSet {
@@ -130,6 +130,10 @@ impl TypeVarSet {
 
     pub fn single(elem: TypeVar) -> TypeVarSet {
         TypeVarSet(HashSet::from([elem]))
+    }
+
+    pub fn insert(&mut self, elem: TypeVar) -> bool {
+        self.0.insert(elem)
     }
 
     pub fn union(&self, other: &TypeVarSet) -> TypeVarSet {
@@ -148,8 +152,16 @@ impl TypeVarSet {
         self.0.contains(elem)
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = &TypeVar> {
         self.0.iter()
+    }
+
+    pub fn into_iter(self) -> impl Iterator<Item = TypeVar> {
+        self.0.into_iter()
     }
 }
 

@@ -1,19 +1,23 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fmt::{self, Display};
 use std::iter;
 
 use crate::ast::{Assignment, Expr, Lhs, Name, Numeral, Pattern, Term};
 use crate::types::{Primitive, Type, TypeScheme, TypeVar, TypeVarSet};
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 enum Constraint {
     Equality(Type, Type),
     ImplicitInstance(Type, Type, TypeVarSet),
     ExplicitInstance(Type, TypeScheme),
 }
 
-impl Constraint {
-    pub fn active_vars(&self) -> TypeVarSet {
+pub trait ActiveVars {
+    fn active_vars(&self) -> TypeVarSet;
+}
+
+impl ActiveVars for Constraint {
+    fn active_vars(&self) -> TypeVarSet {
         match self {
             Constraint::Equality(t1, t2) => t1.free_vars().union(&t2.free_vars()),
             Constraint::ExplicitInstance(t, sigma) => t.free_vars().union(&sigma.free_vars()),
@@ -21,6 +25,23 @@ impl Constraint {
                 t1.free_vars().union(&m.intersection(&t2.free_vars()))
             }
         }
+    }
+}
+
+impl ActiveVars for &[Constraint] {
+    fn active_vars(&self) -> TypeVarSet {
+        self.into_iter()
+            .map(Constraint::active_vars)
+            .reduce(|vars1, vars2| vars1.union(&vars2))
+            .unwrap_or(TypeVarSet::empty())
+    }
+}
+
+// because of VecDeque::as_slices
+impl ActiveVars for (&[Constraint], &[Constraint]) {
+    fn active_vars(&self) -> TypeVarSet {
+        let (a, b) = self;
+        a.active_vars().union(&b.active_vars())
     }
 }
 
@@ -207,6 +228,45 @@ impl ConstraintGenerator {
                 ));
             }
         }
+    }
+
+    pub fn instantiate(&mut self, ts: TypeScheme) -> Type {
+        ts.vars
+            .into_iter()
+            .fold(Substitution::empty(), |sub, var| {
+                sub.then(Substitution::single(var, self.fresh()))
+            })
+            .apply(ts.typ)
+    }
+
+    pub fn solve(&mut self) -> Option<Substitution> {
+        let mut sub = Substitution::empty();
+
+        let mut constraints = VecDeque::from(self.constraints.clone());
+
+        while let Some(c) = constraints.pop_front() {
+            match c {
+                Constraint::Equality(t1, t2) => sub = sub.then(t1.unify(t2)?),
+
+                Constraint::ExplicitInstance(t, ts) => {
+                    constraints.push_back(Constraint::Equality(t, self.instantiate(ts)))
+                }
+
+                Constraint::ImplicitInstance(t1, t2, m)
+                    if t2
+                        .free_vars()
+                        .difference(&m)
+                        .intersection(&constraints.as_slices().active_vars())
+                        .is_empty() =>
+                {
+                    constraints.push_back(Constraint::ExplicitInstance(t1, t2.generalize(&m)));
+                }
+
+                _ => return None,
+            }
+        }
+
+        Some(sub)
     }
 }
 

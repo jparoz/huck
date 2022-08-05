@@ -33,4 +33,7 @@ fn main() {
 
     // Print state of constraint generator
     println!("{}", cg);
+
+    // Print solution substitution
+    println!("Solution substitution: {:?}", cg.solve());
 }
