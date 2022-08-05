@@ -18,10 +18,13 @@ fn main() {
 
     let mut cg = ConstraintGenerator::new();
 
+    let mut types = Vec::new();
+
     for (name, defns) in parsed.assignments {
         // Print type of defined function
         let typ = defns.generate(&mut cg);
         println!("{} : {}", name, typ);
+        types.push((name, typ));
 
         // Print parsed definitions
         for (lhs, expr) in defns.iter() {
@@ -34,6 +37,14 @@ fn main() {
     // Print state of constraint generator
     println!("{}", cg);
 
-    // Print solution substitution
-    println!("Solution substitution: {:?}", cg.solve());
+    if let Some(soln) = cg.solve() {
+        // Print solution substitution
+        println!("Solution: {}", soln);
+
+        for (name, typ) in types {
+            println!("{} : {}", name, soln.apply(typ));
+        }
+    } else {
+        println!("No solution found!");
+    }
 }

@@ -429,6 +429,16 @@ impl<'a> GenerateConstraints for Expr<'a> {
     }
 }
 
+impl Display for Substitution {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Substitution:")?;
+        for (fr, to) in self.0.iter() {
+            writeln!(f, "    {} ↦ {}", fr, to)?;
+        }
+        Ok(())
+    }
+}
+
 impl<'a> Display for ConstraintGenerator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Constraints:")?;
