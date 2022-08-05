@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 use std::fmt::{self, Display};
 
+use crate::constraint::Substitution;
+
 #[derive(PartialEq, Eq, Clone, Hash, Debug)]
 pub enum Type {
     Prim(Primitive),
@@ -37,6 +39,40 @@ impl Type {
             vars: self.free_vars().difference(&type_set),
             typ: self.clone(),
         }
+    }
+
+    /// Finds the most general unifier for two types.
+    pub fn unify(self, other: Self) -> Option<Substitution> {
+        let mut sub = Substitution::empty();
+
+        let mut pairs = vec![(self, other)];
+
+        while let Some((a, b)) = pairs.pop() {
+            match (a, b) {
+                (t1, t2) if t1 == t2 => (),
+                (Type::Var(var), t) | (t, Type::Var(var)) => {
+                    if t.free_vars().contains(&var) {
+                        // @CheckMe
+                        return None;
+                    } else {
+                        let s = Substitution::single(var.clone(), t.clone());
+                        for (a2, b2) in pairs.iter_mut() {
+                            *a2 = s.apply(a2.clone());
+                            *b2 = s.apply(b2.clone());
+                        }
+                        sub = sub.then(s);
+                    }
+                }
+                (Type::List(t1), Type::List(t2)) => pairs.push((*t1, *t2)),
+                (Type::Func(a1, b1), Type::Func(a2, b2)) => {
+                    pairs.push((*a1, *a2));
+                    pairs.push((*b1, *b2));
+                }
+                _ => return None,
+            }
+        }
+
+        Some(sub)
     }
 }
 
