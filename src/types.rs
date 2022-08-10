@@ -171,6 +171,17 @@ impl FromIterator<TypeVar> for TypeVarSet {
     }
 }
 
+impl Display for TypeVarSet {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{{ ")?;
+        for v in self.0.iter() {
+            write!(f, "{} ", v)?;
+        }
+        write!(f, "}}")?;
+        Ok(())
+    }
+}
+
 #[derive(PartialEq, Eq, Clone, Hash, Debug)]
 pub enum Primitive {
     Int,

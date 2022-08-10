@@ -50,11 +50,7 @@ impl<'a> Display for Constraint {
         match self {
             Constraint::Equality(a, b) => write!(f, "{} ≡ {}", a, b),
             Constraint::ImplicitInstance(a, b, m) => {
-                write!(f, "{} ≤ {} where M is {{ ", a, b)?;
-                for var in m.iter() {
-                    write!(f, "{} ", var)?;
-                }
-                write!(f, "}}")
+                write!(f, "{} ≤ {} where M is {}", a, b, m)
             }
             Constraint::ExplicitInstance(tau, sigma) => {
                 write!(f, "{} ≼ {}", tau, sigma)
