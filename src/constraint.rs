@@ -106,13 +106,9 @@ impl Substitution {
             for (_, b) in next.0.iter_mut() {
                 b.apply(&Substitution::single(fr, to.clone()));
             }
-            // @Note: Possibly in here somewhere, we need to check if next already has a
-            // substitution with the same LHS as self. This is because if we do have one already,
-            // this insert call will do nothing. Maybe we should also check the result of the insert
-            // call.
-            // However, it might not be necessary, because maybe it will never come up with other
-            // bugs fixed. Probably good to at least do some checking though for robustness.
-            next.0.insert(fr, new_to);
+
+            // Assert because there should never be a swap already in the sub with the same var!
+            debug_assert!(next.0.insert(fr, new_to).is_none());
         }
         next
     }
@@ -318,11 +314,8 @@ impl<'a> GenerateConstraints for Vec<Assignment<'a>> {
 
         let typs: Vec<Type> = self.iter().map(|defn| defn.generate(cg)).collect();
         for typ in typs {
-            // @Fixme: This sometimes needs to be other types of constraint
-            // @Note: I don't think the above is true? @RemoveMe: the comment
-            // @Note: It might be true if we want polymorphic bindings at top level.
-            //        If this is the case, then I think this function will just go away,
-            //        and we'll decide at the callsite which type of constraint to use.
+            // @Note: If we want polymorphic bindings at top level, this might want to be a
+            // different type of constraint.
             cg.constrain(Constraint::Equality(beta.clone(), typ));
         }
 
@@ -415,17 +408,9 @@ impl<'a> GenerateConstraints for Expr<'a> {
                 let beta = in_expr.generate(cg);
 
                 for (name, defns) in assignments {
-                    // @Fixme @Scope: these should be local to the in_expr, obviously!
                     let typ = defns.generate(cg);
                     cg.bind_name_poly(&name, &typ);
                 }
-
-                // @Todo @Fixme @Scope: remove the let bindings???
-
-                // @Note: It's possible that the above comments about scope aren't actually
-                // necessary. That is, when a variable is bound, its assumptions are removed from
-                // the assumption set; this means that e.g. two separate variables both named `f` in
-                // separate let bindings will be assigned separate types.
 
                 beta
             }
@@ -454,19 +439,6 @@ impl<'a> GenerateConstraints for Expr<'a> {
                 cg.m_stack.truncate(total_len - typevar_count);
 
                 for (arg, lambda_type) in args.iter().zip(types.into_iter()) {
-                    // @Hack: There is a circular dependency in the logic here.
-                    //        First we need some types to put into cg.m_stack, so that they can
-                    //        appear in the context of implicit instance constraints in rhs.
-                    //        But then, after rhs.generate(cg), we need to bind the args to types.
-                    //        This removes assumptions, and we can't do this until after
-                    //        rhs.generate(cg).
-                    //        So, we need access to the types both before and after
-                    //        rhs.generate(cg). To get around this, we simply make a fresh type for
-                    //        each argument first; then later on we bind the argument to another
-                    //        type (often being totally redundant); and finally we make another
-                    //        equality constraint, which will later unify the two types.
-                    //        Really, we would like to not generate another constraint, but instead
-                    //        somehow provide the type to cg.bind. e.g. cg.bind_with_type(arg, typ)
                     let actual_type = cg.bind(arg);
                     cg.constrain(Constraint::Equality(actual_type, lambda_type))
                 }
