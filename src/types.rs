@@ -13,19 +13,6 @@ pub enum Type {
 }
 
 impl Type {
-    pub fn get_mono_type_vars(&self) -> Vec<TypeVar> {
-        match self {
-            Type::Var(var) => vec![*var],
-            Type::Prim(_) => vec![],
-            Type::List(typ) => typ.get_mono_type_vars(),
-            Type::Func(a, b) => {
-                let mut res = a.get_mono_type_vars();
-                res.extend(b.get_mono_type_vars());
-                res
-            }
-        }
-    }
-
     pub fn free_vars(&self) -> TypeVarSet {
         match self {
             Type::Prim(_) => TypeVarSet::empty(),

@@ -434,7 +434,13 @@ impl<'a> GenerateConstraints for Expr<'a> {
                 let types: Vec<Type> = args.iter().map(|_| cg.fresh()).collect();
                 let typevars: Vec<TypeVar> = types
                     .iter()
-                    .flat_map(|typ| typ.get_mono_type_vars())
+                    .map(|t| {
+                        if let Type::Var(v) = t {
+                            *v
+                        } else {
+                            unreachable!()
+                        }
+                    })
                     .collect();
                 let typevar_count = typevars.len();
 
