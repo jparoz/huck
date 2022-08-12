@@ -216,20 +216,20 @@ impl ConstraintGenerator {
         }
     }
 
-    fn bind_name_mono(&mut self, name: &Name, beta: &Type) {
+    fn bind_name_mono(&mut self, name: &Name, typ: &Type) {
         if let Some(assumptions) = self.assumptions.remove(name) {
             for assumed in assumptions {
-                self.constrain(Constraint::Equality(assumed, beta.clone()));
+                self.constrain(Constraint::Equality(assumed, typ.clone()));
             }
         }
     }
 
-    fn bind_name_poly(&mut self, name: &Name, beta: &Type) {
+    fn bind_name_poly(&mut self, name: &Name, typ: &Type) {
         if let Some(assumptions) = self.assumptions.remove(name) {
             for assumed in assumptions {
                 self.constrain(Constraint::ImplicitInstance(
                     assumed,
-                    beta.clone(),
+                    typ.clone(),
                     self.m_stack.iter().cloned().collect(),
                 ));
             }
