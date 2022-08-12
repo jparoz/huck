@@ -2,6 +2,8 @@ use std::collections::{HashMap, VecDeque};
 use std::fmt::{self, Display};
 use std::iter;
 
+use log::{log_enabled, trace};
+
 use crate::ast::{Assignment, Expr, Lhs, Name, Numeral, Pattern, Term};
 use crate::types::{Primitive, Type, TypeScheme, TypeVar, TypeVarSet};
 
@@ -236,13 +238,14 @@ impl ConstraintGenerator {
     }
 
     pub fn solve(&mut self) -> Option<Substitution> {
-        // println!("Start solving!");
+        trace!("START SOLVING");
         let mut sub = Substitution::empty();
 
         let mut constraints = VecDeque::from(self.constraints.clone());
 
         while let Some(c) = constraints.pop_front() {
-            // println!("Looking at: {}", c);
+            trace!("-");
+            trace!("Looking at: {}", c);
             match c {
                 Constraint::Equality(t1, t2) => {
                     let s = t1.unify(t2)?;
@@ -254,7 +257,7 @@ impl ConstraintGenerator {
 
                 Constraint::ExplicitInstance(t, ts) => {
                     let cons = Constraint::Equality(t, self.instantiate(ts));
-                    // println!("Emitting constraint: {}", cons);
+                    trace!("Replacing with new constraint: {}", cons);
                     constraints.push_back(cons)
                 }
 
@@ -266,24 +269,33 @@ impl ConstraintGenerator {
                         .is_empty() =>
                 {
                     let cons = Constraint::ExplicitInstance(t1, t2.generalize(&m));
-                    // println!("Emitting constraint: {}", cons);
+                    trace!("Replacing with new constraint: {}", cons);
                     constraints.push_back(cons)
                 }
 
                 c @ Constraint::ImplicitInstance(..) => {
-                    // println!("Skipping constraint for now");
+                    trace!("Skipping for now");
                     constraints.push_back(c);
                 }
             }
-            // println!("{}", sub);
-            // println!("Constraints:");
-            // for c in constraints.iter() {
-            //     println!("    {}", c);
-            // }
-            // println!("----")
+
+            trace!("Substitution:");
+            if log_enabled!(log::Level::Trace) {
+                for (fr, to) in sub.0.iter() {
+                    trace!("    {} ↦ {}", fr, to);
+                }
+            }
+
+            trace!("Constraints:");
+            if log_enabled!(log::Level::Trace) {
+                for c in constraints.iter() {
+                    trace!("    {}", c);
+                }
+            }
         }
 
-        // println!("Finish solving!");
+        trace!("-");
+        trace!("FINISH SOLVING");
 
         Some(sub)
     }
