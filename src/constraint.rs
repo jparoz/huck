@@ -236,13 +236,13 @@ impl ConstraintGenerator {
     }
 
     pub fn solve(&mut self) -> Option<Substitution> {
-        println!("Start solving!");
+        // println!("Start solving!");
         let mut sub = Substitution::empty();
 
         let mut constraints = VecDeque::from(self.constraints.clone());
 
         while let Some(c) = constraints.pop_front() {
-            println!("Looking at: {}", c);
+            // println!("Looking at: {}", c);
             match c {
                 Constraint::Equality(t1, t2) => {
                     let s = t1.unify(t2)?;
@@ -254,7 +254,7 @@ impl ConstraintGenerator {
 
                 Constraint::ExplicitInstance(t, ts) => {
                     let cons = Constraint::Equality(t, self.instantiate(ts));
-                    println!("Emitting constraint: {}", cons);
+                    // println!("Emitting constraint: {}", cons);
                     constraints.push_back(cons)
                 }
 
@@ -266,24 +266,24 @@ impl ConstraintGenerator {
                         .is_empty() =>
                 {
                     let cons = Constraint::ExplicitInstance(t1, t2.generalize(&m));
-                    println!("Emitting constraint: {}", cons);
+                    // println!("Emitting constraint: {}", cons);
                     constraints.push_back(cons)
                 }
 
                 c @ Constraint::ImplicitInstance(..) => {
-                    println!("Skipping constraint for now");
+                    // println!("Skipping constraint for now");
                     constraints.push_back(c);
                 }
             }
-            println!("{}", sub);
-            println!("Constraints:");
-            for c in constraints.iter() {
-                println!("    {}", c);
-            }
-            println!("----")
+            // println!("{}", sub);
+            // println!("Constraints:");
+            // for c in constraints.iter() {
+            //     println!("    {}", c);
+            // }
+            // println!("----")
         }
 
-        println!("Finish solving!");
+        // println!("Finish solving!");
 
         Some(sub)
     }

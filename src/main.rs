@@ -22,6 +22,7 @@ fn main() {
 
     let mut cg = ConstraintGenerator::new();
 
+    /*
     // Manually add the constraints from example 3
 
     cg.next_typevar_id = 10;
@@ -54,10 +55,11 @@ fn main() {
         Type::Var(TypeVar(1)),
         TypeVarSet::single(TypeVar(5)),
     ));
+    */
 
     let mut types: Vec<(ast::Name, Type)> = Vec::new();
 
-    /*
+    // /*
     for (name, defns) in parsed.assignments {
         // Print type of defined function
         let typ = defns.generate(&mut cg);
@@ -71,8 +73,7 @@ fn main() {
 
         println!();
     }
-    */
-
+    // */
     // Print state of constraint generator
     println!("{}", cg);
 
