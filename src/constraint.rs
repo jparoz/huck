@@ -143,7 +143,6 @@ impl ConstraintGenerator {
     }
 
     fn assume(&mut self, name: Name, typ: Type) {
-        // let beta = self.fresh();
         trace!("Assuming type: {} : {}", name, typ);
         self.assumptions
             .entry(name)
@@ -198,20 +197,20 @@ impl ConstraintGenerator {
             Pattern::String(_) => Type::Prim(Primitive::String),
 
             Pattern::Binop { operator, lhs, rhs } => {
-                let typ = self.fresh();
-                self.assume(operator.clone(), typ.clone());
-                bind!(iter::once(lhs).chain(iter::once(rhs)), typ)
+                let beta = self.fresh();
+                self.assume(operator.clone(), beta.clone());
+                bind!(iter::once(lhs).chain(iter::once(rhs)), beta)
             }
 
             Pattern::UnaryConstructor(name) => {
-                let typ = self.fresh();
-                self.assume(name.clone(), typ.clone());
-                typ
+                let beta = self.fresh();
+                self.assume(name.clone(), beta.clone());
+                beta
             }
             Pattern::Destructure { constructor, args } => {
-                let typ = self.fresh();
-                self.assume(constructor.clone(), typ.clone());
-                bind!(args.iter(), typ)
+                let beta = self.fresh();
+                self.assume(constructor.clone(), beta.clone());
+                bind!(args.iter(), beta)
             }
         }
     }
