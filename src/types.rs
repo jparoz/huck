@@ -200,6 +200,8 @@ impl ApplySub for TypeVarSet {
                     // Type::free_vars just collects all the variables
                     // (i.e. all variables in a Type are free in that type)
                     *self = self.union(&to.free_vars());
+                } else {
+                    self.insert(v);
                 }
             }
         }
