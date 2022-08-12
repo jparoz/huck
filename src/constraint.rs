@@ -142,14 +142,13 @@ impl ConstraintGenerator {
         Type::Var(TypeVar(id))
     }
 
-    fn assume(&mut self, name: Name) -> Type {
-        let beta = self.fresh();
-        trace!("Assuming fresh type variable: {} : {}", name, beta);
+    fn assume(&mut self, name: Name, typ: Type) {
+        // let beta = self.fresh();
+        trace!("Assuming type: {} : {}", name, typ);
         self.assumptions
             .entry(name)
             .or_insert(Vec::with_capacity(1))
-            .push(beta.clone());
-        beta
+            .push(typ);
     }
 
     pub fn constrain(&mut self, constraint: Constraint) {
@@ -199,14 +198,20 @@ impl ConstraintGenerator {
             Pattern::String(_) => Type::Prim(Primitive::String),
 
             Pattern::Binop { operator, lhs, rhs } => {
-                let cons_type = self.assume(operator.clone());
-                bind!(iter::once(lhs).chain(iter::once(rhs)), cons_type)
+                let typ = self.fresh();
+                self.assume(operator.clone(), typ.clone());
+                bind!(iter::once(lhs).chain(iter::once(rhs)), typ)
             }
 
-            Pattern::UnaryConstructor(name) => self.assume(name.clone()),
+            Pattern::UnaryConstructor(name) => {
+                let typ = self.fresh();
+                self.assume(name.clone(), typ.clone());
+                typ
+            }
             Pattern::Destructure { constructor, args } => {
-                let cons_type = self.assume(constructor.clone());
-                bind!(args.iter(), cons_type)
+                let typ = self.fresh();
+                self.assume(constructor.clone(), typ.clone());
+                bind!(args.iter(), typ)
             }
         }
     }
@@ -366,7 +371,11 @@ impl<'a> GenerateConstraints for Expr<'a> {
                 Type::List(Box::new(beta))
             }
 
-            Expr::Term(Term::Name(name)) => cg.assume(name.clone()),
+            Expr::Term(Term::Name(name)) => {
+                let typ = cg.fresh();
+                cg.assume(name.clone(), typ.clone());
+                typ
+            }
 
             Expr::App { func, argument } => {
                 let t1 = func.generate(cg);
@@ -381,7 +390,8 @@ impl<'a> GenerateConstraints for Expr<'a> {
                 beta
             }
             Expr::Binop { operator, lhs, rhs } => {
-                let t1 = cg.assume(operator.clone());
+                let t1 = cg.fresh();
+                cg.assume(operator.clone(), t1.clone());
                 let t2 = lhs.generate(cg);
                 let t3 = rhs.generate(cg);
                 let beta1 = cg.fresh();
