@@ -5,15 +5,39 @@ use std::iter;
 use crate::ast::{Assignment, Expr, Lhs, Name, Numeral, Pattern, Term};
 use crate::types::{Primitive, Type, TypeScheme, TypeVar, TypeVarSet};
 
+pub trait ApplySub {
+    fn apply(&mut self, sub: &Substitution);
+}
+
+pub trait ActiveVars {
+    fn active_vars(&self) -> TypeVarSet;
+}
+
 #[derive(PartialEq, Eq, Clone, Debug)]
-enum Constraint {
+pub enum Constraint {
     Equality(Type, Type),
     ImplicitInstance(Type, Type, TypeVarSet),
     ExplicitInstance(Type, TypeScheme),
 }
 
-pub trait ActiveVars {
-    fn active_vars(&self) -> TypeVarSet;
+impl ApplySub for Constraint {
+    fn apply(&mut self, sub: &Substitution) {
+        match self {
+            Constraint::Equality(t1, t2) => {
+                t1.apply(sub);
+                t2.apply(sub);
+            }
+            Constraint::ImplicitInstance(t1, t2, m) => {
+                t1.apply(sub);
+                t2.apply(sub);
+                m.apply(sub);
+            }
+            Constraint::ExplicitInstance(t, sigma) => {
+                t.apply(sub);
+                sigma.apply(sub);
+            }
+        }
+    }
 }
 
 impl ActiveVars for Constraint {
@@ -59,8 +83,9 @@ impl<'a> Display for Constraint {
     }
 }
 
+// @Cleanup: member shouldn't be pub
 #[derive(Debug)]
-pub struct Substitution(HashMap<TypeVar, Type>);
+pub struct Substitution(pub HashMap<TypeVar, Type>);
 
 impl Substitution {
     pub fn empty() -> Self {
@@ -74,29 +99,20 @@ impl Substitution {
     /// s1.then(s2) == s2 . s1
     pub fn then(self, mut next: Self) -> Self {
         for (fr, to) in self.0 {
+            let mut new_to = to.clone();
+            new_to.apply(&next);
             for (_, b) in next.0.iter_mut() {
-                Substitution::single(fr, to.clone()).apply(b);
+                b.apply(&Substitution::single(fr, to.clone()));
             }
-            next.0.insert(fr, to);
+            // @Note: Possibly in here somewhere, we need to check if next already has a
+            // substitution with the same LHS as self. This is because if we do have one already,
+            // this insert call will do nothing. Maybe we should also check the result of the insert
+            // call.
+            // However, it might not be necessary, because maybe it will never come up with other
+            // bugs fixed. Probably good to at least do some checking though for robustness.
+            next.0.insert(fr, new_to);
         }
         next
-    }
-
-    /// Applies the substitution to the given type.
-    pub fn apply(&self, t: &mut Type) {
-        match t {
-            Type::Var(var) => {
-                if let Some(replacement) = self.0.get(&var) {
-                    *t = replacement.clone();
-                }
-            }
-            Type::Func(a, b) => {
-                self.apply(a);
-                self.apply(b);
-            }
-            Type::List(list_t) => self.apply(list_t),
-            Type::Prim(_) => (),
-        }
     }
 }
 
@@ -104,7 +120,7 @@ impl Substitution {
 pub struct ConstraintGenerator {
     constraints: Vec<Constraint>,
     assumptions: HashMap<Name, Vec<Type>>,
-    next_typevar_id: usize,
+    pub next_typevar_id: usize,
     m_stack: Vec<TypeVar>,
 }
 
@@ -133,7 +149,7 @@ impl ConstraintGenerator {
         beta
     }
 
-    fn constrain(&mut self, constraint: Constraint) {
+    pub fn constrain(&mut self, constraint: Constraint) {
         self.constraints.push(constraint);
     }
 
@@ -215,21 +231,31 @@ impl ConstraintGenerator {
         let sub = ts.vars.into_iter().fold(Substitution::empty(), |sub, var| {
             sub.then(Substitution::single(var, self.fresh()))
         });
-        sub.apply(&mut ts.typ);
+        ts.typ.apply(&sub);
         ts.typ
     }
 
     pub fn solve(&mut self) -> Option<Substitution> {
+        println!("Start solving!");
         let mut sub = Substitution::empty();
 
         let mut constraints = VecDeque::from(self.constraints.clone());
 
         while let Some(c) = constraints.pop_front() {
+            println!("Looking at: {}", c);
             match c {
-                Constraint::Equality(t1, t2) => sub = sub.then(t1.unify(t2)?),
+                Constraint::Equality(t1, t2) => {
+                    let s = t1.unify(t2)?;
+                    for c in constraints.iter_mut() {
+                        c.apply(&s);
+                    }
+                    sub = s.then(sub);
+                }
 
                 Constraint::ExplicitInstance(t, ts) => {
-                    constraints.push_back(Constraint::Equality(t, self.instantiate(ts)))
+                    let cons = Constraint::Equality(t, self.instantiate(ts));
+                    println!("Emitting constraint: {}", cons);
+                    constraints.push_back(cons)
                 }
 
                 Constraint::ImplicitInstance(t1, t2, m)
@@ -239,12 +265,25 @@ impl ConstraintGenerator {
                         .intersection(&constraints.as_slices().active_vars())
                         .is_empty() =>
                 {
-                    constraints.push_back(Constraint::ExplicitInstance(t1, t2.generalize(&m)));
+                    let cons = Constraint::ExplicitInstance(t1, t2.generalize(&m));
+                    println!("Emitting constraint: {}", cons);
+                    constraints.push_back(cons)
                 }
 
-                _ => return None,
+                c @ Constraint::ImplicitInstance(..) => {
+                    println!("Skipping constraint for now");
+                    constraints.push_back(c);
+                }
             }
+            println!("{}", sub);
+            println!("Constraints:");
+            for c in constraints.iter() {
+                println!("    {}", c);
+            }
+            println!("----")
         }
+
+        println!("Finish solving!");
 
         Some(sub)
     }

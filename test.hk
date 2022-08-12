@@ -55,4 +55,12 @@ example2 =
         let y = m in
             let x = y True in x;
 
-foo = \x -> \y -> let z = y in z;
+(* foo = \x -> \y -> let z = y in z; *)
+
+(* bar : Int -> Int; *)
+(* bar = \x -> x + 123; *)
+
+(* t = True; *)
+
+(* id : a -> a; *)
+(* id = \b -> b; *)

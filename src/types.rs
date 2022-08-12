@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 use std::fmt::{self, Display};
+use std::mem;
 
-use crate::constraint::Substitution;
+use crate::constraint::{ApplySub, Substitution};
 
 #[derive(PartialEq, Eq, Clone, Hash, Debug)]
 pub enum Type {
@@ -57,8 +58,8 @@ impl Type {
                     } else {
                         let s = Substitution::single(var.clone(), t.clone());
                         for (a2, b2) in pairs.iter_mut() {
-                            s.apply(a2);
-                            s.apply(b2);
+                            a2.apply(&s);
+                            b2.apply(&s);
                         }
                         sub = sub.then(s);
                     }
@@ -73,6 +74,24 @@ impl Type {
         }
 
         Some(sub)
+    }
+}
+
+impl ApplySub for Type {
+    fn apply(&mut self, sub: &Substitution) {
+        match self {
+            Type::Var(var) => {
+                if let Some(replacement) = sub.0.get(&var) {
+                    *self = replacement.clone();
+                }
+            }
+            Type::Func(a, b) => {
+                a.apply(sub);
+                b.apply(sub);
+            }
+            Type::List(list_t) => list_t.apply(sub),
+            Type::Prim(_) => (),
+        }
     }
 }
 
@@ -98,6 +117,13 @@ pub struct TypeScheme {
 impl TypeScheme {
     pub fn free_vars(&self) -> TypeVarSet {
         self.typ.free_vars().difference(&self.vars)
+    }
+}
+
+impl ApplySub for TypeScheme {
+    fn apply(&mut self, sub: &Substitution) {
+        self.vars.apply(sub);
+        self.typ.apply(sub);
     }
 }
 
@@ -162,6 +188,21 @@ impl TypeVarSet {
 
     pub fn into_iter(self) -> impl Iterator<Item = TypeVar> {
         self.0.into_iter()
+    }
+}
+
+impl ApplySub for TypeVarSet {
+    fn apply(&mut self, sub: &Substitution) {
+        let old_set = mem::replace(self, TypeVarSet::empty());
+        for v in old_set.0.into_iter() {
+            for (fr, to) in sub.0.iter() {
+                if *fr == v {
+                    // Type::free_vars just collects all the variables
+                    // (i.e. all variables in a Type are free in that type)
+                    *self = self.union(&to.free_vars());
+                }
+            }
+        }
     }
 }
 
