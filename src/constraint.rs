@@ -144,6 +144,7 @@ impl ConstraintGenerator {
 
     fn assume(&mut self, name: Name) -> Type {
         let beta = self.fresh();
+        trace!("Assuming fresh type variable: {} : {}", name, beta);
         self.assumptions
             .entry(name)
             .or_insert(Vec::with_capacity(1))
@@ -152,6 +153,7 @@ impl ConstraintGenerator {
     }
 
     pub fn constrain(&mut self, constraint: Constraint) {
+        trace!("Emitting constraint: {}", constraint);
         self.constraints.push(constraint);
     }
 
