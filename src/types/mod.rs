@@ -2,7 +2,10 @@ use std::collections::HashSet;
 use std::fmt::{self, Display};
 use std::mem;
 
-use crate::constraint::{ApplySub, Substitution};
+pub mod constraint;
+pub mod substitution;
+
+pub use substitution::{ApplySub, Substitution};
 
 #[derive(PartialEq, Eq, Clone, Hash, Debug)]
 pub enum Type {
@@ -68,7 +71,7 @@ impl ApplySub for Type {
     fn apply(&mut self, sub: &Substitution) {
         match self {
             Type::Var(var) => {
-                if let Some(replacement) = sub.0.get(&var) {
+                if let Some(replacement) = sub.get(&var) {
                     *self = replacement.clone();
                 }
             }
@@ -183,7 +186,7 @@ impl ApplySub for TypeVarSet {
     fn apply(&mut self, sub: &Substitution) {
         let old_set = mem::replace(self, TypeVarSet::empty());
         for v in old_set.0.into_iter() {
-            for (fr, to) in sub.0.iter() {
+            for (fr, to) in sub.iter() {
                 if *fr == v {
                     // Type::free_vars just collects all the variables
                     // (i.e. all variables in a Type are free in that type)

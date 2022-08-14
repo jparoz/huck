@@ -5,11 +5,7 @@ use std::iter;
 use log::{log_enabled, trace};
 
 use crate::ast::{Assignment, Expr, Lhs, Name, Numeral, Pattern, Term};
-use crate::types::{Primitive, Type, TypeScheme, TypeVar, TypeVarSet};
-
-pub trait ApplySub {
-    fn apply(&mut self, sub: &Substitution);
-}
+use crate::types::{ApplySub, Primitive, Substitution, Type, TypeScheme, TypeVar, TypeVarSet};
 
 pub trait ActiveVars {
     fn active_vars(&self) -> TypeVarSet;
@@ -82,35 +78,6 @@ impl<'a> Display for Constraint {
                 write!(f, "{} ≼ {}", tau, sigma)
             }
         }
-    }
-}
-
-// @Cleanup: member shouldn't be pub
-#[derive(Debug)]
-pub struct Substitution(pub HashMap<TypeVar, Type>);
-
-impl Substitution {
-    pub fn empty() -> Self {
-        Substitution(HashMap::new())
-    }
-
-    pub fn single(fr: TypeVar, to: Type) -> Self {
-        Substitution(HashMap::from([(fr, to)]))
-    }
-
-    /// s1.then(s2) == s2 . s1
-    pub fn then(self, mut next: Self) -> Self {
-        for (fr, to) in self.0 {
-            let mut new_to = to.clone();
-            new_to.apply(&next);
-            for (_, b) in next.0.iter_mut() {
-                b.apply(&Substitution::single(fr, to.clone()));
-            }
-
-            // Assert because there should never be a swap already in the sub with the same var!
-            debug_assert!(next.0.insert(fr, new_to).is_none());
-        }
-        next
     }
 }
 
@@ -283,7 +250,7 @@ impl ConstraintGenerator {
 
             trace!("Substitution:");
             if log_enabled!(log::Level::Trace) {
-                for (fr, to) in sub.0.iter() {
+                for (fr, to) in sub.iter() {
                     trace!("    {} ↦ {}", fr, to);
                 }
             }
@@ -446,16 +413,6 @@ impl<'a> GenerateConstraints for Expr<'a> {
                 res
             }
         }
-    }
-}
-
-impl Display for Substitution {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Substitution:")?;
-        for (fr, to) in self.0.iter() {
-            writeln!(f, "    {} ↦ {}", fr, to)?;
-        }
-        Ok(())
     }
 }
 

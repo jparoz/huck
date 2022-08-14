@@ -1,12 +1,12 @@
 mod ast;
-mod constraint;
 mod error;
 mod parse;
 mod precedence;
 mod types;
 
-use constraint::{ApplySub, ConstraintGenerator, GenerateConstraints};
 use precedence::ApplyPrecedence;
+use types::constraint::{ConstraintGenerator, GenerateConstraints};
+use types::ApplySub;
 
 fn main() {
     env_logger::init();
