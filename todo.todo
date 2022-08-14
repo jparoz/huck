@@ -25,9 +25,10 @@ x ConstraintSolver
 - Change from HashMap and HashSet to BTreeMap and BTreeSet (or BinaryHeap)
     - This is so that substitutions are sorted, among other things. Maybe not necessary, but probably neater. Also, so that we can use the ordering to more easily solve constraints in a well-defined order.
 - Implement CompilerErrors
-    - An enum with variants TypeError(Type::Error), ScopeError(Scope::Error), etc.
+    - An enum with variants TypeError(type::Error), ScopeError(scope::Error), etc.
     - Make sure that each possible type error is as descriptive and specific as possible
     - Include source code location and information in the TypeError (will have to bubble up from far in the past, probably parsing, probably store in the AST somehow)
+    - Implement type graphs (from HHS02) to detect more specific/better type errors
 - Implement scoping @Scope
     - Maybe ban shadowing?
     - Should have a method to create a new (local) sub-scope somehow
