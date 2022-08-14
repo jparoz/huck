@@ -29,7 +29,7 @@ pub trait ApplyPrecedence {
 
 impl<'a> ApplyPrecedence for Chunk<'a> {
     fn apply(&mut self, precs: &HashMap<Name, Precedence>) {
-        // @Note: These defaults should one day be replaced with source code.
+        // @Note @Cleanup: These defaults should one day be replaced with source code.
 
         let mut defaults: HashMap<Name, Precedence> = HashMap::with_capacity(13);
         defaults.insert(

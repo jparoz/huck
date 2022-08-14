@@ -86,8 +86,11 @@ impl<'a> Display for Constraint {
 #[derive(Debug)]
 pub struct ConstraintGenerator {
     constraints: Vec<Constraint>,
-    assumptions: HashMap<Name, Vec<Type>>,
-    pub next_typevar_id: usize,
+
+    // @Cleanup: shouldn't be pub
+    pub assumptions: HashMap<Name, Vec<Type>>,
+
+    next_typevar_id: usize,
     m_stack: Vec<TypeVar>,
 }
 
@@ -113,6 +116,15 @@ impl ConstraintGenerator {
             .entry(name)
             .or_insert(Vec::with_capacity(1))
             .push(typ);
+    }
+
+    pub fn assumption_vars(&self) -> TypeVarSet {
+        self.assumptions
+            .values()
+            .flatten()
+            .map(|t| t.free_vars().iter().cloned().collect::<Vec<TypeVar>>())
+            .flatten()
+            .collect()
     }
 
     pub fn constrain(&mut self, constraint: Constraint) {
