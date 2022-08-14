@@ -8,30 +8,19 @@ use nom::sequence::{delimited, preceded, separated_pair, terminated, tuple};
 use nom::IResult;
 
 use std::collections::HashMap;
-use std::fmt;
 
 use crate::ast::*;
-
-#[derive(Debug)]
-pub struct Error(String);
-
-impl std::error::Error for Error {}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
 
 pub fn parse(input: &str) -> Result<Chunk, Error> {
     match preceded(ws(success(())), chunk)(input) {
         Ok((leftover, c)) => {
             if !leftover.is_empty() {
-                println!("WARNING: leftover:\n{:?}\n", leftover);
+                Err(Error::Leftover(leftover.to_string()))
+            } else {
+                Ok(c)
             }
-            Ok(c)
         }
-        Err(nom) => Err(Error(nom.to_string())),
+        Err(nom) => Err(Error::Nom(nom.to_string())),
     }
 }
 
@@ -318,4 +307,12 @@ fn is_reserved(word: &str) -> bool {
         "module" | "let" | "in" | "do" | "=" | ":" | "\\" | "->" | "<-" => true,
         _ => false,
     }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error("Nom error: {0}")]
+    Nom(String),
+    #[error("Leftover input: {0}")]
+    Leftover(String),
 }
