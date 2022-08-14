@@ -1,10 +1,9 @@
-use crate::types;
+use crate::{parse, types};
 
-#[derive(Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum Error {
-    // @Cleanup: rename Nom to Parse (?)
-    Nom(String),
-    Type(types::Error),
+    #[error("Parse error: {0}")]
+    Parse(#[from] parse::Error),
+    #[error("Type error: {0}")]
+    Type(#[from] types::Error),
 }
-
-pub type Result<T> = std::result::Result<T, Error>;

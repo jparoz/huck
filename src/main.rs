@@ -50,8 +50,7 @@ fn main() {
             }
         }
         Err(e) => {
-            // @Todo: impl Display for Error
-            println!("Type error: {:?}", e);
+            println!("Type error: {}", e);
         }
     }
 }

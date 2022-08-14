@@ -8,11 +8,22 @@ use nom::sequence::{delimited, preceded, separated_pair, terminated, tuple};
 use nom::IResult;
 
 use std::collections::HashMap;
+use std::fmt;
 
 use crate::ast::*;
-use crate::error::*;
 
-pub fn parse(input: &str) -> Result<Chunk> {
+#[derive(Debug)]
+pub struct Error(String);
+
+impl std::error::Error for Error {}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+pub fn parse(input: &str) -> Result<Chunk, Error> {
     match preceded(ws(success(())), chunk)(input) {
         Ok((leftover, c)) => {
             if !leftover.is_empty() {
@@ -20,7 +31,7 @@ pub fn parse(input: &str) -> Result<Chunk> {
             }
             Ok(c)
         }
-        Err(nom) => Err(Error::Nom(nom.to_string())),
+        Err(nom) => Err(Error(nom.to_string())),
     }
 }
 
