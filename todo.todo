@@ -21,9 +21,16 @@ x Add let bindings
     x Change from emitting equality constraints to emitting the other kind of constraint thingy. Consider how to do this with global declarations in mind as well.
 x Add lambdas
 x Refactor apply_precs(precs)
-- ConstraintSolver
-- Scoping/shadowing @Scope
-    - Maybe this simply means that we ban shadowing variable names, because local types are already separated. We can add other stuff later.
+x ConstraintSolver
+- Change from HashMap and HashSet to BTreeMap and BTreeSet (or BinaryHeap)
+    - This is so that substitutions are sorted, among other things. Maybe not necessary, but probably neater. Also, so that we can use the ordering to more easily solve constraints in a well-defined order.
+- Implement CompilerErrors
+    - An enum with variants TypeError(Type::Error), ScopeError(Scope::Error), etc.
+    - Make sure that each possible type error is as descriptive and specific as possible
+    - Include source code location and information in the TypeError (will have to bubble up from far in the past, probably parsing, probably store in the AST somehow)
+- Implement scoping @Scope
+    - Maybe ban shadowing?
+    - Should have a method to create a new (local) sub-scope somehow
 - Add type declarations
     x Special syntax required for tuple types written like (Int, Int, Int), because the type is actually (Int, (Int, Int))?? I don't think so, because the type operator will have the same fixity as the value operator.
 - Add operator precedence declarations
