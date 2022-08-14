@@ -87,7 +87,8 @@ impl Display for Type {
         match self {
             Type::Var(var) => write!(f, "{}", var),
             Type::Prim(p) => write!(f, "{:?}", p), // @Fixme: Display not Debug
-            Type::Func(a, b) => write!(f, "{} -> {}", a, b),
+            // @Todo: be smarter about when to include brackets
+            Type::Func(a, b) => write!(f, "({} -> {})", a, b),
             Type::List(inner) => {
                 write!(f, "[{}]", inner)
             }
