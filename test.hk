@@ -50,10 +50,10 @@ example1 =
     in id id;
 *)
 
-example2 =
-    \m ->
-        let y = m in
-            let x = y True in x;
+(* example2 = *)
+(*     \m -> *)
+(*         let y = m in *)
+(*             let x = y True in x; *)
 
 (* foo = \x -> \y -> let z = y in z; *)
 
@@ -64,3 +64,7 @@ example2 =
 
 (* id : a -> a; *)
 (* id = \b -> b; *)
+
+simpleIllTyped = (\x -> x 123) 456;
+
+(* infiniteTyped x = x x; *)

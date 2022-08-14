@@ -39,15 +39,19 @@ fn main() {
     // Print state of constraint generator
     println!("{}", cg);
 
-    if let Some(soln) = cg.solve() {
-        // Print solution substitution
-        println!("Solution: {}", soln);
+    match cg.solve() {
+        Ok(soln) => {
+            // Print solution substitution
+            println!("Solution: {}", soln);
 
-        for (name, typ) in types.iter_mut() {
-            typ.apply(&soln);
-            println!("{} : {}", name, typ);
+            for (name, typ) in types.iter_mut() {
+                typ.apply(&soln);
+                println!("{} : {}", name, typ);
+            }
         }
-    } else {
-        println!("No solution found!");
+        Err(e) => {
+            // @Todo: impl Display for Error
+            println!("Type error: {:?}", e);
+        }
     }
 }

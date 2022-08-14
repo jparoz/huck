@@ -3,8 +3,10 @@ use std::fmt::{self, Display};
 use std::mem;
 
 pub mod constraint;
+pub mod error;
 pub mod substitution;
 
+pub use error::Error;
 pub use substitution::{ApplySub, Substitution};
 
 #[derive(PartialEq, Eq, Clone, Hash, Debug)]
@@ -33,7 +35,7 @@ impl Type {
     }
 
     /// Finds the most general unifier for two types.
-    pub fn unify(self, other: Self) -> Option<Substitution> {
+    pub fn unify(self, other: Self) -> Result<Substitution, Error> {
         let mut sub = Substitution::empty();
 
         let mut pairs = vec![(self, other)];
@@ -44,7 +46,7 @@ impl Type {
                 (Type::Var(var), t) | (t, Type::Var(var)) => {
                     if t.free_vars().contains(&var) {
                         // @CheckMe
-                        return None;
+                        return Err(Error::CouldNotUnify);
                     } else {
                         let s = Substitution::single(var.clone(), t.clone());
                         for (a2, b2) in pairs.iter_mut() {
@@ -59,11 +61,11 @@ impl Type {
                     pairs.push((*a1, *a2));
                     pairs.push((*b1, *b2));
                 }
-                _ => return None,
+                _ => return Err(Error::CouldNotUnify),
             }
         }
 
-        Some(sub)
+        Ok(sub)
     }
 }
 

@@ -5,7 +5,9 @@ use std::iter;
 use log::{log_enabled, trace};
 
 use crate::ast::{Assignment, Expr, Lhs, Name, Numeral, Pattern, Term};
-use crate::types::{ApplySub, Primitive, Substitution, Type, TypeScheme, TypeVar, TypeVarSet};
+use crate::types::{
+    self, ApplySub, Primitive, Substitution, Type, TypeScheme, TypeVar, TypeVarSet,
+};
 
 pub trait ActiveVars {
     fn active_vars(&self) -> TypeVarSet;
@@ -206,7 +208,7 @@ impl ConstraintGenerator {
         ts.typ
     }
 
-    pub fn solve(&mut self) -> Option<Substitution> {
+    pub fn solve(&mut self) -> Result<Substitution, types::Error> {
         trace!("START SOLVING");
         let mut sub = Substitution::empty();
 
@@ -243,6 +245,8 @@ impl ConstraintGenerator {
                 }
 
                 c @ Constraint::ImplicitInstance(..) => {
+                    // @Note: This should never diverge, i.e. there should always be at least one
+                    // constraint in the set that meets the criteria to be solvable. See HHS02.
                     trace!("Skipping for now");
                     constraints.push_back(c);
                 }
@@ -266,7 +270,7 @@ impl ConstraintGenerator {
         trace!("-");
         trace!("FINISH SOLVING");
 
-        Some(sub)
+        Ok(sub)
     }
 }
 
