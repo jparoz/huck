@@ -2,7 +2,7 @@ use std::collections::{HashMap, VecDeque};
 use std::fmt::{self, Display};
 use std::iter;
 
-use log::{log_enabled, trace};
+use log::{info, log_enabled, trace};
 
 use crate::ast::{Assignment, Expr, Lhs, Name, Numeral, Pattern, Term};
 use crate::types::{
@@ -128,7 +128,7 @@ impl ConstraintGenerator {
     }
 
     pub fn constrain(&mut self, constraint: Constraint) {
-        trace!("Emitting constraint: {}", constraint);
+        info!("Emitting constraint: {}", constraint);
         self.constraints.push(constraint);
     }
 
@@ -196,6 +196,7 @@ impl ConstraintGenerator {
         if let Some(assumptions) = self.assumptions.remove(name) {
             for assumed in assumptions {
                 self.constrain(Constraint::Equality(assumed, typ.clone()));
+                info!("Bound (mono): {} to type {}", name, typ);
             }
         }
     }
@@ -208,6 +209,12 @@ impl ConstraintGenerator {
                     typ.clone(),
                     self.m_stack.iter().cloned().collect(),
                 ));
+                info!(
+                    "Bound (poly): {} to type {} (M = {})",
+                    name,
+                    typ,
+                    self.m_stack.iter().cloned().collect::<TypeVarSet>()
+                );
             }
         }
     }
@@ -228,7 +235,7 @@ impl ConstraintGenerator {
 
         while let Some(c) = constraints.pop_front() {
             trace!("-");
-            trace!("Looking at: {}", c);
+            info!("Looking at: {}", c);
             match c {
                 Constraint::Equality(t1, t2) => {
                     let s = t1.unify(t2)?;
@@ -240,7 +247,7 @@ impl ConstraintGenerator {
 
                 Constraint::ExplicitInstance(t, ts) => {
                     let cons = Constraint::Equality(t, self.instantiate(ts));
-                    trace!("Replacing with new constraint: {}", cons);
+                    info!("Replacing with new constraint: {}", cons);
                     constraints.push_back(cons)
                 }
 
@@ -252,14 +259,14 @@ impl ConstraintGenerator {
                         .is_empty() =>
                 {
                     let cons = Constraint::ExplicitInstance(t1, t2.generalize(&m));
-                    trace!("Replacing with new constraint: {}", cons);
+                    info!("Replacing with new constraint: {}", cons);
                     constraints.push_back(cons)
                 }
 
                 c @ Constraint::ImplicitInstance(..) => {
                     // @Note: This should never diverge, i.e. there should always be at least one
                     // constraint in the set that meets the criteria to be solvable. See HHS02.
-                    trace!("Skipping for now");
+                    info!("Skipping for now");
                     constraints.push_back(c);
                 }
             }

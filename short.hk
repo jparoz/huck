@@ -1,0 +1,4 @@
+foo = let a = 123
+        in let b = a + 456
+            in let a = "Hello"
+                in a;
