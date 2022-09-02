@@ -123,11 +123,14 @@ impl ApplySub for TypeScheme {
 
 impl Display for TypeScheme {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "∀")?;
-        for var in self.vars.iter() {
-            write!(f, " {}", var)?;
+        if !self.vars.is_empty() {
+            write!(f, "∀")?;
+            for var in self.vars.iter() {
+                write!(f, " {}", var)?;
+            }
+            write!(f, ". ")?;
         }
-        write!(f, ". {}", self.typ)
+        write!(f, "{}", self.typ)
     }
 }
 
