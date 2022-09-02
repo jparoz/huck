@@ -48,40 +48,39 @@ fn main() {
 
     let mut scope = Scope::new();
 
-    match cg.solve() {
-        Ok(soln) => {
-            // Print solution substitution
-            // println!("Solution: {}", soln);
+    // Solve the type constraints
+    let soln = cg.solve().unwrap_or_else(|e| {
+        println!("Type error: {}", e);
+        std::process::exit(1);
+    });
 
-            // @Cleanup: This should all be done in a more proper way
-            // Apply the solution to the assumption set
-            for typ in cg.assumptions.values_mut().flatten() {
-                typ.apply(&soln);
-            }
+    // Print solution substitution
+    // println!("Solution: {}", soln);
 
-            info!("Constraint generator state: {}", cg);
+    // @Cleanup: This should all be done in a more proper way
+    // Apply the solution to the assumption set
+    for typ in cg.assumptions.values_mut().flatten() {
+        typ.apply(&soln);
+    }
 
-            let assumption_vars = cg.assumption_vars();
+    info!("Constraint generator state: {}", cg);
 
-            for (name, mut typ) in types.into_iter() {
-                typ.apply(&soln);
+    let assumption_vars = cg.assumption_vars();
 
-                let type_scheme = typ.generalize(&assumption_vars);
-                info!("Inferred type for {} : {}", name, type_scheme);
-                scope.insert(name, type_scheme);
-            }
+    for (name, mut typ) in types.into_iter() {
+        typ.apply(&soln);
 
-            println!("{}", scope);
+        let type_scheme = typ.generalize(&assumption_vars);
+        info!("Inferred type for {} : {}", name, type_scheme);
+        scope.insert(name, type_scheme);
+    }
 
-            println!("Assumptions:");
-            for (name, vars) in cg.assumptions.iter() {
-                for var in vars {
-                    println!("    {} : {}", name, var);
-                }
-            }
-        }
-        Err(e) => {
-            println!("Type error: {}", e);
+    println!("{}", scope);
+
+    println!("Assumptions:");
+    for (name, vars) in cg.assumptions.iter() {
+        for var in vars {
+            println!("    {} : {}", name, var);
         }
     }
 }
