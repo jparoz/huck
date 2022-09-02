@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use log::info;
 
 use precedence::ApplyPrecedence;
-use scope::Scope;
+use scope::{Definition, Scope};
 use types::constraint::{ConstraintGenerator, GenerateConstraints};
 use types::ApplySub;
 
@@ -73,10 +73,9 @@ fn main() {
 
         let type_scheme = typ.generalize(&assumption_vars);
         info!("Inferred type for {} : {}", name, type_scheme);
-        scope.insert(name, type_scheme);
+        let defn = Definition::new(type_scheme);
+        scope.insert(name, defn);
     }
-
-    eprintln!("{}", scope);
 
     eprintln!("Assumptions:");
     for (name, vars) in cg.assumptions.iter() {
@@ -88,6 +87,6 @@ fn main() {
     // @Todo: optimisations go here
 
     // Generate code
-    let lua = codegen::lua::generate();
+    let lua = codegen::lua::generate(&scope);
     println!("{}", lua);
 }
