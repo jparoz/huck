@@ -35,7 +35,7 @@ fn main() {
         // Print type of defined function
         let typ = defns.generate(&mut cg);
 
-        types.push((name, typ));
+        types.push((name, typ, defns));
 
         // // Print parsed definitions
         // for (lhs, expr) in defns.iter() {
@@ -68,12 +68,12 @@ fn main() {
 
     let assumption_vars = cg.assumption_vars();
 
-    for (name, mut typ) in types.into_iter() {
+    for (name, mut typ, assignments) in types.into_iter() {
         typ.apply(&soln);
 
         let type_scheme = typ.generalize(&assumption_vars);
         info!("Inferred type for {} : {}", name, type_scheme);
-        let defn = Definition::new(type_scheme);
+        let defn = Definition::new(type_scheme, assignments);
         scope.insert(name, defn);
     }
 
