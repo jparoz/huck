@@ -87,6 +87,6 @@ fn main() {
     // @Todo: optimisations go here
 
     // Generate code
-    let lua = codegen::lua::generate(&scope);
+    let lua = codegen::lua::Generate::generate(&scope);
     println!("{}", lua);
 }

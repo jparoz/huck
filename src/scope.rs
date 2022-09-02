@@ -5,8 +5,8 @@ use crate::types::TypeScheme;
 
 #[derive(Debug)]
 pub struct Definition<'file> {
-    type_scheme: TypeScheme,
-    assignments: Vec<Assignment<'file>>,
+    pub type_scheme: TypeScheme,
+    pub assignments: Vec<Assignment<'file>>,
 }
 
 impl<'file> Definition<'file> {
