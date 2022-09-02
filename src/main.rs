@@ -1,4 +1,5 @@
 mod ast;
+mod codegen;
 mod error;
 mod parse;
 mod precedence;
@@ -38,24 +39,24 @@ fn main() {
 
         // // Print parsed definitions
         // for (lhs, expr) in defns.iter() {
-        //     println!("{} = {};", lhs, expr);
+        //     eprintln!("{} = {};", lhs, expr);
         // }
-        // println!();
+        // eprintln!();
     }
 
     // Print state of constraint generator
-    // println!("{}", cg);
+    // eprintln!("{}", cg);
 
     let mut scope = Scope::new();
 
     // Solve the type constraints
     let soln = cg.solve().unwrap_or_else(|e| {
-        println!("Type error: {}", e);
+        eprintln!("Type error: {}", e);
         std::process::exit(1);
     });
 
     // Print solution substitution
-    // println!("Solution: {}", soln);
+    // eprintln!("Solution: {}", soln);
 
     // @Cleanup: This should all be done in a more proper way
     // Apply the solution to the assumption set
@@ -75,12 +76,18 @@ fn main() {
         scope.insert(name, type_scheme);
     }
 
-    println!("{}", scope);
+    eprintln!("{}", scope);
 
-    println!("Assumptions:");
+    eprintln!("Assumptions:");
     for (name, vars) in cg.assumptions.iter() {
         for var in vars {
-            println!("    {} : {}", name, var);
+            eprintln!("    {} : {}", name, var);
         }
     }
+
+    // @Todo: optimisations go here
+
+    // Generate code
+    let lua = codegen::lua::generate();
+    println!("{}", lua);
 }
