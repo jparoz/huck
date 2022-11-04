@@ -14,17 +14,9 @@ impl<'file> Generate for Scope<'file> {
     fn generate(&self) -> String {
         let mut lua = "return {".to_string();
 
-        for (name, defn) in self.iter() {
+        for (name, typed_defn) in self.iter() {
             lua.push_str(&format!("[\"{}\"] = ", name));
-
-            if defn.assignments.len() == 1 {
-                // No need for a switch
-                lua.push_str(&defn.assignments[0].generate());
-            } else {
-                // Need to switch on the assignment LHSs using an if-then-elseif-else
-                todo!();
-            }
-
+            lua.push_str(&typed_defn.definition.generate());
             lua.push(',');
         }
 
@@ -34,36 +26,63 @@ impl<'file> Generate for Scope<'file> {
     }
 }
 
-impl<'file> Generate for Vec<ast::Assignment<'file>> {
+impl<'file> Generate for ast::Definition<'file> {
+    /// Generates a Lua statement something like:
+    ///     lhs.name = expr
+    /// This has to be generated from the Vec<Assignment>,
+    /// because in the case of multiple definitions,
+    /// we have to generate a Lua 'switch' statement.
     fn generate(&self) -> String {
-        todo!()
-    }
-}
-
-impl<'file> Generate for ast::Assignment<'file> {
-    fn generate(&self) -> String {
+        // @Todo @Fixme
         let mut lua = String::new();
 
-        let (lhs, expr) = self;
+        let (lhs, expr) = &self[0];
+        lua.push_str(&lhs.generate()); // @Fixme: should just be the name
+        lua.push_str(" = ");
 
-        match lhs {
-            ast::Lhs::Func { name, args } if args.is_empty() => {
-                // It's a value
-                lua.push_str(&expr.generate());
-            }
-            ast::Lhs::Func { name, args } => {
-                // It's a function
-                todo!()
-            }
-            ast::Lhs::Binop { a, op, b } => {
-                // It's a function
-                todo!()
-            }
+        if self.len() == 1 {
+            // No need for a switch
+            lua.push_str(&expr.generate());
+        } else {
+            // Need to switch on the assignment LHSs using an if-then-elseif-else
+            todo!();
         }
 
         lua
     }
 }
+
+impl<'file> Generate for ast::Lhs<'file> {
+    fn generate(&self) -> String {
+        todo!()
+    }
+}
+
+// @Todo @DeleteMe
+// impl<'file> Generate for ast::Assignment<'file> {
+//     fn generate(&self) -> String {
+//         let mut lua = String::new();
+
+//         let (lhs, expr) = self;
+
+//         match lhs {
+//             ast::Lhs::Func { name, args } if args.is_empty() => {
+//                 // It's a value
+//                 lua.push_str(&expr.generate());
+//             }
+//             ast::Lhs::Func { name, args } => {
+//                 // It's a function
+//                 todo!()
+//             }
+//             ast::Lhs::Binop { a, op, b } => {
+//                 // It's a function
+//                 todo!()
+//             }
+//         }
+
+//         lua
+//     }
+// }
 
 impl<'file> Generate for ast::Expr<'file> {
     fn generate(&self) -> String {

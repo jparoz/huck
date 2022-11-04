@@ -29,6 +29,8 @@ impl<'a> Chunk<'a> {
 
 pub type Assignment<'a> = (Lhs<'a>, Expr<'a>);
 
+pub type Definition<'file> = Vec<Assignment<'file>>;
+
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub enum Name {
     Ident(String),

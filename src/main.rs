@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use log::info;
 
 use precedence::ApplyPrecedence;
-use scope::{Definition, Scope};
+use scope::{Scope, TypedDefinition};
 use types::constraint::{ConstraintGenerator, GenerateConstraints};
 use types::ApplySub;
 
@@ -73,7 +73,7 @@ fn main() {
 
         let type_scheme = typ.generalize(&assumption_vars);
         info!("Inferred type for {} : {}", name, type_scheme);
-        let defn = Definition::new(type_scheme, assignments);
+        let defn = TypedDefinition::new(type_scheme, assignments);
         scope.insert(name, defn);
     }
 
