@@ -37,7 +37,7 @@ impl<'file> Generate for ast::Definition<'file> {
         let mut lua = String::new();
 
         let (lhs, expr) = &self[0];
-        lua.push_str(&lhs.generate()); // @Fixme: should just be the name
+        lua.push_str(&lhs.name().generate()); // @Fixme: should just be the name
         lua.push_str(" = ");
 
         if self.len() == 1 {
@@ -52,9 +52,23 @@ impl<'file> Generate for ast::Definition<'file> {
     }
 }
 
-impl<'file> Generate for ast::Lhs<'file> {
+impl Generate for ast::Name {
+    /// Generates a Lua-safe name for the Huck Name.
     fn generate(&self) -> String {
-        todo!()
+        match self {
+            ast::Name::Ident(s) => s.clone(),
+            ast::Name::Binop(s) => {
+                // @Todo: Convert the binop into some kind of Lua identifier.
+                // Maybe something like this conversion:
+                //      >>=     ->      _HUCK_RANGLE_RANGLE_EQUALS
+                //      <*>     ->      _HUCK_LANGLE_STAR_RANGLE
+                //      &&      ->      _HUCK_AMPERS_AMPERS
+                // Note that the binop might be a valid Lua binop
+                // (which possibly will/should never happen),
+                // but this method should probably still do the conversion.
+                todo!("Convert the binop into some kind of Lua identifier: {}", s)
+            }
+        }
     }
 }
 
