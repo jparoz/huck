@@ -392,7 +392,7 @@ impl<'a> GenerateConstraints for Expr<'a> {
             }
 
             Expr::Let {
-                assignments,
+                definitions: assignments,
                 in_expr,
             } => {
                 let beta = in_expr.generate(cg);

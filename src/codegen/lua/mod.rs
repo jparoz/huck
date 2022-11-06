@@ -27,21 +27,17 @@ impl<'file> Generate for Scope<'file> {
 }
 
 impl<'file> Generate for ast::Definition<'file> {
-    /// Generates a Lua statement something like:
-    ///     lhs.name = expr
+    /// Generates a Lua expression representing a Huck definition,
+    /// even if it's defined on multiple lines.
     /// This has to be generated from the Vec<Assignment>,
     /// because in the case of multiple definitions,
     /// we have to generate a Lua 'switch' statement.
     fn generate(&self) -> String {
-        // @Todo @Fixme
         let mut lua = String::new();
-
-        let (lhs, expr) = &self[0];
-        lua.push_str(&lhs.name().generate()); // @Fixme: should just be the name
-        lua.push_str(" = ");
 
         if self.len() == 1 {
             // No need for a switch
+            let (_lhs, expr) = &self[0];
             lua.push_str(&expr.generate());
         } else {
             // Need to switch on the assignment LHSs using an if-then-elseif-else
@@ -140,7 +136,7 @@ impl<'file> Generate for ast::Expr<'file> {
                 lua
             }
             ast::Expr::Let {
-                assignments,
+                definitions,
                 in_expr,
             } => {
                 let mut lua = String::new();
@@ -149,9 +145,12 @@ impl<'file> Generate for ast::Expr<'file> {
                 lua.push_str("(function()\n");
 
                 // Make a new local variable for each assignment
-                for assign in assignments.values() {
+                for definition in definitions.values() {
+                    let (lhs, expr) = &definition[0];
                     lua.push_str("local ");
-                    lua.push_str(&assign.generate()); // @XXX @Fixme: This is certainly wrong
+                    lua.push_str(&lhs.name().generate());
+                    lua.push_str(" = ");
+                    lua.push_str(&definition.generate());
                     lua.push('\n');
                 }
 

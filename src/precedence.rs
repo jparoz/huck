@@ -237,7 +237,7 @@ impl<'a> ApplyPrecedence for Expr<'a> {
                 _ => (),
             },
             Expr::Let {
-                assignments,
+                definitions: assignments,
                 in_expr,
             } => {
                 for (_name, defns) in assignments {

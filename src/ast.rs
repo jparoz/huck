@@ -149,7 +149,7 @@ pub enum Expr<'a> {
         rhs: Box<Expr<'a>>,
     },
     Let {
-        assignments: HashMap<Name, Vec<Assignment<'a>>>,
+        definitions: HashMap<Name, Definition<'a>>,
         in_expr: Box<Expr<'a>>,
     },
     Lambda {
@@ -174,7 +174,7 @@ impl<'a> Display for Expr<'a> {
             }
             Term(t) => write!(f, "{}", t),
             Let {
-                assignments,
+                definitions: assignments,
                 in_expr,
             } => {
                 write!(f, "let")?;

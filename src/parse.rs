@@ -124,7 +124,7 @@ fn let_in(input: &str) -> IResult<&str, Expr> {
                     .push((lhs, expr));
             }
             Expr::Let {
-                assignments: local_env,
+                definitions: local_env,
                 in_expr: Box::new(in_expr),
             }
         },
