@@ -211,6 +211,7 @@ fn numeral_negative(input: &str) -> IResult<&str, &str> {
 
 fn string(input: &str) -> IResult<&str, &str> {
     // "hello, world"
+    // @Note: includes the quotes
     ws(recognize(delimited(
         char('"'),
         map(

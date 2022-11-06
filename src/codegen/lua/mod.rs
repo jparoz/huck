@@ -173,6 +173,44 @@ impl<'file> Generate for ast::Expr<'file> {
 
 impl<'file> Generate for ast::Term<'file> {
     fn generate(&self) -> String {
-        todo!()
+        match self {
+            ast::Term::Numeral(num) => num.generate(),
+
+            // possible @XXX, @Todo: escape (or check escaping) better
+            // @Note: includes the quotes
+            ast::Term::String(s) => s.to_string(),
+
+            ast::Term::List(v) => {
+                // @Note: this is where the semantics for Huck Lists are decided.
+                // The below simply converts them as Lua lists;
+                // possibly one day we should instead convert them to Lua iterators.
+                let mut lua = String::new();
+                lua.push('{');
+                for item in v {
+                    lua.push_str(&item.generate());
+                    lua.push_str(", ");
+                }
+                lua.push('}');
+                lua
+            }
+            ast::Term::Name(name) => name.generate(),
+            ast::Term::Parens(expr) => {
+                let mut lua = String::new();
+
+                lua.push('(');
+                lua.push_str(&expr.generate());
+                lua.push(')');
+
+                lua
+            }
+        }
+    }
+}
+
+impl<'file> Generate for ast::Numeral<'file> {
+    fn generate(&self) -> String {
+        match self {
+            ast::Numeral::Int(s) | ast::Numeral::Float(s) => s.to_string(),
+        }
     }
 }
