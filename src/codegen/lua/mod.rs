@@ -12,12 +12,12 @@ impl<'file> Generate for Scope<'file> {
     /// This will generate a Lua chunk which returns a table containing the definitions given in the
     /// Huck scope.
     fn generate(&self) -> String {
-        let mut lua = "return {".to_string();
+        let mut lua = "return {\n".to_string();
 
         for (name, typed_defn) in self.iter() {
             lua.push_str(&format!("[\"{}\"] = ", name));
             lua.push_str(&typed_defn.definition.generate());
-            lua.push(',');
+            lua.push_str(",\n");
         }
 
         lua.push('}');
@@ -147,7 +147,7 @@ impl<'file> Generate for ast::Expr<'file> {
 
                 // Make a new local variable for each assignment
                 for definition in definitions.values() {
-                    let (lhs, expr) = &definition[0];
+                    let (lhs, _expr) = &definition[0];
                     lua.push_str("local ");
                     lua.push_str(&lhs.name().generate());
                     lua.push_str(" = ");
@@ -170,13 +170,19 @@ impl<'file> Generate for ast::Expr<'file> {
                 lua.push_str("function(");
                 let args_s = args
                     .into_iter()
-                    .map(|pat| {
-                        // @Todo: transform these into Lua identifiers
-                        // @Note: pretty sure it should be a syntax error
-                        // to get a literal pattern here. @Todo: @Test this
-                        // @Note: or maybe not; we probably want to allow e.g. Unit.
-                        // Perhaps Unit should be a special case of Pattern.
-                        "hi".to_string() // @XXX
+                    // @Todo: transform these into Lua identifiers
+                    // @Note: pretty sure it should be a syntax error
+                    // to get a literal pattern here. @Todo: @Test this
+                    // @Note: or maybe not; we probably want to allow e.g. Unit.
+                    // Perhaps Unit should be a special case of Pattern.
+                    .map(|pat| match pat {
+                        ast::Pattern::Bind(var) => var.to_string(),
+                        ast::Pattern::List(_) => todo!(),
+                        ast::Pattern::Numeral(_) => todo!(),
+                        ast::Pattern::String(_) => todo!(),
+                        ast::Pattern::Binop { operator, lhs, rhs } => todo!(),
+                        ast::Pattern::UnaryConstructor(_) => todo!(),
+                        ast::Pattern::Destructure { constructor, args } => todo!(),
                     })
                     .reduce(|mut a, b| {
                         a.reserve(b.len() + 2);
@@ -187,9 +193,11 @@ impl<'file> Generate for ast::Expr<'file> {
                     .unwrap(); // Safe unwrap: lambda with no arguments is a syntax error
                                // @Todo: @Test this
                 lua.push_str(&args_s);
-                lua.push_str(")\n");
-                // @Todo: rhs
-                lua.push_str("end");
+                lua.push_str(")\nreturn ");
+
+                lua.push_str(&rhs.generate());
+
+                lua.push_str(" end");
 
                 lua
             }

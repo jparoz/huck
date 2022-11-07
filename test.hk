@@ -65,6 +65,10 @@ bar = \x -> x + 123;
 (* id : a -> a; *)
 id = \b -> b;
 
+(* @Fixme: *)
+(* foo = \x y -> (x (y+100)) - 100; *)
+foo = \x y -> (x (y + 100)) - 100;
+
 (* simpleIllTyped = (\x -> x 123) 456; *)
 
 (* infiniteTyped x = x x; *)
