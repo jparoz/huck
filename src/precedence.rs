@@ -89,7 +89,7 @@ impl<'a> ApplyPrecedence for Chunk<'a> {
             defaults.insert(name.clone(), *prec);
         }
 
-        for (_name, defns) in &mut self.assignments {
+        for (_name, defns) in &mut self.definitions {
             for (lhs, rhs) in defns.iter_mut() {
                 lhs.apply(&defaults);
                 rhs.apply(&defaults);

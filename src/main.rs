@@ -31,7 +31,7 @@ fn main() {
 
     let mut types = Vec::new();
 
-    for (name, defns) in parsed.assignments {
+    for (name, defns) in parsed.definitions {
         // Print type of defined function
         let typ = defns.generate(&mut cg);
 

@@ -37,7 +37,7 @@ fn chunk(input: &str) -> IResult<&str, Chunk> {
     Ok((leftovers, Chunk::new(env)))
 }
 
-fn assign(input: &str) -> IResult<&str, (Lhs, Expr)> {
+fn assign(input: &str) -> IResult<&str, Assignment> {
     terminated(separated_pair(lhs, reserved_op("="), expr), semi)(input)
 }
 

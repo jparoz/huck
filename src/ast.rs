@@ -16,20 +16,20 @@ use std::fmt::{self, Display};
 //     len: usize,
 // }
 
+pub type Definition<'file> = Vec<Assignment<'file>>;
+
 #[derive(Debug)]
-pub struct Chunk<'a> {
-    pub assignments: HashMap<Name, Vec<Assignment<'a>>>,
+pub struct Chunk<'file> {
+    pub definitions: HashMap<Name, Definition<'file>>,
 }
 
-impl<'a> Chunk<'a> {
-    pub fn new(assignments: HashMap<Name, Vec<Assignment<'a>>>) -> Chunk<'a> {
-        Chunk { assignments }
+impl<'file> Chunk<'file> {
+    pub fn new(definitions: HashMap<Name, Definition<'file>>) -> Chunk<'file> {
+        Chunk { definitions }
     }
 }
 
-pub type Assignment<'a> = (Lhs<'a>, Expr<'a>);
-
-pub type Definition<'file> = Vec<Assignment<'file>>;
+pub type Assignment<'file> = (Lhs<'file>, Expr<'file>);
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub enum Name {
@@ -37,7 +37,7 @@ pub enum Name {
     Binop(String),
 }
 
-impl<'a> Display for Name {
+impl<'file> Display for Name {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Name::Ident(s) | Name::Binop(s) => write!(f, "{}", s),
@@ -46,19 +46,19 @@ impl<'a> Display for Name {
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
-pub enum Lhs<'a> {
+pub enum Lhs<'file> {
     Func {
         name: Name,
-        args: Vec<Pattern<'a>>,
+        args: Vec<Pattern<'file>>,
     },
     Binop {
-        a: Pattern<'a>,
+        a: Pattern<'file>,
         op: Name,
-        b: Pattern<'a>,
+        b: Pattern<'file>,
     },
 }
 
-impl<'a> Lhs<'a> {
+impl<'file> Lhs<'file> {
     pub fn name(&self) -> &Name {
         match self {
             Lhs::Func { name, .. } => name,
@@ -67,7 +67,7 @@ impl<'a> Lhs<'a> {
     }
 }
 
-impl<'a> Display for Lhs<'a> {
+impl<'file> Display for Lhs<'file> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Lhs::Func { name, args } => {
@@ -88,24 +88,24 @@ impl<'a> Display for Lhs<'a> {
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
-pub enum Pattern<'a> {
-    Bind(&'a str),
-    List(Vec<Pattern<'a>>),
-    Numeral(Numeral<'a>),
-    String(&'a str),
+pub enum Pattern<'file> {
+    Bind(&'file str),
+    List(Vec<Pattern<'file>>),
+    Numeral(Numeral<'file>),
+    String(&'file str),
     Binop {
         operator: Name,
-        lhs: Box<Pattern<'a>>,
-        rhs: Box<Pattern<'a>>,
+        lhs: Box<Pattern<'file>>,
+        rhs: Box<Pattern<'file>>,
     },
     UnaryConstructor(Name),
     Destructure {
         constructor: Name,
-        args: Vec<Pattern<'a>>,
+        args: Vec<Pattern<'file>>,
     },
 }
 
-impl<'a> Display for Pattern<'a> {
+impl<'file> Display for Pattern<'file> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use Pattern::*;
         match self {
@@ -137,28 +137,28 @@ impl<'a> Display for Pattern<'a> {
 }
 
 #[derive(PartialEq, Clone, Debug)]
-pub enum Expr<'a> {
-    Term(Term<'a>),
+pub enum Expr<'file> {
+    Term(Term<'file>),
     App {
-        func: Box<Expr<'a>>,
-        argument: Box<Expr<'a>>,
+        func: Box<Expr<'file>>,
+        argument: Box<Expr<'file>>,
     },
     Binop {
         operator: Name,
-        lhs: Box<Expr<'a>>,
-        rhs: Box<Expr<'a>>,
+        lhs: Box<Expr<'file>>,
+        rhs: Box<Expr<'file>>,
     },
     Let {
-        definitions: HashMap<Name, Definition<'a>>,
-        in_expr: Box<Expr<'a>>,
+        definitions: HashMap<Name, Definition<'file>>,
+        in_expr: Box<Expr<'file>>,
     },
     Lambda {
-        args: Vec<Pattern<'a>>,
-        rhs: Box<Expr<'a>>,
+        args: Vec<Pattern<'file>>,
+        rhs: Box<Expr<'file>>,
     },
 }
 
-impl<'a> Display for Expr<'a> {
+impl<'file> Display for Expr<'file> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use Expr::*;
         match self {
@@ -202,15 +202,15 @@ impl<'a> Display for Expr<'a> {
 }
 
 #[derive(PartialEq, Clone, Debug)]
-pub enum Term<'a> {
-    Numeral(Numeral<'a>),
-    String(&'a str),
-    List(Vec<Expr<'a>>),
+pub enum Term<'file> {
+    Numeral(Numeral<'file>),
+    String(&'file str),
+    List(Vec<Expr<'file>>),
     Name(Name),
-    Parens(Box<Expr<'a>>),
+    Parens(Box<Expr<'file>>),
 }
 
-impl<'a> Display for Term<'a> {
+impl<'file> Display for Term<'file> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use Term::*;
         match self {
@@ -236,12 +236,12 @@ impl<'a> Display for Term<'a> {
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
-pub enum Numeral<'a> {
-    Int(&'a str),
-    Float(&'a str),
+pub enum Numeral<'file> {
+    Int(&'file str),
+    Float(&'file str),
 }
 
-impl<'a> Display for Numeral<'a> {
+impl<'file> Display for Numeral<'file> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use Numeral::*;
         match self {
