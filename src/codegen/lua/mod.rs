@@ -35,6 +35,7 @@ impl<'file> Generate for ast::Definition<'file> {
     fn generate(&self) -> String {
         let mut lua = String::new();
 
+        // @Todo @Fixme: this should look at lhs, it can't not.
         if self.len() == 1 {
             // No need for a switch
             let (_lhs, expr) = &self[0];
@@ -164,7 +165,33 @@ impl<'file> Generate for ast::Expr<'file> {
                 lua
             }
             ast::Expr::Lambda { args, rhs } => {
-                todo!();
+                let mut lua = String::new();
+
+                lua.push_str("function(");
+                let args_s = args
+                    .into_iter()
+                    .map(|pat| {
+                        // @Todo: transform these into Lua identifiers
+                        // @Note: pretty sure it should be a syntax error
+                        // to get a literal pattern here. @Todo: @Test this
+                        // @Note: or maybe not; we probably want to allow e.g. Unit.
+                        // Perhaps Unit should be a special case of Pattern.
+                        "hi".to_string() // @XXX
+                    })
+                    .reduce(|mut a, b| {
+                        a.reserve(b.len() + 2);
+                        a.push_str(", ");
+                        a.push_str(&b);
+                        a
+                    })
+                    .unwrap(); // Safe unwrap: lambda with no arguments is a syntax error
+                               // @Todo: @Test this
+                lua.push_str(&args_s);
+                lua.push_str(")\n");
+                // @Todo: rhs
+                lua.push_str("end");
+
+                lua
             }
         }
     }
