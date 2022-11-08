@@ -5,6 +5,7 @@ mod parse;
 mod precedence;
 mod scope;
 mod types;
+mod utils;
 
 use std::collections::HashMap;
 
@@ -89,4 +90,7 @@ fn main() {
     // Generate code
     let lua = codegen::lua::Generate::generate(&scope);
     println!("{}", lua);
+
+    eprintln!("\nExecuting...\n");
+    eprintln!("{}", utils::execute_lua(&lua));
 }
