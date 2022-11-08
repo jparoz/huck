@@ -49,27 +49,7 @@ impl<'file> Generate for ast::Definition<'file> {
                     } else {
                         // should be a function
                         lua.push_str("function(");
-                        lua.push_str(
-                            &args
-                                .iter()
-                                .map(|pat| match pat {
-                                    // @Todo: DRY
-                                    ast::Pattern::Bind(var) => var.to_string(),
-                                    ast::Pattern::List(_) => todo!(),
-                                    ast::Pattern::Numeral(_) => todo!(),
-                                    ast::Pattern::String(_) => todo!(),
-                                    ast::Pattern::Binop { operator, lhs, rhs } => todo!(),
-                                    ast::Pattern::UnaryConstructor(_) => todo!(),
-                                    ast::Pattern::Destructure { constructor, args } => todo!(),
-                                })
-                                .reduce(|mut a, b| {
-                                    a.reserve(b.len() + 2);
-                                    a.push_str(", ");
-                                    a.push_str(&b);
-                                    a
-                                })
-                                .unwrap(), // Safe unwrap: we checked args.len() > 0 above
-                        );
+                        lua.push_str(&args.generate());
                         lua.push_str(")\nreturn ");
                         lua.push_str(&expr.generate());
                         lua.push_str("\nend");
@@ -78,6 +58,7 @@ impl<'file> Generate for ast::Definition<'file> {
                 ast::Lhs::Binop { a, op, b } => todo!(),
             }
         } else {
+            // self.len() > 1
             // Need to switch on the assignment LHSs using an if-then-elseif-else
             let (first_lhs, first_expr) = &self[0];
             lua.push_str("(function()\nif ");
@@ -91,6 +72,33 @@ impl<'file> Generate for ast::Definition<'file> {
             // @Todo: the final element of the Vec (??? should be any unconditional match)
 
             lua.push_str("\nend)()");
+        }
+
+        lua
+    }
+}
+
+impl<'file> Generate for Vec<ast::Pattern<'file>> {
+    /// Generates a Lua argument list.
+    fn generate(&self) -> String {
+        debug_assert!(self.len() > 0);
+
+        let mut lua = String::new();
+
+        for i in 0..self.len() {
+            let arg = match &self[i] {
+                ast::Pattern::Bind(var) => var.to_string(),
+                ast::Pattern::List(_) => todo!(),
+                ast::Pattern::Numeral(_) => todo!(),
+                ast::Pattern::String(_) => todo!(),
+                ast::Pattern::Binop { operator, lhs, rhs } => todo!(),
+                ast::Pattern::UnaryConstructor(name) => todo!(),
+                ast::Pattern::Destructure { constructor, args } => todo!(),
+            };
+            lua.push_str(&arg);
+            if i < self.len() - 1 {
+                lua.push_str(", ");
+            }
         }
 
         lua
@@ -213,34 +221,12 @@ impl<'file> Generate for ast::Expr<'file> {
                 lua
             }
             ast::Expr::Lambda { args, rhs } => {
+                debug_assert!(args.len() > 0);
+
                 let mut lua = String::new();
 
                 lua.push_str("function(");
-                let args_s = args
-                    .into_iter()
-                    // @Todo: transform these into Lua identifiers
-                    // @Note: pretty sure it should be a syntax error
-                    // to get a literal pattern here. @Todo: @Test this
-                    // @Note: or maybe not; we probably want to allow e.g. Unit.
-                    // Perhaps Unit should be a special case of Pattern.
-                    .map(|pat| match pat {
-                        ast::Pattern::Bind(var) => var.to_string(),
-                        ast::Pattern::List(_) => todo!(),
-                        ast::Pattern::Numeral(_) => todo!(),
-                        ast::Pattern::String(_) => todo!(),
-                        ast::Pattern::Binop { operator, lhs, rhs } => todo!(),
-                        ast::Pattern::UnaryConstructor(_) => todo!(),
-                        ast::Pattern::Destructure { constructor, args } => todo!(),
-                    })
-                    .reduce(|mut a, b| {
-                        a.reserve(b.len() + 2);
-                        a.push_str(", ");
-                        a.push_str(&b);
-                        a
-                    })
-                    .unwrap(); // Safe unwrap: lambda with no arguments is a syntax error
-                               // @Todo: @Test this
-                lua.push_str(&args_s);
+                lua.push_str(&args.generate());
                 lua.push_str(")\nreturn ");
 
                 lua.push_str(&rhs.generate());
