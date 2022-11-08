@@ -65,6 +65,13 @@ impl<'file> Lhs<'file> {
             Lhs::Binop { op, .. } => op,
         }
     }
+
+    pub fn arg_count(&self) -> usize {
+        match self {
+            Lhs::Func { args, .. } => args.len(),
+            Lhs::Binop { .. } => 2,
+        }
+    }
 }
 
 impl<'file> Display for Lhs<'file> {

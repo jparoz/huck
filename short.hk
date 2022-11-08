@@ -10,3 +10,6 @@ id1 = \a -> a;
 id2 a = a;
 
 const a b = a;
+
+bar any 0 = 0;
+bar x y = x / y;

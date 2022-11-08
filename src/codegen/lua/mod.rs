@@ -1,7 +1,15 @@
 use crate::ast;
 use crate::scope::Scope;
 
+use std::sync::atomic::{self, AtomicU64};
+
 const HUCK_TABLE_NAME: &str = "Huck";
+
+static UNIQUE_COUNTER: AtomicU64 = AtomicU64::new(0);
+/// Generates a new and unique u64 each time it's called.
+fn unique() -> u64 {
+    UNIQUE_COUNTER.fetch_add(1, atomic::Ordering::Relaxed)
+}
 
 pub trait Generate {
     fn generate(&self) -> String;
@@ -40,9 +48,8 @@ impl<'file> Generate for ast::Definition<'file> {
         if self.len() == 1 {
             // No need for a switch
             let (lhs, expr) = &self[0];
-
             match lhs {
-                ast::Lhs::Func { name, args } => {
+                ast::Lhs::Func { args, .. } => {
                     if args.len() == 0 {
                         // should be a value
                         lua.push_str(&expr.generate());
@@ -60,11 +67,66 @@ impl<'file> Generate for ast::Definition<'file> {
         } else {
             // self.len() > 1
             // Need to switch on the assignment LHSs using if-thens
-            lua.push_str("(function()\n");
+            lua.push_str("function(");
+
+            let arg_count = self[0].0.arg_count();
+            let mut ids = Vec::with_capacity(arg_count);
+            for i in 0..arg_count {
+                let id = unique();
+                ids.push(id);
+                lua.push_str(&format!("_HUCK_{}", id));
+                if i < arg_count - 1 {
+                    lua.push_str(", ");
+                }
+            }
+
+            lua.push_str(")\n");
 
             for (lhs, expr) in self.iter() {
+                // @Fixme @Errors: this should be a compile error, not an assert
+                assert_eq!(arg_count, lhs.arg_count());
+
                 lua.push_str("if MATCHES"); // @XXX @Todo: actually generate Lua to do the match
-                lua.push_str("\nthen\nreturn ");
+                lua.push_str("\nthen\n");
+
+                match lhs {
+                    ast::Lhs::Func { name, args } => {
+                        for i in 0..args.len() {
+                            match &args[i] {
+                                ast::Pattern::Bind(s) => {
+                                    lua.push_str(&format!("local {} = _HUCK_{}\n", s, ids[i]));
+                                }
+                                ast::Pattern::List(v)
+                                | ast::Pattern::Destructure { args: v, .. } => {
+                                    for j in 0..v.len() {
+                                        // @Fixme: probably wrong, need to do something with v[j]
+                                        lua.push_str(&format!(
+                                            "local {} = _HUCK_{}[{}]\n",
+                                            v[j],
+                                            ids[i],
+                                            j + 1,
+                                        ));
+                                    }
+                                }
+                                ast::Pattern::Numeral(_) => (),
+                                ast::Pattern::String(_) => (),
+                                ast::Pattern::Binop { lhs, rhs, .. } => {
+                                    // @Fixme: probably wrong, need to do something with lhs/rhs
+                                    lua.push_str(
+                                        &format!("local {} = _HUCK_{}[1]\n", lhs, ids[i],),
+                                    );
+                                    lua.push_str(
+                                        &format!("local {} = _HUCK_{}[2]\n", rhs, ids[i],),
+                                    );
+                                }
+                                ast::Pattern::UnaryConstructor(_) => (),
+                            };
+                        }
+                    }
+                    ast::Lhs::Binop { a, op, b } => todo!(),
+                }
+
+                lua.push_str("return ");
                 lua.push_str(&expr.generate());
                 lua.push_str("\nend\n")
             }
@@ -74,7 +136,7 @@ impl<'file> Generate for ast::Definition<'file> {
                 &self[0].0.name()
             ));
 
-            lua.push_str("\nend)()");
+            lua.push_str("\nend");
         }
 
         lua
