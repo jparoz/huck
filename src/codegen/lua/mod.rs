@@ -119,8 +119,12 @@ impl<'file> Generate for ast::Definition<'file> {
                                 ast::Pattern::String(lit) => {
                                     conditions.push(format!("_HUCK_{} == {}", ids[i], lit));
                                 }
-                                ast::Pattern::Binop { lhs, rhs, .. } => {
-                                    todo!(); // @Todo: generate conditions for binop destructuring
+                                ast::Pattern::Binop { lhs, rhs, operator } => {
+                                    conditions.push(format!(
+                                        r#"getmetatable(_HUCK_{}).__variant == "{}""#,
+                                        ids[i], operator
+                                    ));
+                                    // @Todo: generate conditions for pattern matches on operands
 
                                     // @Fixme: probably wrong, need to do something with lhs/rhs
                                     bindings
@@ -130,7 +134,10 @@ impl<'file> Generate for ast::Definition<'file> {
                                 }
                                 ast::Pattern::UnaryConstructor(name) => {
                                     debug_assert!(matches!(name, ast::Name::Ident(_)));
-                                    conditions.push(format!(r#"_HUCK_{} == "{}""#, ids[i], name));
+                                    conditions.push(format!(
+                                        r#"getmetatable(_HUCK_{}).__variant == "{}""#,
+                                        ids[i], name
+                                    ));
                                 }
                             };
                         }
