@@ -59,17 +59,20 @@ impl<'file> Generate for ast::Definition<'file> {
             }
         } else {
             // self.len() > 1
-            // Need to switch on the assignment LHSs using an if-then-elseif-else
-            let (first_lhs, first_expr) = &self[0];
-            lua.push_str("(function()\nif ");
-            // @Todo: first_lhs in the if condition
-            lua.push_str(" then\n");
-            lua.push_str(&first_expr.generate());
+            // Need to switch on the assignment LHSs using if-thens
+            lua.push_str("(function()\n");
 
-            // @Todo: the rest of the Vec with elseifs
-            todo!();
+            for (lhs, expr) in self.iter() {
+                lua.push_str("if MATCHES"); // @XXX @Todo: actually generate Lua to do the match
+                lua.push_str("\nthen\nreturn ");
+                lua.push_str(&expr.generate());
+                lua.push_str("\nend\n")
+            }
 
-            // @Todo: the final element of the Vec (??? should be any unconditional match)
+            lua.push_str(&format!(
+                r#"error("Unmatched pattern in function `{}`")"#,
+                &self[0].0.name()
+            ));
 
             lua.push_str("\nend)()");
         }
@@ -124,32 +127,6 @@ impl Generate for ast::Name {
         }
     }
 }
-
-// @Todo @DeleteMe
-// impl<'file> Generate for ast::Assignment<'file> {
-//     fn generate(&self) -> String {
-//         let mut lua = String::new();
-
-//         let (lhs, expr) = self;
-
-//         match lhs {
-//             ast::Lhs::Func { name, args } if args.is_empty() => {
-//                 // It's a value
-//                 lua.push_str(&expr.generate());
-//             }
-//             ast::Lhs::Func { name, args } => {
-//                 // It's a function
-//                 todo!()
-//             }
-//             ast::Lhs::Binop { a, op, b } => {
-//                 // It's a function
-//                 todo!()
-//             }
-//         }
-
-//         lua
-//     }
-// }
 
 impl<'file> Generate for ast::Expr<'file> {
     fn generate(&self) -> String {

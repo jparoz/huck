@@ -3,8 +3,8 @@
 (*             in let a = "Hello" *)
 (*                 in a; *)
 
-(* not True = False; *)
-(* not False = True; *)
+not True = False;
+not False = True;
 
 id1 = \a -> a;
 id2 a = a;
