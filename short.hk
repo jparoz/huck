@@ -13,3 +13,6 @@ const a b = a;
 
 bar any 0 = 0;
 bar x y = x / y;
+
+baz "hello" = "goodbye";
+baz s = s ++ ".";

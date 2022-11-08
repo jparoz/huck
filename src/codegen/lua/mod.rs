@@ -86,21 +86,26 @@ impl<'file> Generate for ast::Definition<'file> {
                 // @Fixme @Errors: this should be a compile error, not an assert
                 assert_eq!(arg_count, lhs.arg_count());
 
-                lua.push_str("if MATCHES"); // @XXX @Todo: actually generate Lua to do the match
-                lua.push_str("\nthen\n");
+                // lua.push_str("if MATCHES"); // @XXX @Todo: actually generate Lua to do the match
+                // lua.push_str("\nthen\n");
+
+                let mut conditions = Vec::new();
+                let mut bindings = Vec::new();
 
                 match lhs {
-                    ast::Lhs::Func { name, args } => {
+                    ast::Lhs::Func { args, .. } => {
                         for i in 0..args.len() {
                             match &args[i] {
                                 ast::Pattern::Bind(s) => {
-                                    lua.push_str(&format!("local {} = _HUCK_{}\n", s, ids[i]));
+                                    bindings.push(format!("local {} = _HUCK_{}\n", s, ids[i]));
                                 }
                                 ast::Pattern::List(v)
                                 | ast::Pattern::Destructure { args: v, .. } => {
+                                    todo!(); // @Todo: generate conditions for lists and
+                                             // destructuring separately
                                     for j in 0..v.len() {
                                         // @Fixme: probably wrong, need to do something with v[j]
-                                        lua.push_str(&format!(
+                                        bindings.push(format!(
                                             "local {} = _HUCK_{}[{}]\n",
                                             v[j],
                                             ids[i],
@@ -108,22 +113,46 @@ impl<'file> Generate for ast::Definition<'file> {
                                         ));
                                     }
                                 }
-                                ast::Pattern::Numeral(_) => (),
-                                ast::Pattern::String(_) => (),
-                                ast::Pattern::Binop { lhs, rhs, .. } => {
-                                    // @Fixme: probably wrong, need to do something with lhs/rhs
-                                    lua.push_str(
-                                        &format!("local {} = _HUCK_{}[1]\n", lhs, ids[i],),
-                                    );
-                                    lua.push_str(
-                                        &format!("local {} = _HUCK_{}[2]\n", rhs, ids[i],),
-                                    );
+                                ast::Pattern::Numeral(lit) => {
+                                    conditions.push(format!("_HUCK_{} == {}", ids[i], lit));
                                 }
-                                ast::Pattern::UnaryConstructor(_) => (),
+                                ast::Pattern::String(lit) => {
+                                    conditions.push(format!("_HUCK_{} == {}", ids[i], lit));
+                                }
+                                ast::Pattern::Binop { lhs, rhs, .. } => {
+                                    todo!(); // @Todo: generate conditions for binop destructuring
+
+                                    // @Fixme: probably wrong, need to do something with lhs/rhs
+                                    bindings
+                                        .push(format!("local {} = _HUCK_{}[1]\n", lhs, ids[i],));
+                                    bindings
+                                        .push(format!("local {} = _HUCK_{}[2]\n", rhs, ids[i],));
+                                }
+                                ast::Pattern::UnaryConstructor(name) => {
+                                    debug_assert!(matches!(name, ast::Name::Ident(_)));
+                                    conditions.push(format!(r#"_HUCK_{} == "{}""#, ids[i], name));
+                                }
                             };
                         }
                     }
                     ast::Lhs::Binop { a, op, b } => todo!(),
+                }
+
+                if conditions.is_empty() {
+                    lua.push_str("do\n");
+                } else {
+                    lua.push_str("if ");
+                    for i in 0..conditions.len() {
+                        lua.push_str(&format!("({})", conditions[i]));
+                        if i < conditions.len() - 1 {
+                            lua.push_str("\nand ");
+                        }
+                    }
+                    lua.push_str(" then\n")
+                }
+
+                for b in bindings {
+                    lua.push_str(&b);
                 }
 
                 lua.push_str("return ");
