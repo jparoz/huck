@@ -33,16 +33,64 @@ impl<'file> Generate for ast::Definition<'file> {
     /// because in the case of multiple definitions,
     /// we have to generate a Lua 'switch' statement.
     fn generate(&self) -> String {
+        debug_assert!(self.len() > 0);
+
         let mut lua = String::new();
 
-        // @Todo @Fixme: this should look at lhs, it can't not.
         if self.len() == 1 {
             // No need for a switch
-            let (_lhs, expr) = &self[0];
-            lua.push_str(&expr.generate());
+            let (lhs, expr) = &self[0];
+
+            match lhs {
+                ast::Lhs::Func { name, args } => {
+                    if args.len() == 0 {
+                        // should be a value
+                        lua.push_str(&expr.generate());
+                    } else {
+                        // should be a function
+                        lua.push_str("function(");
+                        lua.push_str(
+                            &args
+                                .iter()
+                                .map(|pat| match pat {
+                                    // @Todo: DRY
+                                    ast::Pattern::Bind(var) => var.to_string(),
+                                    ast::Pattern::List(_) => todo!(),
+                                    ast::Pattern::Numeral(_) => todo!(),
+                                    ast::Pattern::String(_) => todo!(),
+                                    ast::Pattern::Binop { operator, lhs, rhs } => todo!(),
+                                    ast::Pattern::UnaryConstructor(_) => todo!(),
+                                    ast::Pattern::Destructure { constructor, args } => todo!(),
+                                })
+                                .reduce(|mut a, b| {
+                                    a.reserve(b.len() + 2);
+                                    a.push_str(", ");
+                                    a.push_str(&b);
+                                    a
+                                })
+                                .unwrap(), // Safe unwrap: we checked args.len() > 0 above
+                        );
+                        lua.push_str(")\nreturn ");
+                        lua.push_str(&expr.generate());
+                        lua.push_str("\nend");
+                    }
+                }
+                ast::Lhs::Binop { a, op, b } => todo!(),
+            }
         } else {
             // Need to switch on the assignment LHSs using an if-then-elseif-else
+            let (first_lhs, first_expr) = &self[0];
+            lua.push_str("(function()\nif ");
+            // @Todo: first_lhs in the if condition
+            lua.push_str(" then\n");
+            lua.push_str(&first_expr.generate());
+
+            // @Todo: the rest of the Vec with elseifs
             todo!();
+
+            // @Todo: the final element of the Vec (??? should be any unconditional match)
+
+            lua.push_str("\nend)()");
         }
 
         lua
@@ -160,7 +208,7 @@ impl<'file> Generate for ast::Expr<'file> {
                 lua.push_str(&in_expr.generate());
                 lua.push('\n');
 
-                lua.push_str("end)()");
+                lua.push_str("\nend)()");
 
                 lua
             }
@@ -197,7 +245,7 @@ impl<'file> Generate for ast::Expr<'file> {
 
                 lua.push_str(&rhs.generate());
 
-                lua.push_str(" end");
+                lua.push_str("\nend");
 
                 lua
             }

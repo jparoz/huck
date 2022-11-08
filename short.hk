@@ -1,4 +1,12 @@
-foo = let a = 123
-        in let b = a + 456
-            in let a = "Hello"
-                in a;
+(* foo = let a = 123 *)
+(*         in let b = a + 456 *)
+(*             in let a = "Hello" *)
+(*                 in a; *)
+
+(* not True = False; *)
+(* not False = True; *)
+
+id1 = \a -> a;
+id2 a = a;
+
+const a b = a;
