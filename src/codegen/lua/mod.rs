@@ -86,63 +86,68 @@ impl<'file> Generate for ast::Definition<'file> {
                 // @Fixme @Errors: this should be a compile error, not an assert
                 assert_eq!(arg_count, lhs.arg_count());
 
-                // lua.push_str("if MATCHES"); // @XXX @Todo: actually generate Lua to do the match
-                // lua.push_str("\nthen\n");
+                let args = match lhs {
+                    ast::Lhs::Func { args, .. } => args.clone(),
+                    ast::Lhs::Binop { a, b, .. } => vec![a.clone(), b.clone()],
+                };
 
                 let mut conditions = Vec::new();
                 let mut bindings = Vec::new();
 
-                match lhs {
-                    ast::Lhs::Func { args, .. } => {
-                        for i in 0..args.len() {
-                            match &args[i] {
-                                ast::Pattern::Bind(s) => {
-                                    bindings.push(format!("local {} = _HUCK_{}\n", s, ids[i]));
-                                }
-                                ast::Pattern::List(v)
-                                | ast::Pattern::Destructure { args: v, .. } => {
-                                    todo!(); // @Todo: generate conditions for lists and
-                                             // destructuring separately
-                                    for j in 0..v.len() {
-                                        // @Fixme: probably wrong, need to do something with v[j]
-                                        bindings.push(format!(
-                                            "local {} = _HUCK_{}[{}]\n",
-                                            v[j],
-                                            ids[i],
-                                            j + 1,
-                                        ));
-                                    }
-                                }
-                                ast::Pattern::Numeral(lit) => {
-                                    conditions.push(format!("_HUCK_{} == {}", ids[i], lit));
-                                }
-                                ast::Pattern::String(lit) => {
-                                    conditions.push(format!("_HUCK_{} == {}", ids[i], lit));
-                                }
-                                ast::Pattern::Binop { lhs, rhs, operator } => {
-                                    conditions.push(format!(
-                                        r#"getmetatable(_HUCK_{}).__variant == "{}""#,
-                                        ids[i], operator
-                                    ));
-                                    // @Todo: generate conditions for pattern matches on operands
-
-                                    // @Fixme: probably wrong, need to do something with lhs/rhs
-                                    bindings
-                                        .push(format!("local {} = _HUCK_{}[1]\n", lhs, ids[i],));
-                                    bindings
-                                        .push(format!("local {} = _HUCK_{}[2]\n", rhs, ids[i],));
-                                }
-                                ast::Pattern::UnaryConstructor(name) => {
-                                    debug_assert!(matches!(name, ast::Name::Ident(_)));
-                                    conditions.push(format!(
-                                        r#"getmetatable(_HUCK_{}).__variant == "{}""#,
-                                        ids[i], name
-                                    ));
-                                }
-                            };
+                for i in 0..arg_count {
+                    match &args[i] {
+                        ast::Pattern::Bind(s) => {
+                            bindings.push(format!("local {} = _HUCK_{}\n", s, ids[i]));
                         }
-                    }
-                    ast::Lhs::Binop { a, op, b } => todo!(),
+                        ast::Pattern::List(v) => {
+                            todo!();
+                            for j in 0..v.len() {
+                                // @Fixme: probably wrong, need to do something with v[j]
+                                bindings.push(format!(
+                                    "local {} = _HUCK_{}[{}]\n",
+                                    v[j],
+                                    ids[i],
+                                    j + 1,
+                                ));
+                            }
+                        }
+                        ast::Pattern::Destructure { args: v, .. } => {
+                            todo!();
+                            for j in 0..v.len() {
+                                // @Fixme: probably wrong, need to do something with v[j]
+                                bindings.push(format!(
+                                    "local {} = _HUCK_{}[{}]\n",
+                                    v[j],
+                                    ids[i],
+                                    j + 1,
+                                ));
+                            }
+                        }
+                        ast::Pattern::Numeral(lit) => {
+                            conditions.push(format!("_HUCK_{} == {}", ids[i], lit));
+                        }
+                        ast::Pattern::String(lit) => {
+                            conditions.push(format!("_HUCK_{} == {}", ids[i], lit));
+                        }
+                        ast::Pattern::Binop { lhs, rhs, operator } => {
+                            conditions.push(format!(
+                                r#"getmetatable(_HUCK_{}).__variant == "{}""#,
+                                ids[i], operator
+                            ));
+                            // @Todo: generate conditions for pattern matches on operands
+
+                            // @Fixme: probably wrong, need to do something with lhs/rhs
+                            bindings.push(format!("local {} = _HUCK_{}[1]\n", lhs, ids[i],));
+                            bindings.push(format!("local {} = _HUCK_{}[2]\n", rhs, ids[i],));
+                        }
+                        ast::Pattern::UnaryConstructor(name) => {
+                            debug_assert!(matches!(name, ast::Name::Ident(_)));
+                            conditions.push(format!(
+                                r#"getmetatable(_HUCK_{}).__variant == "{}""#,
+                                ids[i], name
+                            ));
+                        }
+                    };
                 }
 
                 if conditions.is_empty() {
