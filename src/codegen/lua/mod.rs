@@ -55,14 +55,16 @@ impl<'file> Generate for ast::Definition<'file> {
                         lua.push_str(&expr.generate());
                     } else {
                         // should be a function
-                        lua.push_str("function(");
-                        lua.push_str(&args.generate()); // @Currying
-                        lua.push_str(")\nreturn ");
-                        lua.push_str(&expr.generate());
-                        lua.push_str("\nend");
+                        lua.push_str(&generate_curried_function(args, &expr));
                     }
                 }
-                ast::Lhs::Binop { a, op, b } => todo!(),
+                ast::Lhs::Binop { a, op, b } => {
+                    // It's a binop, so we should generate a function
+                    lua.push_str(&generate_curried_function(
+                        &vec![a.clone(), b.clone()],
+                        &expr,
+                    ));
+                }
             }
         } else {
             // self.len() > 1
@@ -136,7 +138,7 @@ impl<'file> Generate for ast::Definition<'file> {
     }
 }
 
-fn generate_pattern_match<'file, 'a>(
+fn generate_pattern_match<'file>(
     pat: &ast::Pattern<'file>,
     lua_arg_name: &str,
 ) -> (Vec<String>, Vec<String>) {
@@ -216,6 +218,18 @@ fn generate_pattern_match<'file, 'a>(
     (conditions, bindings)
 }
 
+fn generate_curried_function<'file>(args: &Vec<ast::Pattern<'file>>, expr: &ast::Expr) -> String {
+    let mut lua = String::new();
+
+    lua.push_str("function(");
+    lua.push_str(&args.generate()); // @Currying
+    lua.push_str(")\nreturn ");
+    lua.push_str(&expr.generate());
+    lua.push_str("\nend");
+
+    lua
+}
+
 impl<'file> Generate for Vec<ast::Pattern<'file>> {
     /// Generates a Lua argument list.
     fn generate(&self) -> String {
@@ -247,6 +261,7 @@ impl Generate for ast::Name {
     /// Generates a Lua-safe name for the Huck Name.
     fn generate(&self) -> String {
         match self {
+            // @Todo: remap Lua keywords
             ast::Name::Ident(s) => s.clone(),
             ast::Name::Binop(s) => {
                 // @Todo: Convert the binop into some kind of Lua identifier.

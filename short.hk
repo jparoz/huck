@@ -6,13 +6,13 @@
 (* not True = False; *)
 (* not False = True; *)
 
-True && True = True;
-_ && _ = False;
+(* True && True = True; *)
+(* _ && _ = False; *)
 
 (* id1 = \a -> a; *)
 (* id2 a = a; *)
 
-(* const a b = a; *)
+const a b = a;
 
 (* bar any 0 = 0; *)
 (* bar x y = x / y; *)
