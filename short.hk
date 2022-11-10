@@ -9,8 +9,8 @@
 (* True && True = True; *)
 (* _ && _ = False; *)
 
-(* id1 = \a -> a; *)
-(* id2 a = a; *)
+id1 = \a -> a;
+id2 a = a;
 
 const a b = a;
 

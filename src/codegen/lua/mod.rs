@@ -273,32 +273,32 @@ fn generate_curried_function<'file>(args: &[ast::Pattern<'file>], expr: &ast::Ex
     lua
 }
 
-impl<'file> Generate for [ast::Pattern<'file>] {
-    /// Generates a Lua argument list.
-    fn generate(&self) -> String {
-        debug_assert!(self.len() > 0);
+// impl<'file> Generate for [ast::Pattern<'file>] {
+//     /// Generates a Lua argument list.
+//     fn generate(&self) -> String {
+//         debug_assert!(self.len() > 0);
 
-        let mut lua = String::new();
+//         let mut lua = String::new();
 
-        for i in 0..self.len() {
-            let arg = match &self[i] {
-                ast::Pattern::Bind(var) => var.to_string(),
-                ast::Pattern::List(_) => todo!(),
-                ast::Pattern::Numeral(_) => todo!(),
-                ast::Pattern::String(_) => todo!(),
-                ast::Pattern::Binop { operator, lhs, rhs } => todo!(),
-                ast::Pattern::UnaryConstructor(name) => todo!(),
-                ast::Pattern::Destructure { constructor, args } => todo!(),
-            };
-            lua.push_str(&arg);
-            if i < self.len() - 1 {
-                lua.push_str(", "); // @Currying
-            }
-        }
+//         for i in 0..self.len() {
+//             let arg = match &self[i] {
+//                 ast::Pattern::Bind(var) => var.to_string(),
+//                 ast::Pattern::List(_) => todo!(),
+//                 ast::Pattern::Numeral(_) => todo!(),
+//                 ast::Pattern::String(_) => todo!(),
+//                 ast::Pattern::Binop { operator, lhs, rhs } => todo!(),
+//                 ast::Pattern::UnaryConstructor(name) => todo!(),
+//                 ast::Pattern::Destructure { constructor, args } => todo!(),
+//             };
+//             lua.push_str(&arg);
+//             if i < self.len() - 1 {
+//                 lua.push_str(", "); // @Currying
+//             }
+//         }
 
-        lua
-    }
-}
+//         lua
+//     }
+// }
 
 impl Generate for ast::Name {
     /// Generates a Lua-safe name for the Huck Name.
@@ -392,18 +392,7 @@ impl<'file> Generate for ast::Expr<'file> {
             }
             ast::Expr::Lambda { args, rhs } => {
                 debug_assert!(args.len() > 0);
-
-                let mut lua = String::new();
-
-                lua.push_str("function(");
-                lua.push_str(&args.generate()); // @Currying
-                lua.push_str(")\nreturn ");
-
-                lua.push_str(&rhs.generate());
-
-                lua.push_str("\nend");
-
-                lua
+                generate_curried_function(args, rhs)
             }
         }
     }
