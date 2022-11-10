@@ -58,7 +58,7 @@ impl<'file> Generate for ast::Definition<'file> {
                         lua.push_str(&generate_curried_function(args, &expr));
                     }
                 }
-                ast::Lhs::Binop { a, op, b } => {
+                ast::Lhs::Binop { a, b, .. } => {
                     // It's a binop, so we should generate a function
                     lua.push_str(&generate_curried_function(
                         &vec![a.clone(), b.clone()],
