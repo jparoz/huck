@@ -3,7 +3,7 @@ use crate::scope::Scope;
 
 use std::sync::atomic::{self, AtomicU64};
 
-const HUCK_TABLE_NAME: &str = "Huck";
+const HUCK_PREFIX: &str = "_HUCK";
 
 /// Generates a new and unique u64 each time it's called.
 fn unique() -> u64 {
@@ -76,7 +76,7 @@ impl<'file> Generate for ast::Definition<'file> {
             for i in 0..arg_count {
                 let id = unique();
                 ids.push(id);
-                lua.push_str(&format!("_HUCK_{}", id));
+                lua.push_str(&format!("{}_{}", HUCK_PREFIX, id));
                 if i < arg_count - 1 {
                     lua.push_str(", "); // @Currying
                 }
@@ -97,7 +97,7 @@ impl<'file> Generate for ast::Definition<'file> {
                 let mut bindings = Vec::new();
 
                 for i in 0..arg_count {
-                    let lua_arg_name = format!("_HUCK_{}", ids[i]);
+                    let lua_arg_name = format!("{}_{}", HUCK_PREFIX, ids[i]);
                     generate_pattern_match(&args[i], &lua_arg_name, &mut conditions, &mut bindings);
                 }
 
@@ -301,7 +301,8 @@ impl<'file> Generate for ast::Expr<'file> {
                 // if available
 
                 // Op
-                lua.push_str(&format!("{}[\"{}\"]", HUCK_TABLE_NAME, operator));
+                // @Fixme: this should refer to a local, not some weird global table
+                lua.push_str(&format!("{}[\"{}\"]", HUCK_PREFIX, operator));
 
                 // Argument (function call syntax)
                 // @Note: this assumes functions are curried (? maybe not if tuples desugar to
