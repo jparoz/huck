@@ -49,13 +49,7 @@ impl<'file> Generate for ast::Definition<'file> {
             // No need for a switch
             let (lhs, expr) = &self[0];
 
-            // @Todo: turn this into a function and @DRY
-            let args = match lhs {
-                ast::Lhs::Func { args, .. } => args.clone(),
-                ast::Lhs::Binop { a, b, .. } => vec![a.clone(), b.clone()],
-            };
-
-            lua.push_str(&generate_curried_function(&args, expr));
+            lua.push_str(&generate_curried_function(&lhs.args(), expr));
         } else {
             // self.len() > 1
             // Need to switch on the assignment LHSs using if-thens
@@ -78,12 +72,7 @@ impl<'file> Generate for ast::Definition<'file> {
                 // @Fixme @Errors: this should be a compile error, not an assert
                 assert_eq!(arg_count, lhs.arg_count());
 
-                // @DRY
-                let args = match lhs {
-                    ast::Lhs::Func { args, .. } => args.clone(),
-                    ast::Lhs::Binop { a, b, .. } => vec![a.clone(), b.clone()],
-                };
-
+                let args = lhs.args();
                 let mut conditions = Vec::new();
                 let mut bindings = Vec::new();
 

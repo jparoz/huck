@@ -72,6 +72,13 @@ impl<'file> Lhs<'file> {
             Lhs::Binop { .. } => 2,
         }
     }
+
+    pub fn args(&self) -> Vec<Pattern<'file>> {
+        match self {
+            Lhs::Func { args, .. } => args.clone(),
+            Lhs::Binop { a, b, .. } => vec![a.clone(), b.clone()],
+        }
+    }
 }
 
 impl<'file> Display for Lhs<'file> {
