@@ -3,8 +3,8 @@
 (*             in let a = "Hello" *)
 (*                 in a; *)
 
-not True = False;
-not False = True;
+(* not True = False; *)
+(* not False = True; *)
 
 True && True = True;
 _ && _ = False;
@@ -12,10 +12,17 @@ _ && _ = False;
 (* id1 = \a -> a; *)
 (* id2 a = a; *)
 
-const a b = a;
+(* const a b = a; *)
 
-bar any 0 = 0;
-bar x y = x / y;
+(* bar any 0 = 0; *)
+(* bar x y = x / y; *)
 
-baz "hello" = "goodbye";
-baz s = s ++ ".";
+(* baz "hello" = "goodbye"; *)
+(* baz s = s ++ "."; *)
+
+(* foo (Just 1) = 1; *)
+(* foo (Just x) = x + 2; *)
+(* foo Nothing = 123; *)
+
+(* addIfOne [1, x] = 1 + x; *)
+(* addIfOne [_, x] = x; *)

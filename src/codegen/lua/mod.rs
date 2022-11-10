@@ -95,59 +95,11 @@ impl<'file> Generate for ast::Definition<'file> {
                 let mut bindings = Vec::new();
 
                 for i in 0..arg_count {
-                    match &args[i] {
-                        ast::Pattern::Bind(s) => {
-                            bindings.push(format!("local {} = _HUCK_{}\n", s, ids[i]));
-                        }
-                        ast::Pattern::List(v) => {
-                            todo!();
-                            for j in 0..v.len() {
-                                // @Fixme: probably wrong, need to do something with v[j]
-                                bindings.push(format!(
-                                    "local {} = _HUCK_{}[{}]\n",
-                                    v[j],
-                                    ids[i],
-                                    j + 1,
-                                ));
-                            }
-                        }
-                        ast::Pattern::Destructure { args: v, .. } => {
-                            todo!();
-                            for j in 0..v.len() {
-                                // @Fixme: probably wrong, need to do something with v[j]
-                                bindings.push(format!(
-                                    "local {} = _HUCK_{}[{}]\n",
-                                    v[j],
-                                    ids[i],
-                                    j + 1,
-                                ));
-                            }
-                        }
-                        ast::Pattern::Numeral(lit) => {
-                            conditions.push(format!("_HUCK_{} == {}", ids[i], lit));
-                        }
-                        ast::Pattern::String(lit) => {
-                            conditions.push(format!("_HUCK_{} == {}", ids[i], lit));
-                        }
-                        ast::Pattern::Binop { lhs, rhs, operator } => {
-                            conditions.push(format!(
-                                r#"getmetatable(_HUCK_{}).__variant == "{}""#,
-                                ids[i], operator
-                            ));
-                            // @Todo: generate conditions for pattern matches on operands
-
-                            // @Fixme: probably wrong, need to do something with lhs/rhs
-                            bindings.push(format!("local {} = _HUCK_{}[1]\n", lhs, ids[i],));
-                            bindings.push(format!("local {} = _HUCK_{}[2]\n", rhs, ids[i],));
-                        }
-                        ast::Pattern::UnaryConstructor(name) => {
-                            debug_assert!(matches!(name, ast::Name::Ident(_)));
-                            conditions.push(format!(
-                                r#"getmetatable(_HUCK_{}).__variant == "{}""#,
-                                ids[i], name
-                            ));
-                        }
-                    };
+                    let lua_arg_name = format!("_HUCK_{}", ids[i]);
+                    let (mut new_conditions, mut new_bindings) =
+                        generate_pattern_match(&args[i], &lua_arg_name);
+                    conditions.append(&mut new_conditions);
+                    bindings.append(&mut new_bindings);
                 }
 
                 if conditions.is_empty() {
@@ -182,6 +134,86 @@ impl<'file> Generate for ast::Definition<'file> {
 
         lua
     }
+}
+
+fn generate_pattern_match<'file, 'a>(
+    pat: &ast::Pattern<'file>,
+    lua_arg_name: &str,
+) -> (Vec<String>, Vec<String>) {
+    // This function takes a Lua argument name,
+    // e.g. _HUCK_0, _HUCK_12[3], _HUCK_3[13][334] or whatever.
+    // This is to allow nested pattern matches.
+    let mut conditions = Vec::new();
+    let mut bindings = Vec::new();
+    match pat {
+        ast::Pattern::Bind(s) => {
+            bindings.push(format!("local {} = {}\n", s, lua_arg_name));
+        }
+        ast::Pattern::List(list) => {
+            // Check that the list is the correct length
+            conditions.push(format!("#{} == {}", lua_arg_name, list.len()));
+
+            // Check that each pattern matches
+            for j in 0..list.len() {
+                let new_lua_arg_name = format!("{}[{}]", lua_arg_name, j + 1);
+                let (mut new_conditions, mut new_bindings) =
+                    generate_pattern_match(&list[j], &new_lua_arg_name);
+                conditions.append(&mut new_conditions);
+                bindings.append(&mut new_bindings);
+            }
+        }
+        ast::Pattern::Numeral(lit) => {
+            conditions.push(format!("{} == {}", lua_arg_name, lit));
+        }
+        ast::Pattern::String(lit) => {
+            conditions.push(format!("{} == {}", lua_arg_name, lit));
+        }
+        ast::Pattern::Destructure { constructor, args } => {
+            // Check that it's the right variant
+            conditions.push(format!(
+                r#"getmetatable({}).__variant == "{}""#,
+                lua_arg_name, constructor
+            ));
+
+            // Check that each pattern matches
+            for j in 0..args.len() {
+                let new_lua_arg_name = format!("{}[{}]", lua_arg_name, j + 1);
+                let (mut new_conditions, mut new_bindings) =
+                    generate_pattern_match(&args[j], &new_lua_arg_name);
+                conditions.append(&mut new_conditions);
+                bindings.append(&mut new_bindings);
+            }
+        }
+        ast::Pattern::Binop { lhs, rhs, operator } => {
+            // Check that it's the right variant
+            conditions.push(format!(
+                r#"getmetatable({}).__variant == "{}""#,
+                lua_arg_name, operator
+            ));
+
+            // Check that the LHS pattern matches
+            let (mut lhs_conditions, mut lhs_bindings) =
+                generate_pattern_match(&lhs, &format!("{}[{}]", lua_arg_name, 1));
+            conditions.append(&mut lhs_conditions);
+            bindings.append(&mut lhs_bindings);
+
+            // Check that the RHS pattern matches
+            let (mut rhs_conditions, mut rhs_bindings) =
+                generate_pattern_match(&rhs, &format!("{}[{}]", lua_arg_name, 2));
+            conditions.append(&mut rhs_conditions);
+            bindings.append(&mut rhs_bindings);
+        }
+        ast::Pattern::UnaryConstructor(name) => {
+            debug_assert!(matches!(name, ast::Name::Ident(_)));
+            // Check that it's the right variant
+            conditions.push(format!(
+                r#"getmetatable({}).__variant == "{}""#,
+                lua_arg_name, name
+            ));
+        }
+    };
+
+    (conditions, bindings)
 }
 
 impl<'file> Generate for Vec<ast::Pattern<'file>> {
