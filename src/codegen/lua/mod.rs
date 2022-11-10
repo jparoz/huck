@@ -5,9 +5,9 @@ use std::sync::atomic::{self, AtomicU64};
 
 const HUCK_TABLE_NAME: &str = "Huck";
 
-static UNIQUE_COUNTER: AtomicU64 = AtomicU64::new(0);
 /// Generates a new and unique u64 each time it's called.
 fn unique() -> u64 {
+    static UNIQUE_COUNTER: AtomicU64 = AtomicU64::new(0);
     UNIQUE_COUNTER.fetch_add(1, atomic::Ordering::Relaxed)
 }
 
