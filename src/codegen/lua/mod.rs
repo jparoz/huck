@@ -48,24 +48,14 @@ impl<'file> Generate for ast::Definition<'file> {
         if self.len() == 1 {
             // No need for a switch
             let (lhs, expr) = &self[0];
-            match lhs {
-                ast::Lhs::Func { args, .. } => {
-                    if args.len() == 0 {
-                        // should be a value
-                        lua.push_str(&expr.generate());
-                    } else {
-                        // should be a function
-                        lua.push_str(&generate_curried_function(args, &expr));
-                    }
-                }
-                ast::Lhs::Binop { a, b, .. } => {
-                    // It's a binop, so we should generate a function
-                    lua.push_str(&generate_curried_function(
-                        &vec![a.clone(), b.clone()],
-                        &expr,
-                    ));
-                }
-            }
+
+            // @Todo: turn this into a function and @DRY
+            let args = match lhs {
+                ast::Lhs::Func { args, .. } => args.clone(),
+                ast::Lhs::Binop { a, b, .. } => vec![a.clone(), b.clone()],
+            };
+
+            lua.push_str(&generate_curried_function(&args, expr));
         } else {
             // self.len() > 1
             // Need to switch on the assignment LHSs using if-thens
@@ -88,6 +78,7 @@ impl<'file> Generate for ast::Definition<'file> {
                 // @Fixme @Errors: this should be a compile error, not an assert
                 assert_eq!(arg_count, lhs.arg_count());
 
+                // @DRY
                 let args = match lhs {
                     ast::Lhs::Func { args, .. } => args.clone(),
                     ast::Lhs::Binop { a, b, .. } => vec![a.clone(), b.clone()],
@@ -220,9 +211,10 @@ fn generate_curried_function<'file>(args: &[ast::Pattern<'file>], expr: &ast::Ex
     let arg_count = args.len();
     let mut ids = Vec::with_capacity(arg_count);
 
-    let mut conditions = Vec::new();
-    let mut bindings = Vec::new();
+    let mut conditions: Vec<String> = Vec::new();
+    let mut bindings: Vec<String> = Vec::new();
 
+    // Start the functions
     for i in 0..arg_count {
         let id = unique();
         ids.push(id);
@@ -230,9 +222,6 @@ fn generate_curried_function<'file>(args: &[ast::Pattern<'file>], expr: &ast::Ex
         lua.push_str("function(");
         lua.push_str(&format!("{}_{}", HUCK_PREFIX, id));
         lua.push_str(")\n");
-        if i < arg_count - 1 {
-            lua.push_str("return ");
-        }
 
         generate_pattern_match(
             &args[i],
@@ -240,11 +229,28 @@ fn generate_curried_function<'file>(args: &[ast::Pattern<'file>], expr: &ast::Ex
             &mut conditions,
             &mut bindings,
         );
+
+        for b in bindings.drain(..) {
+            lua.push_str(&b);
+        }
+
+        if i < arg_count - 1 {
+            lua.push_str("return ");
+        }
     }
+
+    // Return the expr
 
     // @DRY
     if conditions.is_empty() {
-        lua.push_str("do\n");
+        // If we have no Huck arguments,
+        // then we should be a Lua value, not a Lua function;
+        // so we don't return, we just are.
+        if arg_count > 0 {
+            lua.push_str("return ");
+        }
+
+        lua.push_str(&expr.generate());
     } else {
         lua.push_str("if ");
         for i in 0..conditions.len() {
@@ -255,17 +261,13 @@ fn generate_curried_function<'file>(args: &[ast::Pattern<'file>], expr: &ast::Ex
                 lua.push_str("\nand ");
             }
         }
-        lua.push_str(" then\n")
+        lua.push_str(" then\n");
+        lua.push_str("return ");
+        lua.push_str(&expr.generate());
+        lua.push_str("\nend");
     }
 
-    for b in bindings {
-        lua.push_str(&b);
-    }
-
-    lua.push_str("return ");
-    lua.push_str(&expr.generate());
-    lua.push_str("\nend");
-
+    // End the functions
     for _ in 0..arg_count {
         lua.push_str("\nend")
     }
