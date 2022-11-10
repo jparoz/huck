@@ -101,6 +101,7 @@ impl<'file> Generate for ast::Definition<'file> {
                     generate_pattern_match(&args[i], &lua_arg_name, &mut conditions, &mut bindings);
                 }
 
+                // @DRY
                 if conditions.is_empty() {
                     lua.push_str("do\n");
                 } else {
@@ -122,7 +123,7 @@ impl<'file> Generate for ast::Definition<'file> {
 
                 lua.push_str("return ");
                 lua.push_str(&expr.generate());
-                lua.push_str("\nend\n")
+                lua.push_str("\nend\n");
             }
 
             lua.push_str(&format!(
@@ -216,11 +217,58 @@ fn generate_pattern_match<'file>(
 fn generate_curried_function<'file>(args: &[ast::Pattern<'file>], expr: &ast::Expr) -> String {
     let mut lua = String::new();
 
-    lua.push_str("function(");
-    lua.push_str(&args.generate()); // @Currying
-    lua.push_str(")\nreturn ");
+    let arg_count = args.len();
+    let mut ids = Vec::with_capacity(arg_count);
+
+    let mut conditions = Vec::new();
+    let mut bindings = Vec::new();
+
+    for i in 0..arg_count {
+        let id = unique();
+        ids.push(id);
+
+        lua.push_str("function(");
+        lua.push_str(&format!("{}_{}", HUCK_PREFIX, id));
+        lua.push_str(")\n");
+        if i < arg_count - 1 {
+            lua.push_str("return ");
+        }
+
+        generate_pattern_match(
+            &args[i],
+            &format!("{}_{}", HUCK_PREFIX, id),
+            &mut conditions,
+            &mut bindings,
+        );
+    }
+
+    // @DRY
+    if conditions.is_empty() {
+        lua.push_str("do\n");
+    } else {
+        lua.push_str("if ");
+        for i in 0..conditions.len() {
+            lua.push('(');
+            lua.push_str(&conditions[i]);
+            lua.push(')');
+            if i < conditions.len() - 1 {
+                lua.push_str("\nand ");
+            }
+        }
+        lua.push_str(" then\n")
+    }
+
+    for b in bindings {
+        lua.push_str(&b);
+    }
+
+    lua.push_str("return ");
     lua.push_str(&expr.generate());
     lua.push_str("\nend");
+
+    for _ in 0..arg_count {
+        lua.push_str("\nend")
+    }
 
     lua
 }
@@ -337,7 +385,6 @@ impl<'file> Generate for ast::Expr<'file> {
                 // Generate the in_expr
                 lua.push_str("return ");
                 lua.push_str(&in_expr.generate());
-                lua.push('\n');
 
                 lua.push_str("\nend)()");
 
