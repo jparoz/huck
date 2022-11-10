@@ -56,7 +56,7 @@ impl<'file> Generate for ast::Definition<'file> {
                     } else {
                         // should be a function
                         lua.push_str("function(");
-                        lua.push_str(&args.generate());
+                        lua.push_str(&args.generate()); // @Currying
                         lua.push_str(")\nreturn ");
                         lua.push_str(&expr.generate());
                         lua.push_str("\nend");
@@ -76,7 +76,7 @@ impl<'file> Generate for ast::Definition<'file> {
                 ids.push(id);
                 lua.push_str(&format!("_HUCK_{}", id));
                 if i < arg_count - 1 {
-                    lua.push_str(", ");
+                    lua.push_str(", "); // @Currying
                 }
             }
 
@@ -235,7 +235,7 @@ impl<'file> Generate for Vec<ast::Pattern<'file>> {
             };
             lua.push_str(&arg);
             if i < self.len() - 1 {
-                lua.push_str(", ");
+                lua.push_str(", "); // @Currying
             }
         }
 
@@ -279,7 +279,7 @@ impl<'file> Generate for ast::Expr<'file> {
                 // @Note: this assumes functions are curried (? maybe not if tuples desugar to
                 // bare (func)(a, b) instead of (func)((a, b)) which doesn't make sense anyway)
                 lua.push('(');
-                lua.push_str(&argument.generate());
+                lua.push_str(&argument.generate()); // @Currying
                 lua.push(')');
 
                 lua
@@ -298,7 +298,7 @@ impl<'file> Generate for ast::Expr<'file> {
                 // bare (func)(a, b) instead of (func)((a, b)) which doesn't make sense anyway)
                 lua.push('(');
                 lua.push_str(&lhs.generate());
-                lua.push_str(", ");
+                lua.push_str(", "); // @Currying
                 lua.push_str(&rhs.generate());
                 lua.push(')');
 
@@ -310,7 +310,7 @@ impl<'file> Generate for ast::Expr<'file> {
             } => {
                 let mut lua = String::new();
 
-                // Open a new function, and local variable declaration
+                // Open a new scope (i.e. an immediately-called function so that return works)
                 lua.push_str("(function()\n");
 
                 // Make a new local variable for each assignment
@@ -338,7 +338,7 @@ impl<'file> Generate for ast::Expr<'file> {
                 let mut lua = String::new();
 
                 lua.push_str("function(");
-                lua.push_str(&args.generate());
+                lua.push_str(&args.generate()); // @Currying
                 lua.push_str(")\nreturn ");
 
                 lua.push_str(&rhs.generate());
