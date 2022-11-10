@@ -106,7 +106,9 @@ impl<'file> Generate for ast::Definition<'file> {
                 } else {
                     lua.push_str("if ");
                     for i in 0..conditions.len() {
-                        lua.push_str(&format!("({})", conditions[i]));
+                        lua.push('(');
+                        lua.push_str(&conditions[i]);
+                        lua.push(')');
                         if i < conditions.len() - 1 {
                             lua.push_str("\nand ");
                         }
