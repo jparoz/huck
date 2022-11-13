@@ -20,15 +20,20 @@ impl<'file> Generate for Scope<'file> {
     /// This will generate a Lua chunk which returns a table containing the definitions given in the
     /// Huck scope.
     fn generate(&self) -> String {
-        let mut lua = "return {\n".to_string();
+        let mut lua = String::new();
+
+        // @Hardcode @Todo: this should be derived from the filename or something
+        let module_name = "M";
+
+        lua.push_str(&format!("local {} = {{}}\n\n", module_name));
 
         for (name, typed_defn) in self.iter() {
-            lua.push_str(&format!("[\"{}\"] = ", name));
+            lua.push_str(&format!("{}[\"{}\"] = ", module_name, name));
             lua.push_str(&typed_defn.definition.generate());
-            lua.push_str(",\n");
+            lua.push_str("\n\n");
         }
 
-        lua.push('}');
+        lua.push_str(&format!("return {}", module_name));
 
         lua
     }
@@ -341,6 +346,7 @@ impl<'file> Generate for ast::Expr<'file> {
 
                 // Op
                 // @Fixme: this should refer to a local, not some weird global table
+                // @Todo: replace HUCK_PREFIX with module_name
                 lua.push_str(&format!("{}[\"{}\"]", HUCK_PREFIX, operator));
 
                 // Argument (function call syntax)

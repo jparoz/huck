@@ -20,9 +20,9 @@ const a b = a;
 (* baz "hello" = "goodbye"; *)
 (* baz s = s ++ "."; *)
 
-(* foo (Just 1) = 1; *)
-(* foo (Just x) = x + 2; *)
-(* foo Nothing = 123; *)
+(* quux (Just 1) = 1; *)
+(* quux (Just x) = x + 2; *)
+(* quux Nothing = 123; *)
 
 (* addIfOne [1, x] = 1 + x; *)
 (* addIfOne [_, x] = x; *)
