@@ -11,6 +11,35 @@ fn unique() -> u64 {
     UNIQUE_COUNTER.fetch_add(1, atomic::Ordering::Relaxed)
 }
 
+/// Generates Lua code, and maintains all necessary state to do so.
+/// Methods on this struct should generally correspond to Lua constructs,
+/// not to Huck constructs.
+#[derive(Debug)]
+pub struct CodeGenerator {
+    lua: String,
+
+    // @Todo: this shouldn't be static, should be an option at transpile time
+    generated_name_prefix: &'static str,
+}
+
+impl CodeGenerator {
+    pub fn new() -> Self {
+        CodeGenerator {
+            lua: String::new(),
+            generated_name_prefix: "_HUCK", // @Hardcode
+        }
+    }
+
+    /// Generates a new and unique u64 each time it's called.
+    fn unique() -> u64 {
+        static UNIQUE_COUNTER: AtomicU64 = AtomicU64::new(0);
+        UNIQUE_COUNTER.fetch_add(1, atomic::Ordering::Relaxed)
+    }
+
+    // Generate methods
+    // @Todo
+}
+
 pub trait Generate {
     fn generate(&self) -> String;
 }
