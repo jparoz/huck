@@ -1,10 +1,12 @@
 use crate::ast;
 use crate::scope::Scope;
 
+use std::fmt::Write;
 use std::sync::atomic::{self, AtomicU64};
 
-const HUCK_PREFIX: &str = "_HUCK";
+type WriteResult = Result<(), std::fmt::Error>;
 
+// @Cleanup: maybe move this onto CodeGenerator?
 /// Generates a new and unique u64 each time it's called.
 fn unique() -> u64 {
     static UNIQUE_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -16,7 +18,8 @@ fn unique() -> u64 {
 /// not to Huck constructs.
 #[derive(Debug)]
 pub struct CodeGenerator {
-    lua: String,
+    // @Cleanup: not pub, use a wrapper function
+    pub lua: String,
 
     // @Todo: this shouldn't be static, should be an option at transpile time
     generated_name_prefix: &'static str,
@@ -30,79 +33,58 @@ impl CodeGenerator {
         }
     }
 
-    /// Generates a new and unique u64 each time it's called.
-    fn unique() -> u64 {
-        static UNIQUE_COUNTER: AtomicU64 = AtomicU64::new(0);
-        UNIQUE_COUNTER.fetch_add(1, atomic::Ordering::Relaxed)
-    }
-
     // Generate methods
-    // @Todo
-}
 
-pub trait Generate {
-    fn generate(&self) -> String;
-}
-
-impl<'file> Generate for Scope<'file> {
     /// Generate Lua code for the given Scope.
     /// This will generate a Lua chunk which returns a table containing the definitions given in the
     /// Huck scope.
-    fn generate(&self) -> String {
-        let mut lua = String::new();
-
+    pub fn scope<'file>(&mut self, scope: &Scope<'file>) -> WriteResult {
         // @Hardcode @Todo: this should be derived from the filename or something
         let module_name = "M";
 
-        lua.push_str(&format!("local {} = {{}}\n\n", module_name));
+        write!(self.lua, "local {} = {{}}\n\n", module_name)?;
 
-        for (name, typed_defn) in self.iter() {
-            lua.push_str(&format!("{}[\"{}\"] = ", module_name, name));
-            lua.push_str(&typed_defn.definition.generate());
-            lua.push_str("\n\n");
+        for (name, typed_defn) in scope.iter() {
+            write!(self.lua, r#"{}["{}"] = "#, module_name, name)?;
+            self.definition(&typed_defn.definition)?;
+            self.lua.write_str("\n\n")?;
         }
 
-        lua.push_str(&format!("return {}", module_name));
-
-        lua
+        self.lua.write_str(&format!("return {}", module_name))
     }
-}
 
-impl<'file> Generate for ast::Definition<'file> {
     /// Generates a Lua expression representing a Huck definition,
     /// even if it's defined on multiple lines.
     /// This has to be generated from the Vec<Assignment>,
     /// because in the case of multiple definitions,
     /// we have to generate a Lua 'switch' statement.
-    fn generate(&self) -> String {
-        debug_assert!(self.len() > 0);
+    fn definition<'file>(&mut self, defn: &ast::Definition<'file>) -> WriteResult {
+        debug_assert!(defn.len() > 0);
 
-        let mut lua = String::new();
-
-        if self.len() == 1 {
+        if defn.len() == 1 {
             // No need for a switch
-            let (lhs, expr) = &self[0];
+            let (lhs, expr) = &defn[0];
 
-            lua.push_str(&generate_curried_function(&lhs.args(), expr));
+            self.curried_function(&lhs.args(), expr)?;
         } else {
             // self.len() > 1
             // Need to switch on the assignment LHSs using if-thens
-            lua.push_str("function(");
+            self.lua.write_str("function(")?;
 
-            let arg_count = self[0].0.arg_count();
+            let arg_count = defn[0].0.arg_count();
             let mut ids = Vec::with_capacity(arg_count);
             for i in 0..arg_count {
                 let id = unique();
                 ids.push(id);
-                lua.push_str(&format!("{}_{}", HUCK_PREFIX, id));
+                write!(self.lua, "{}_{}", self.generated_name_prefix, id)?;
                 if i < arg_count - 1 {
-                    lua.push_str(", "); // @Currying
+                    self.lua.write_str(", ")?; // @Currying
                 }
             }
 
-            lua.push_str(")\n");
+            self.lua.write_str(")\n")?;
 
-            for (lhs, expr) in self.iter() {
+            for (lhs, expr) in defn.iter() {
                 // @Fixme @Errors: this should be a compile error, not an assert
                 assert_eq!(arg_count, lhs.arg_count());
 
@@ -111,226 +93,300 @@ impl<'file> Generate for ast::Definition<'file> {
                 let mut bindings = Vec::new();
 
                 for i in 0..arg_count {
-                    let lua_arg_name = format!("{}_{}", HUCK_PREFIX, ids[i]);
-                    generate_pattern_match(&args[i], &lua_arg_name, &mut conditions, &mut bindings);
+                    let lua_arg_name = format!("{}_{}", self.generated_name_prefix, ids[i]);
+                    self.pattern_match(&args[i], &lua_arg_name, &mut conditions, &mut bindings)?;
                 }
 
                 // @DRY
                 if conditions.is_empty() {
-                    lua.push_str("do\n");
+                    self.lua.write_str("do\n")?;
                 } else {
-                    lua.push_str("if ");
+                    self.lua.write_str("if ")?;
                     for i in 0..conditions.len() {
-                        lua.push('(');
-                        lua.push_str(&conditions[i]);
-                        lua.push(')');
+                        self.lua.write_char('(')?;
+                        self.lua.write_str(&conditions[i])?;
+                        self.lua.write_char(')')?;
                         if i < conditions.len() - 1 {
-                            lua.push_str("\nand ");
+                            self.lua.write_str("\nand ")?;
                         }
                     }
-                    lua.push_str(" then\n")
+                    self.lua.write_str(" then\n")?;
                 }
 
                 for b in bindings {
-                    lua.push_str(&b);
+                    self.lua.write_str(&b)?;
                 }
 
-                lua.push_str("return ");
-                lua.push_str(&expr.generate());
-                lua.push_str("\nend\n");
+                self.lua.write_str("return ")?;
+                self.expr(expr)?;
+                self.lua.write_str("\nend\n")?;
             }
 
-            lua.push_str(&format!(
-                r#"error("Unmatched pattern in function `{}`")"#,
-                &self[0].0.name()
-            ));
+            write!(
+                self.lua,
+                r#"Unmatched pattern in function `{}`"#,
+                &defn[0].0.name()
+            )?;
 
-            lua.push_str("\nend");
+            self.lua.write_str("\nend")?;
         }
 
-        lua
+        Ok(())
     }
-}
 
-fn generate_pattern_match<'file>(
-    pat: &ast::Pattern<'file>,
-    lua_arg_name: &str,
-    conditions: &mut Vec<String>,
-    bindings: &mut Vec<String>,
-) {
-    // This function takes a Lua argument name,
-    // e.g. _HUCK_0, _HUCK_12[3], _HUCK_3[13][334] or whatever.
-    // This is to allow nested pattern matches.
-    match pat {
-        ast::Pattern::Bind(s) => {
-            bindings.push(format!("local {} = {}\n", s, lua_arg_name));
-        }
-        ast::Pattern::List(list) => {
-            // Check that the list is the correct length
-            conditions.push(format!("#{} == {}", lua_arg_name, list.len()));
+    fn expr<'file>(&mut self, expr: &ast::Expr<'file>) -> WriteResult {
+        match expr {
+            ast::Expr::Term(term) => self.term(term),
+            ast::Expr::App { func, argument } => {
+                // Func (as an expr, surrounded in brackets)
+                self.lua.write_char('(')?; // @Note: not strictly necessary?
+                self.expr(func)?;
+                self.lua.write_char(')')?; // @Note: not strictly necessary?
 
-            // Check that each pattern matches
-            for j in 0..list.len() {
-                let new_lua_arg_name = format!("{}[{}]", lua_arg_name, j + 1);
-                generate_pattern_match(&list[j], &new_lua_arg_name, conditions, bindings);
+                // Argument (function call syntax)
+                // @Note: this assumes functions are curried (? maybe not if tuples desugar to
+                // bare (func)(a, b) instead of (func)((a, b)) which doesn't make sense anyway)
+                self.lua.write_char('(')?;
+                self.expr(argument)?; // @Currying
+                self.lua.write_char(')')?;
+                Ok(())
             }
-        }
-        ast::Pattern::Numeral(lit) => {
-            conditions.push(format!("{} == {}", lua_arg_name, lit));
-        }
-        ast::Pattern::String(lit) => {
-            conditions.push(format!("{} == {}", lua_arg_name, lit));
-        }
-        ast::Pattern::Destructure { constructor, args } => {
-            // Check that it's the right variant
-            conditions.push(format!(
-                r#"getmetatable({}).__variant == "{}""#,
-                lua_arg_name, constructor
-            ));
+            ast::Expr::Binop { operator, lhs, rhs } => {
+                // @Note @Fixme: this should check for Lua's builtin operators and use those
+                // if available
 
-            // Check that each pattern matches
-            for j in 0..args.len() {
-                let new_lua_arg_name = format!("{}[{}]", lua_arg_name, j + 1);
-                generate_pattern_match(&args[j], &new_lua_arg_name, conditions, bindings);
+                // Op
+                // @Fixme: this should refer to a local, not some weird global table
+                self.lua
+                    .write_str(&format!("{}[\"{}\"]", self.generated_name_prefix, operator))?;
+
+                // Argument (function call syntax)
+                // @Note: this assumes functions are curried (? maybe not if tuples desugar to
+                // bare (func)(a, b) instead of (func)((a, b)) which doesn't make sense anyway)
+                self.lua.write_char('(')?;
+                self.expr(lhs)?;
+                self.lua.write_str(", ")?; // @Currying
+                self.expr(rhs)?;
+                self.lua.write_char(')')?;
+                Ok(())
             }
-        }
-        ast::Pattern::Binop { lhs, rhs, operator } => {
-            // Check that it's the right variant
-            conditions.push(format!(
-                r#"getmetatable({}).__variant == "{}""#,
-                lua_arg_name, operator
-            ));
+            ast::Expr::Let {
+                definitions,
+                in_expr,
+            } => {
+                // Open a new scope (i.e. an immediately-called function so that return works)
+                self.lua.write_str("(function()\n")?;
 
-            // Check that the LHS pattern matches
-            generate_pattern_match(
-                &lhs,
-                &format!("{}[{}]", lua_arg_name, 1),
-                conditions,
-                bindings,
-            );
+                // Make a new local variable for each assignment
+                for definition in definitions.values() {
+                    write!(self.lua, "local {} = ", definition[0].0.name())?;
+                    self.definition(definition)?;
+                    self.lua.write_char('\n')?;
+                }
 
-            // Check that the RHS pattern matches
-            generate_pattern_match(
-                &rhs,
-                &format!("{}[{}]", lua_arg_name, 2),
-                conditions,
-                bindings,
-            );
-        }
-        ast::Pattern::UnaryConstructor(name) => {
-            debug_assert!(matches!(name, ast::Name::Ident(_)));
-            // Check that it's the right variant
-            conditions.push(format!(
-                r#"getmetatable({}).__variant == "{}""#,
-                lua_arg_name, name
-            ));
-        }
-    };
-}
+                // Generate the in_expr
+                self.lua.write_str("return ")?;
+                self.expr(in_expr)?;
 
-fn generate_curried_function<'file>(args: &[ast::Pattern<'file>], expr: &ast::Expr) -> String {
-    let mut lua = String::new();
-
-    let arg_count = args.len();
-    let mut ids = Vec::with_capacity(arg_count);
-
-    let mut conditions: Vec<String> = Vec::new();
-    let mut bindings: Vec<String> = Vec::new();
-
-    // Start the functions
-    for i in 0..arg_count {
-        let id = unique();
-        ids.push(id);
-
-        lua.push_str("function(");
-        lua.push_str(&format!("{}_{}", HUCK_PREFIX, id));
-        lua.push_str(")\n");
-
-        generate_pattern_match(
-            &args[i],
-            &format!("{}_{}", HUCK_PREFIX, id),
-            &mut conditions,
-            &mut bindings,
-        );
-
-        for b in bindings.drain(..) {
-            lua.push_str(&b);
-        }
-
-        if i < arg_count - 1 {
-            lua.push_str("return ");
+                self.lua.write_str("\nend)()")
+            }
+            ast::Expr::Lambda { args, rhs } => {
+                debug_assert!(args.len() > 0);
+                self.curried_function(args, rhs)
+            }
         }
     }
 
-    // Return the expr
+    fn term<'file>(&mut self, term: &ast::Term<'file>) -> WriteResult {
+        match term {
+            // @Inline?
+            ast::Term::Numeral(num) => self.numeric_literal(num),
 
-    // @DRY
-    if conditions.is_empty() {
-        // If we have no Huck arguments,
-        // then we should be a Lua value, not a Lua function;
-        // so we don't return, we just are.
-        if arg_count > 0 {
-            lua.push_str("return ");
-        }
+            // possible @XXX, @Todo: escape (or check escaping) better
+            // @Note: includes the quotes
+            ast::Term::String(s) => self.lua.write_str(s),
 
-        lua.push_str(&expr.generate());
-    } else {
-        lua.push_str("if ");
-        for i in 0..conditions.len() {
-            lua.push('(');
-            lua.push_str(&conditions[i]);
-            lua.push(')');
-            if i < conditions.len() - 1 {
-                lua.push_str("\nand ");
+            // @Note: this is where the semantics for Huck Lists are decided.
+            // The below simply converts them as Lua lists;
+            // possibly one day we should instead convert them to Lua iterators.
+            ast::Term::List(v) => {
+                self.lua.write_char('{')?;
+                for (i, e) in v.iter().enumerate() {
+                    self.expr(e)?;
+                    if i < v.len() {
+                        write!(self.lua, ", ")?;
+                    }
+                }
+                self.lua.write_char('}')
+            }
+
+            // @Inline?
+            ast::Term::Name(name) => self.name(name),
+
+            ast::Term::Parens(expr) => {
+                self.lua.write_char('(')?;
+                self.expr(expr)?;
+                self.lua.write_char(')')
             }
         }
-        lua.push_str(" then\n");
-        lua.push_str("return ");
-        lua.push_str(&expr.generate());
-        lua.push_str("\nend");
     }
 
-    // End the functions
-    for _ in 0..arg_count {
-        lua.push_str("\nend")
+    fn curried_function<'file>(
+        &mut self,
+        args: &[ast::Pattern<'file>],
+        expr: &ast::Expr,
+    ) -> WriteResult {
+        let arg_count = args.len();
+        let mut ids = Vec::with_capacity(arg_count);
+
+        let mut conditions: Vec<String> = Vec::new();
+        let mut bindings: Vec<String> = Vec::new();
+
+        // Start the functions
+        for i in 0..arg_count {
+            let id = unique();
+            ids.push(id);
+
+            self.lua.write_str("function(")?;
+            self.lua
+                .write_str(&format!("{}_{}", self.generated_name_prefix, id))?;
+            self.lua.write_str(")\n")?;
+
+            self.pattern_match(
+                &args[i],
+                &format!("{}_{}", self.generated_name_prefix, id),
+                &mut conditions,
+                &mut bindings,
+            )?;
+
+            for b in bindings.drain(..) {
+                self.lua.write_str(&b)?;
+            }
+
+            if i < arg_count - 1 {
+                self.lua.write_str("return ")?;
+            }
+        }
+
+        // Return the expr
+
+        // @DRY
+        if conditions.is_empty() {
+            // If we have no Huck arguments,
+            // then we should be a Lua value, not a Lua function;
+            // so we don't return, we just are.
+            if arg_count > 0 {
+                self.lua.write_str("return ")?;
+            }
+
+            self.expr(expr)?;
+        } else {
+            self.lua.write_str("if ")?;
+            for i in 0..conditions.len() {
+                self.lua.write_char('(')?;
+                self.lua.write_str(&conditions[i])?;
+                self.lua.write_char(')')?;
+                if i < conditions.len() - 1 {
+                    self.lua.write_str("\nand ")?;
+                }
+            }
+            self.lua.write_str(" then\n")?;
+            self.lua.write_str("return ")?;
+            self.expr(expr)?;
+            self.lua.write_str("\nend")?;
+        }
+
+        // End the functions
+        for _ in 0..arg_count {
+            self.lua.write_str("\nend")?;
+        }
+        Ok(())
     }
 
-    lua
-}
+    fn pattern_match<'file>(
+        &mut self,
+        pat: &ast::Pattern<'file>,
+        lua_arg_name: &str,
+        conditions: &mut Vec<String>,
+        bindings: &mut Vec<String>,
+    ) -> WriteResult {
+        // This function takes a Lua argument name,
+        // e.g. _HUCK_0, _HUCK_12[3], _HUCK_3[13][334] or whatever.
+        // This is to allow nested pattern matches.
+        match pat {
+            ast::Pattern::Bind(s) => {
+                bindings.push(format!("local {} = {}\n", s, lua_arg_name));
+            }
+            ast::Pattern::List(list) => {
+                // Check that the list is the correct length
+                conditions.push(format!("#{} == {}", lua_arg_name, list.len()));
 
-// impl<'file> Generate for [ast::Pattern<'file>] {
-//     /// Generates a Lua argument list.
-//     fn generate(&self) -> String {
-//         debug_assert!(self.len() > 0);
+                // Check that each pattern matches
+                for j in 0..list.len() {
+                    let new_lua_arg_name = format!("{}[{}]", lua_arg_name, j + 1);
+                    self.pattern_match(&list[j], &new_lua_arg_name, conditions, bindings)?;
+                }
+            }
+            ast::Pattern::Numeral(lit) => {
+                conditions.push(format!("{} == {}", lua_arg_name, lit));
+            }
+            ast::Pattern::String(lit) => {
+                conditions.push(format!("{} == {}", lua_arg_name, lit));
+            }
+            ast::Pattern::Destructure { constructor, args } => {
+                // Check that it's the right variant
+                conditions.push(format!(
+                    r#"getmetatable({}).__variant == "{}""#,
+                    lua_arg_name, constructor
+                ));
 
-//         let mut lua = String::new();
+                // Check that each pattern matches
+                for j in 0..args.len() {
+                    let new_lua_arg_name = format!("{}[{}]", lua_arg_name, j + 1);
+                    self.pattern_match(&args[j], &new_lua_arg_name, conditions, bindings)?;
+                }
+            }
+            ast::Pattern::Binop { lhs, rhs, operator } => {
+                // Check that it's the right variant
+                conditions.push(format!(
+                    r#"getmetatable({}).__variant == "{}""#,
+                    lua_arg_name, operator
+                ));
 
-//         for i in 0..self.len() {
-//             let arg = match &self[i] {
-//                 ast::Pattern::Bind(var) => var.to_string(),
-//                 ast::Pattern::List(_) => todo!(),
-//                 ast::Pattern::Numeral(_) => todo!(),
-//                 ast::Pattern::String(_) => todo!(),
-//                 ast::Pattern::Binop { operator, lhs, rhs } => todo!(),
-//                 ast::Pattern::UnaryConstructor(name) => todo!(),
-//                 ast::Pattern::Destructure { constructor, args } => todo!(),
-//             };
-//             lua.push_str(&arg);
-//             if i < self.len() - 1 {
-//                 lua.push_str(", "); // @Currying
-//             }
-//         }
+                // Check that the LHS pattern matches
+                self.pattern_match(
+                    &lhs,
+                    &format!("{}[{}]", lua_arg_name, 1),
+                    conditions,
+                    bindings,
+                )?;
 
-//         lua
-//     }
-// }
+                // Check that the RHS pattern matches
+                self.pattern_match(
+                    &rhs,
+                    &format!("{}[{}]", lua_arg_name, 2),
+                    conditions,
+                    bindings,
+                )?;
+            }
+            ast::Pattern::UnaryConstructor(name) => {
+                debug_assert!(matches!(name, ast::Name::Ident(_)));
+                // Check that it's the right variant
+                conditions.push(format!(
+                    r#"getmetatable({}).__variant == "{}""#,
+                    lua_arg_name, name
+                ));
+            }
+        };
 
-impl Generate for ast::Name {
+        Ok(())
+    }
+
     /// Generates a Lua-safe name for the Huck Name.
-    fn generate(&self) -> String {
-        match self {
+    fn name<'file>(&mut self, name: &ast::Name) -> WriteResult {
+        match name {
             // @Todo: remap Lua keywords
-            ast::Name::Ident(s) => s.clone(),
+            ast::Name::Ident(s) => write!(self.lua, "{}", s),
             ast::Name::Binop(s) => {
                 // @Todo: Convert the binop into some kind of Lua identifier.
                 // Maybe something like this conversion:
@@ -344,126 +400,10 @@ impl Generate for ast::Name {
             }
         }
     }
-}
 
-impl<'file> Generate for ast::Expr<'file> {
-    fn generate(&self) -> String {
-        match self {
-            ast::Expr::Term(term) => term.generate(),
-            ast::Expr::App { func, argument } => {
-                let mut lua = String::new();
-
-                // Func (as an expr, surrounded in brackets)
-                lua.push('('); // @Note: not strictly necessary?
-                lua.push_str(&func.generate());
-                lua.push(')'); // @Note: not strictly necessary?
-
-                // Argument (function call syntax)
-                // @Note: this assumes functions are curried (? maybe not if tuples desugar to
-                // bare (func)(a, b) instead of (func)((a, b)) which doesn't make sense anyway)
-                lua.push('(');
-                lua.push_str(&argument.generate()); // @Currying
-                lua.push(')');
-
-                lua
-            }
-            ast::Expr::Binop { operator, lhs, rhs } => {
-                let mut lua = String::new();
-
-                // @Note @Fixme: this should check for Lua's builtin operators and use those
-                // if available
-
-                // Op
-                // @Fixme: this should refer to a local, not some weird global table
-                // @Todo: replace HUCK_PREFIX with module_name
-                lua.push_str(&format!("{}[\"{}\"]", HUCK_PREFIX, operator));
-
-                // Argument (function call syntax)
-                // @Note: this assumes functions are curried (? maybe not if tuples desugar to
-                // bare (func)(a, b) instead of (func)((a, b)) which doesn't make sense anyway)
-                lua.push('(');
-                lua.push_str(&lhs.generate());
-                lua.push_str(", "); // @Currying
-                lua.push_str(&rhs.generate());
-                lua.push(')');
-
-                lua
-            }
-            ast::Expr::Let {
-                definitions,
-                in_expr,
-            } => {
-                let mut lua = String::new();
-
-                // Open a new scope (i.e. an immediately-called function so that return works)
-                lua.push_str("(function()\n");
-
-                // Make a new local variable for each assignment
-                for definition in definitions.values() {
-                    let (lhs, _expr) = &definition[0];
-                    lua.push_str("local ");
-                    lua.push_str(&lhs.name().generate());
-                    lua.push_str(" = ");
-                    lua.push_str(&definition.generate());
-                    lua.push('\n');
-                }
-
-                // Generate the in_expr
-                lua.push_str("return ");
-                lua.push_str(&in_expr.generate());
-
-                lua.push_str("\nend)()");
-
-                lua
-            }
-            ast::Expr::Lambda { args, rhs } => {
-                debug_assert!(args.len() > 0);
-                generate_curried_function(args, rhs)
-            }
-        }
-    }
-}
-
-impl<'file> Generate for ast::Term<'file> {
-    fn generate(&self) -> String {
-        match self {
-            ast::Term::Numeral(num) => num.generate(),
-
-            // possible @XXX, @Todo: escape (or check escaping) better
-            // @Note: includes the quotes
-            ast::Term::String(s) => s.to_string(),
-
-            ast::Term::List(v) => {
-                // @Note: this is where the semantics for Huck Lists are decided.
-                // The below simply converts them as Lua lists;
-                // possibly one day we should instead convert them to Lua iterators.
-                let mut lua = String::new();
-                lua.push('{');
-                for item in v {
-                    lua.push_str(&item.generate());
-                    lua.push_str(", ");
-                }
-                lua.push('}');
-                lua
-            }
-            ast::Term::Name(name) => name.generate(),
-            ast::Term::Parens(expr) => {
-                let mut lua = String::new();
-
-                lua.push('(');
-                lua.push_str(&expr.generate());
-                lua.push(')');
-
-                lua
-            }
-        }
-    }
-}
-
-impl<'file> Generate for ast::Numeral<'file> {
-    fn generate(&self) -> String {
-        match self {
-            ast::Numeral::Int(s) | ast::Numeral::Float(s) => s.to_string(),
+    fn numeric_literal<'file>(&mut self, lit: &ast::Numeral<'file>) -> WriteResult {
+        match lit {
+            ast::Numeral::Int(s) | ast::Numeral::Float(s) => write!(self.lua, "{}", s),
         }
     }
 }
