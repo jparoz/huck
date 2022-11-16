@@ -135,7 +135,7 @@ fn lambda(input: &str) -> IResult<&str, Expr> {
     map(
         tuple((reserved_op("\\"), many1(pattern), reserved_op("->"), expr)),
         |(_, args, _, rhs)| Expr::Lambda {
-            args,
+            lhs: Lhs::Lambda { args },
             rhs: Box::new(rhs),
         },
     )(input)

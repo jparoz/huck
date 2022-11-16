@@ -35,12 +35,14 @@ pub type Assignment<'file> = (Lhs<'file>, Expr<'file>);
 pub enum Name {
     Ident(String),
     Binop(String),
+    Lambda,
 }
 
 impl<'file> Display for Name {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Name::Ident(s) | Name::Binop(s) => write!(f, "{}", s),
+            Name::Lambda => write!(f, "lambda"),
         }
     }
 }
@@ -56,6 +58,9 @@ pub enum Lhs<'file> {
         op: Name,
         b: Pattern<'file>,
     },
+    Lambda {
+        args: Vec<Pattern<'file>>,
+    },
 }
 
 impl<'file> Lhs<'file> {
@@ -63,19 +68,20 @@ impl<'file> Lhs<'file> {
         match self {
             Lhs::Func { name, .. } => name,
             Lhs::Binop { op, .. } => op,
+            Lhs::Lambda { .. } => &Name::Lambda,
         }
     }
 
     pub fn arg_count(&self) -> usize {
         match self {
-            Lhs::Func { args, .. } => args.len(),
+            Lhs::Func { args, .. } | Lhs::Lambda { args } => args.len(),
             Lhs::Binop { .. } => 2,
         }
     }
 
     pub fn args(&self) -> Vec<Pattern<'file>> {
         match self {
-            Lhs::Func { args, .. } => args.clone(),
+            Lhs::Func { args, .. } | Lhs::Lambda { args } => args.clone(),
             Lhs::Binop { a, b, .. } => vec![a.clone(), b.clone()],
         }
     }
@@ -88,6 +94,7 @@ impl<'file> Display for Lhs<'file> {
                 match name {
                     Name::Ident(s) => write!(f, "{}", s)?,
                     Name::Binop(s) => write!(f, "({})", s)?,
+                    Name::Lambda => write!(f, "lambda")?, // Should this be here??
                 }
                 for arg in args.iter() {
                     write!(f, " {}", arg)?;
@@ -96,6 +103,12 @@ impl<'file> Display for Lhs<'file> {
             }
             Lhs::Binop { a, op, b } => {
                 write!(f, "{} {} {}", a, op, b)
+            }
+            Lhs::Lambda { args } => {
+                for arg in args.iter() {
+                    write!(f, " {}", arg)?;
+                }
+                Ok(())
             }
         }
     }
@@ -167,7 +180,7 @@ pub enum Expr<'file> {
         in_expr: Box<Expr<'file>>,
     },
     Lambda {
-        args: Vec<Pattern<'file>>,
+        lhs: Lhs<'file>,
         rhs: Box<Expr<'file>>,
     },
 }
@@ -200,9 +213,9 @@ impl<'file> Display for Expr<'file> {
                 }
                 write!(f, " in {}", in_expr)
             }
-            Lambda { args: pats, rhs } => {
+            Lambda { lhs, rhs } => {
                 write!(f, "\\")?;
-                for pat in pats {
+                for pat in lhs.args() {
                     write!(f, "{} ", pat)?;
                 }
                 write!(f, "-> {}", rhs)

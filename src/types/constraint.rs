@@ -327,7 +327,7 @@ impl<'a> GenerateConstraints for Assignment<'a> {
         }
 
         match lhs {
-            Lhs::Func { args, name: _name } => {
+            Lhs::Func { args, .. } | Lhs::Lambda { args } => {
                 bind!(args.iter().rev())
             }
             Lhs::Binop { a, b, op: _op } => {
@@ -405,7 +405,8 @@ impl<'a> GenerateConstraints for Expr<'a> {
                 beta
             }
 
-            Expr::Lambda { args, rhs } => {
+            Expr::Lambda { lhs, rhs } => {
+                let args = lhs.args();
                 let types: Vec<Type> = args.iter().map(|_| cg.fresh()).collect();
                 let typevars: Vec<TypeVar> = types
                     .iter()

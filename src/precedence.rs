@@ -101,7 +101,7 @@ impl<'a> ApplyPrecedence for Chunk<'a> {
 impl<'a> ApplyPrecedence for Lhs<'a> {
     fn apply(&mut self, precs: &HashMap<Name, Precedence>) {
         match self {
-            Lhs::Func { args, .. } => {
+            Lhs::Func { args, .. } | Lhs::Lambda { args } => {
                 for arg in args {
                     arg.apply(precs);
                 }
@@ -248,8 +248,8 @@ impl<'a> ApplyPrecedence for Expr<'a> {
                 }
                 in_expr.apply(precs);
             }
-            Expr::Lambda { args: pats, rhs } => {
-                for pat in pats {
+            Expr::Lambda { lhs, rhs } => {
+                for mut pat in lhs.args() {
                     pat.apply(precs);
                 }
                 rhs.apply(precs);

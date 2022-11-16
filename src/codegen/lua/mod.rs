@@ -73,81 +73,7 @@ impl<'a> CodeGenerator<'a> {
     /// because in the case of multiple definitions,
     /// we have to generate a Lua 'switch' statement.
     fn definition<'file>(&mut self, defn: &ast::Definition<'file>) -> CodegenResult {
-        debug_assert!(defn.len() > 0);
-
-        if defn.len() == 1 {
-            // No need for a switch
-            let (lhs, expr) = &defn[0];
-
-            self.curried_function(&lhs.args(), expr)?;
-        } else {
-            // self.len() > 1
-            // Need to switch on the assignment LHSs using if-thens
-            self.lua.write_str("function(")?;
-
-            let arg_count = defn[0].0.arg_count();
-            let mut ids = Vec::with_capacity(arg_count);
-            for i in 0..arg_count {
-                let id = unique();
-                ids.push(id);
-                write!(self.lua, "{}_{}", self.generated_name_prefix, id)?;
-                if i < arg_count - 1 {
-                    self.lua.write_str(", ")?; // @Currying
-                }
-            }
-
-            self.lua.write_str(")\n")?;
-
-            for (lhs, expr) in defn.iter() {
-                if arg_count != lhs.arg_count() {
-                    return Err(CodegenError::IncorrectArgumentCount(format!(
-                        "{}",
-                        defn[0].0.name()
-                    )));
-                }
-                assert_eq!(arg_count, lhs.arg_count());
-
-                let args = lhs.args();
-
-                for i in 0..arg_count {
-                    let lua_arg_name = format!("{}_{}", self.generated_name_prefix, ids[i]);
-                    self.pattern_match(&args[i], &lua_arg_name)?;
-                }
-
-                // @DRY
-                if self.conditions.is_empty() {
-                    self.lua.write_str("do\n")?;
-                } else {
-                    self.lua.write_str("if ")?;
-                    let condition_count = self.conditions.len();
-                    for (i, cond) in self.conditions.drain(..).enumerate() {
-                        write!(self.lua, "({})", cond)?;
-                        if i < condition_count - 1 {
-                            self.lua.write_str("\nand ")?;
-                        }
-                    }
-                    self.lua.write_str(" then\n")?;
-                }
-
-                for b in self.bindings.drain(..) {
-                    self.lua.write_str(&b)?;
-                }
-
-                self.lua.write_str("return ")?;
-                self.expr(expr)?;
-                self.lua.write_str("\nend\n")?;
-            }
-
-            write!(
-                self.lua,
-                r#"error("Unmatched pattern in function `{}`")"#,
-                &defn[0].0.name()
-            )?;
-
-            self.lua.write_str("\nend")?;
-        }
-
-        Ok(())
+        self.curried_function(defn)
     }
 
     fn expr<'file>(&mut self, expr: &ast::Expr<'file>) -> CodegenResult {
@@ -207,9 +133,9 @@ impl<'a> CodeGenerator<'a> {
                 self.lua.write_str("\nend)()")?;
                 Ok(())
             }
-            ast::Expr::Lambda { args, rhs } => {
-                debug_assert!(args.len() > 0);
-                self.curried_function(args, rhs)
+            ast::Expr::Lambda { lhs, rhs } => {
+                debug_assert!(lhs.arg_count() > 0);
+                self.curried_function(&vec![(lhs.clone(), *rhs.clone())]) // @Fixme: don't clone?
             }
         }
     }
@@ -248,12 +174,10 @@ impl<'a> CodeGenerator<'a> {
         }
     }
 
-    fn curried_function<'file>(
-        &mut self,
-        args: &[ast::Pattern<'file>],
-        expr: &ast::Expr,
-    ) -> CodegenResult {
-        let arg_count = args.len();
+    fn curried_function<'file>(&mut self, definition: &ast::Definition) -> CodegenResult {
+        debug_assert!(definition.len() > 0);
+
+        let arg_count = definition[0].0.arg_count();
         let mut ids = Vec::with_capacity(arg_count);
 
         // Start the functions
@@ -263,14 +187,8 @@ impl<'a> CodeGenerator<'a> {
 
             self.lua.write_str("function(")?;
             self.lua
-                .write_str(&format!("{}_{}", self.generated_name_prefix, id))?;
+                .write_str(&format!("{}_{}", self.generated_name_prefix, ids[i]))?;
             self.lua.write_str(")\n")?;
-
-            self.pattern_match(&args[i], &format!("{}_{}", self.generated_name_prefix, id))?;
-
-            for b in self.bindings.drain(..) {
-                self.lua.write_str(&b)?;
-            }
 
             if i < arg_count - 1 {
                 self.lua.write_str("return ")?;
@@ -279,29 +197,50 @@ impl<'a> CodeGenerator<'a> {
 
         // Return the expr
 
-        // @DRY
-        if self.conditions.is_empty() {
-            // If we have no Huck arguments,
-            // then we should be a Lua value, not a Lua function;
-            // so we don't return, we just are.
-            if arg_count > 0 {
-                self.lua.write_str("return ")?;
+        // @Todo: change this to a for loop to support multiple definitions
+        for (lhs, expr) in definition {
+            let args = lhs.args();
+            if arg_count != args.len() {
+                return Err(CodegenError::IncorrectArgumentCount(format!(
+                    "{}",
+                    lhs.name()
+                )));
             }
 
-            self.expr(expr)?;
-        } else {
-            self.lua.write_str("if ")?;
-            let condition_count = self.conditions.len();
-            for (i, cond) in self.conditions.drain(..).enumerate() {
-                write!(self.lua, "({})", cond)?;
-                if i < condition_count - 1 {
-                    self.lua.write_str("\nand ")?;
-                }
+            for i in 0..arg_count {
+                self.pattern_match(
+                    &args[i],
+                    &format!("{}_{}", self.generated_name_prefix, ids[i]),
+                )?;
             }
-            self.lua.write_str(" then\n")?;
-            self.lua.write_str("return ")?;
-            self.expr(expr)?;
-            self.lua.write_str("\nend")?;
+
+            for b in self.bindings.drain(..) {
+                self.lua.write_str(&b)?;
+            }
+
+            if self.conditions.is_empty() {
+                // If we have no Huck arguments,
+                // then we should be a Lua value, not a Lua function;
+                // so we don't return, we just are.
+                if arg_count > 0 {
+                    self.lua.write_str("return ")?;
+                }
+
+                self.expr(expr)?;
+            } else {
+                self.lua.write_str("if ")?;
+                let condition_count = self.conditions.len();
+                for (i, cond) in self.conditions.drain(..).enumerate() {
+                    write!(self.lua, "({})", cond)?;
+                    if i < condition_count - 1 {
+                        self.lua.write_str("\nand ")?;
+                    }
+                }
+                self.lua.write_str(" then\n")?;
+                self.lua.write_str("return ")?;
+                self.expr(expr)?;
+                self.lua.write_str("\nend\n")?;
+            }
         }
 
         // End the functions
@@ -311,6 +250,8 @@ impl<'a> CodeGenerator<'a> {
         Ok(())
     }
 
+    /// Generates code for a pattern match.
+    /// Note: This _does not_ modify self.lua at all, only `self.conditions` and `self.bindings`.
     fn pattern_match<'file>(
         &mut self,
         pat: &ast::Pattern<'file>,
@@ -385,6 +326,7 @@ impl<'a> CodeGenerator<'a> {
         match name {
             // @Todo: remap Lua keywords
             ast::Name::Ident(s) => Ok(write!(self.lua, "{}", s)?),
+            ast::Name::Lambda => Ok(write!(self.lua, "lambda")?), // @Checkme: should be unreachable
             ast::Name::Binop(s) => {
                 // @Todo: Convert the binop into some kind of Lua identifier.
                 // Maybe something like this conversion:
