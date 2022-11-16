@@ -28,6 +28,11 @@ fn unique() -> u64 {
 #[derive(Debug)]
 struct CodeGenerator<'a> {
     lua: String,
+
+    // These are used in generating curried functions.
+    conditions: Vec<String>,
+    bindings: Vec<String>,
+
     generated_name_prefix: &'a str,
     module_name: &'a str,
 }
@@ -36,6 +41,10 @@ impl<'a> CodeGenerator<'a> {
     fn new(generated_name_prefix: &'a str, module_name: &'a str) -> Self {
         CodeGenerator {
             lua: String::new(),
+
+            conditions: Vec::new(),
+            bindings: Vec::new(),
+
             generated_name_prefix,
             module_name,
         }
@@ -99,31 +108,29 @@ impl<'a> CodeGenerator<'a> {
                 assert_eq!(arg_count, lhs.arg_count());
 
                 let args = lhs.args();
-                let mut conditions = Vec::new();
-                let mut bindings = Vec::new();
 
                 for i in 0..arg_count {
                     let lua_arg_name = format!("{}_{}", self.generated_name_prefix, ids[i]);
-                    self.pattern_match(&args[i], &lua_arg_name, &mut conditions, &mut bindings)?;
+                    self.pattern_match(&args[i], &lua_arg_name)?;
                 }
 
                 // @DRY
-                if conditions.is_empty() {
+                if self.conditions.is_empty() {
                     self.lua.write_str("do\n")?;
                 } else {
                     self.lua.write_str("if ")?;
-                    for i in 0..conditions.len() {
+                    for i in 0..self.conditions.len() {
                         self.lua.write_char('(')?;
-                        self.lua.write_str(&conditions[i])?;
+                        self.lua.write_str(&self.conditions[i])?;
                         self.lua.write_char(')')?;
-                        if i < conditions.len() - 1 {
+                        if i < self.conditions.len() - 1 {
                             self.lua.write_str("\nand ")?;
                         }
                     }
                     self.lua.write_str(" then\n")?;
                 }
 
-                for b in bindings {
+                for b in self.bindings.drain(..) {
                     self.lua.write_str(&b)?;
                 }
 
@@ -250,9 +257,6 @@ impl<'a> CodeGenerator<'a> {
         let arg_count = args.len();
         let mut ids = Vec::with_capacity(arg_count);
 
-        let mut conditions: Vec<String> = Vec::new();
-        let mut bindings: Vec<String> = Vec::new();
-
         // Start the functions
         for i in 0..arg_count {
             let id = unique();
@@ -263,14 +267,9 @@ impl<'a> CodeGenerator<'a> {
                 .write_str(&format!("{}_{}", self.generated_name_prefix, id))?;
             self.lua.write_str(")\n")?;
 
-            self.pattern_match(
-                &args[i],
-                &format!("{}_{}", self.generated_name_prefix, id),
-                &mut conditions,
-                &mut bindings,
-            )?;
+            self.pattern_match(&args[i], &format!("{}_{}", self.generated_name_prefix, id))?;
 
-            for b in bindings.drain(..) {
+            for b in self.bindings.drain(..) {
                 self.lua.write_str(&b)?;
             }
 
@@ -282,7 +281,7 @@ impl<'a> CodeGenerator<'a> {
         // Return the expr
 
         // @DRY
-        if conditions.is_empty() {
+        if self.conditions.is_empty() {
             // If we have no Huck arguments,
             // then we should be a Lua value, not a Lua function;
             // so we don't return, we just are.
@@ -293,11 +292,11 @@ impl<'a> CodeGenerator<'a> {
             self.expr(expr)?;
         } else {
             self.lua.write_str("if ")?;
-            for i in 0..conditions.len() {
+            for i in 0..self.conditions.len() {
                 self.lua.write_char('(')?;
-                self.lua.write_str(&conditions[i])?;
+                self.lua.write_str(&self.conditions[i])?;
                 self.lua.write_char(')')?;
-                if i < conditions.len() - 1 {
+                if i < self.conditions.len() - 1 {
                     self.lua.write_str("\nand ")?;
                 }
             }
@@ -318,35 +317,35 @@ impl<'a> CodeGenerator<'a> {
         &mut self,
         pat: &ast::Pattern<'file>,
         lua_arg_name: &str,
-        conditions: &mut Vec<String>,
-        bindings: &mut Vec<String>,
     ) -> CodegenResult {
         // This function takes a Lua argument name,
         // e.g. _HUCK_0, _HUCK_12[3], _HUCK_3[13][334] or whatever.
         // This is to allow nested pattern matches.
         match pat {
             ast::Pattern::Bind(s) => {
-                bindings.push(format!("local {} = {}\n", s, lua_arg_name));
+                self.bindings
+                    .push(format!("local {} = {}\n", s, lua_arg_name));
             }
             ast::Pattern::List(list) => {
                 // Check that the list is the correct length
-                conditions.push(format!("#{} == {}", lua_arg_name, list.len()));
+                self.conditions
+                    .push(format!("#{} == {}", lua_arg_name, list.len()));
 
                 // Check that each pattern matches
                 for j in 0..list.len() {
                     let new_lua_arg_name = format!("{}[{}]", lua_arg_name, j + 1);
-                    self.pattern_match(&list[j], &new_lua_arg_name, conditions, bindings)?;
+                    self.pattern_match(&list[j], &new_lua_arg_name)?;
                 }
             }
             ast::Pattern::Numeral(lit) => {
-                conditions.push(format!("{} == {}", lua_arg_name, lit));
+                self.conditions.push(format!("{} == {}", lua_arg_name, lit));
             }
             ast::Pattern::String(lit) => {
-                conditions.push(format!("{} == {}", lua_arg_name, lit));
+                self.conditions.push(format!("{} == {}", lua_arg_name, lit));
             }
             ast::Pattern::Destructure { constructor, args } => {
                 // Check that it's the right variant
-                conditions.push(format!(
+                self.conditions.push(format!(
                     r#"getmetatable({}).__variant == "{}""#,
                     lua_arg_name, constructor
                 ));
@@ -354,36 +353,26 @@ impl<'a> CodeGenerator<'a> {
                 // Check that each pattern matches
                 for j in 0..args.len() {
                     let new_lua_arg_name = format!("{}[{}]", lua_arg_name, j + 1);
-                    self.pattern_match(&args[j], &new_lua_arg_name, conditions, bindings)?;
+                    self.pattern_match(&args[j], &new_lua_arg_name)?;
                 }
             }
             ast::Pattern::Binop { lhs, rhs, operator } => {
                 // Check that it's the right variant
-                conditions.push(format!(
+                self.conditions.push(format!(
                     r#"getmetatable({}).__variant == "{}""#,
                     lua_arg_name, operator
                 ));
 
                 // Check that the LHS pattern matches
-                self.pattern_match(
-                    &lhs,
-                    &format!("{}[{}]", lua_arg_name, 1),
-                    conditions,
-                    bindings,
-                )?;
+                self.pattern_match(&lhs, &format!("{}[{}]", lua_arg_name, 1))?;
 
                 // Check that the RHS pattern matches
-                self.pattern_match(
-                    &rhs,
-                    &format!("{}[{}]", lua_arg_name, 2),
-                    conditions,
-                    bindings,
-                )?;
+                self.pattern_match(&rhs, &format!("{}[{}]", lua_arg_name, 2))?;
             }
             ast::Pattern::UnaryConstructor(name) => {
                 debug_assert!(matches!(name, ast::Name::Ident(_)));
                 // Check that it's the right variant
-                conditions.push(format!(
+                self.conditions.push(format!(
                     r#"getmetatable({}).__variant == "{}""#,
                     lua_arg_name, name
                 ));
@@ -423,6 +412,10 @@ impl<'a> Default for CodeGenerator<'a> {
     fn default() -> Self {
         CodeGenerator {
             lua: String::new(),
+
+            conditions: Vec::new(),
+            bindings: Vec::new(),
+
             generated_name_prefix: "_HUCK",
             module_name: "M",
         }

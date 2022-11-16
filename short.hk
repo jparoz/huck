@@ -9,13 +9,13 @@
 (* True && True = True; *)
 (* _ && _ = False; *)
 
-id1 = \a -> a;
-id2 a = a;
+(* id1 = \a -> a; *)
+(* id2 a = a; *)
 
-const a b = a;
+(* const a b = a; *)
 
-(* bar any 0 = 0; *)
-(* bar x y = x / y; *)
+bar any 0 = 0;
+bar x y = x / y;
 
 (* baz "hello" = "goodbye"; *)
 (* baz s = s ++ "."; *)
