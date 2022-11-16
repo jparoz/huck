@@ -88,10 +88,9 @@ fn main() {
     // @Todo: optimisations go here
 
     // Generate code
-    let mut cg = codegen::lua::CodeGenerator::new();
-    cg.scope(&scope).unwrap();
-    println!("{}", cg.lua);
+    let lua = codegen::lua::generate(&scope).unwrap();
+    println!("{}", lua);
 
     eprintln!("\nExecuting...\n");
-    eprintln!("{}", utils::execute_lua(&cg.lua));
+    eprintln!("{}", utils::execute_lua(&lua));
 }

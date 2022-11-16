@@ -4,7 +4,16 @@ use crate::scope::Scope;
 use std::fmt::Write;
 use std::sync::atomic::{self, AtomicU64};
 
-type WriteResult = Result<(), std::fmt::Error>;
+use super::Error as CodegenError;
+
+/// Generates Lua for the given Huck Scope.
+pub fn generate<'file>(scope: &Scope<'file>) -> Result<String, CodegenError> {
+    let mut cg = CodeGenerator::default();
+    cg.scope(scope)?;
+    Ok(cg.lua)
+}
+
+type CodegenResult = Result<(), CodegenError>;
 
 // @Cleanup: maybe move this onto CodeGenerator?
 /// Generates a new and unique u64 each time it's called.
@@ -17,40 +26,36 @@ fn unique() -> u64 {
 /// Methods on this struct should generally correspond to Lua constructs,
 /// not to Huck constructs.
 #[derive(Debug)]
-pub struct CodeGenerator {
-    // @Cleanup: not pub, use a wrapper function
-    pub lua: String,
-
-    // @Todo: this shouldn't be static, should be an option at transpile time
-    generated_name_prefix: &'static str,
+struct CodeGenerator<'a> {
+    lua: String,
+    generated_name_prefix: &'a str,
+    module_name: &'a str,
 }
 
-impl CodeGenerator {
-    pub fn new() -> Self {
+impl<'a> CodeGenerator<'a> {
+    fn new(generated_name_prefix: &'a str, module_name: &'a str) -> Self {
         CodeGenerator {
             lua: String::new(),
-            generated_name_prefix: "_HUCK", // @Hardcode
+            generated_name_prefix,
+            module_name,
         }
     }
-
-    // Generate methods
 
     /// Generate Lua code for the given Scope.
     /// This will generate a Lua chunk which returns a table containing the definitions given in the
     /// Huck scope.
-    pub fn scope<'file>(&mut self, scope: &Scope<'file>) -> WriteResult {
-        // @Hardcode @Todo: this should be derived from the filename or something
-        let module_name = "M";
-
-        write!(self.lua, "local {} = {{}}\n\n", module_name)?;
+    fn scope<'file>(&mut self, scope: &Scope<'file>) -> CodegenResult {
+        write!(self.lua, "local {} = {{}}\n\n", self.module_name)?;
 
         for (name, typed_defn) in scope.iter() {
-            write!(self.lua, r#"{}["{}"] = "#, module_name, name)?;
+            write!(self.lua, r#"{}["{}"] = "#, self.module_name, name)?;
             self.definition(&typed_defn.definition)?;
             self.lua.write_str("\n\n")?;
         }
 
-        self.lua.write_str(&format!("return {}", module_name))
+        Ok(self
+            .lua
+            .write_str(&format!("return {}", self.module_name))?)
     }
 
     /// Generates a Lua expression representing a Huck definition,
@@ -58,7 +63,7 @@ impl CodeGenerator {
     /// This has to be generated from the Vec<Assignment>,
     /// because in the case of multiple definitions,
     /// we have to generate a Lua 'switch' statement.
-    fn definition<'file>(&mut self, defn: &ast::Definition<'file>) -> WriteResult {
+    fn definition<'file>(&mut self, defn: &ast::Definition<'file>) -> CodegenResult {
         debug_assert!(defn.len() > 0);
 
         if defn.len() == 1 {
@@ -86,6 +91,12 @@ impl CodeGenerator {
 
             for (lhs, expr) in defn.iter() {
                 // @Fixme @Errors: this should be a compile error, not an assert
+                if arg_count != lhs.arg_count() {
+                    return Err(CodegenError::IncorrectArgumentCount(format!(
+                        "{}",
+                        defn[0].0.name()
+                    )));
+                }
                 assert_eq!(arg_count, lhs.arg_count());
 
                 let args = lhs.args();
@@ -134,7 +145,7 @@ impl CodeGenerator {
         Ok(())
     }
 
-    fn expr<'file>(&mut self, expr: &ast::Expr<'file>) -> WriteResult {
+    fn expr<'file>(&mut self, expr: &ast::Expr<'file>) -> CodegenResult {
         match expr {
             ast::Expr::Term(term) => self.term(term),
             ast::Expr::App { func, argument } => {
@@ -188,7 +199,8 @@ impl CodeGenerator {
                 self.lua.write_str("return ")?;
                 self.expr(in_expr)?;
 
-                self.lua.write_str("\nend)()")
+                self.lua.write_str("\nend)()")?;
+                Ok(())
             }
             ast::Expr::Lambda { args, rhs } => {
                 debug_assert!(args.len() > 0);
@@ -197,14 +209,14 @@ impl CodeGenerator {
         }
     }
 
-    fn term<'file>(&mut self, term: &ast::Term<'file>) -> WriteResult {
+    fn term<'file>(&mut self, term: &ast::Term<'file>) -> CodegenResult {
         match term {
             // @Inline?
             ast::Term::Numeral(num) => self.numeric_literal(num),
 
             // possible @XXX, @Todo: escape (or check escaping) better
             // @Note: includes the quotes
-            ast::Term::String(s) => self.lua.write_str(s),
+            ast::Term::String(s) => Ok(self.lua.write_str(s)?),
 
             // @Note: this is where the semantics for Huck Lists are decided.
             // The below simply converts them as Lua lists;
@@ -217,7 +229,7 @@ impl CodeGenerator {
                         write!(self.lua, ", ")?;
                     }
                 }
-                self.lua.write_char('}')
+                Ok(self.lua.write_char('}')?)
             }
 
             // @Inline?
@@ -226,7 +238,7 @@ impl CodeGenerator {
             ast::Term::Parens(expr) => {
                 self.lua.write_char('(')?;
                 self.expr(expr)?;
-                self.lua.write_char(')')
+                Ok(self.lua.write_char(')')?)
             }
         }
     }
@@ -235,7 +247,7 @@ impl CodeGenerator {
         &mut self,
         args: &[ast::Pattern<'file>],
         expr: &ast::Expr,
-    ) -> WriteResult {
+    ) -> CodegenResult {
         let arg_count = args.len();
         let mut ids = Vec::with_capacity(arg_count);
 
@@ -309,7 +321,7 @@ impl CodeGenerator {
         lua_arg_name: &str,
         conditions: &mut Vec<String>,
         bindings: &mut Vec<String>,
-    ) -> WriteResult {
+    ) -> CodegenResult {
         // This function takes a Lua argument name,
         // e.g. _HUCK_0, _HUCK_12[3], _HUCK_3[13][334] or whatever.
         // This is to allow nested pattern matches.
@@ -383,10 +395,10 @@ impl CodeGenerator {
     }
 
     /// Generates a Lua-safe name for the Huck Name.
-    fn name<'file>(&mut self, name: &ast::Name) -> WriteResult {
+    fn name<'file>(&mut self, name: &ast::Name) -> CodegenResult {
         match name {
             // @Todo: remap Lua keywords
-            ast::Name::Ident(s) => write!(self.lua, "{}", s),
+            ast::Name::Ident(s) => Ok(write!(self.lua, "{}", s)?),
             ast::Name::Binop(s) => {
                 // @Todo: Convert the binop into some kind of Lua identifier.
                 // Maybe something like this conversion:
@@ -401,9 +413,19 @@ impl CodeGenerator {
         }
     }
 
-    fn numeric_literal<'file>(&mut self, lit: &ast::Numeral<'file>) -> WriteResult {
+    fn numeric_literal<'file>(&mut self, lit: &ast::Numeral<'file>) -> CodegenResult {
         match lit {
-            ast::Numeral::Int(s) | ast::Numeral::Float(s) => write!(self.lua, "{}", s),
+            ast::Numeral::Int(s) | ast::Numeral::Float(s) => Ok(write!(self.lua, "{}", s)?),
+        }
+    }
+}
+
+impl<'a> Default for CodeGenerator<'a> {
+    fn default() -> Self {
+        CodeGenerator {
+            lua: String::new(),
+            generated_name_prefix: "_HUCK",
+            module_name: "M",
         }
     }
 }
