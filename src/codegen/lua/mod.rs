@@ -103,11 +103,9 @@ impl<'a> CodeGenerator<'a> {
                     .write_str(&format!("{}[\"{}\"]", self.generated_name_prefix, operator))?;
 
                 // Argument (function call syntax)
-                // @Note: this assumes functions are curried (? maybe not if tuples desugar to
-                // bare (func)(a, b) instead of (func)((a, b)) which doesn't make sense anyway)
                 self.lua.write_char('(')?;
                 self.expr(lhs)?;
-                self.lua.write_str(", ")?; // @Currying
+                self.lua.write_str(")(")?;
                 self.expr(rhs)?;
                 self.lua.write_char(')')?;
                 Ok(())
