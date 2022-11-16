@@ -90,7 +90,6 @@ impl<'a> CodeGenerator<'a> {
             self.lua.write_str(")\n")?;
 
             for (lhs, expr) in defn.iter() {
-                // @Fixme @Errors: this should be a compile error, not an assert
                 if arg_count != lhs.arg_count() {
                     return Err(CodegenError::IncorrectArgumentCount(format!(
                         "{}",
@@ -135,7 +134,7 @@ impl<'a> CodeGenerator<'a> {
 
             write!(
                 self.lua,
-                r#"Unmatched pattern in function `{}`"#,
+                r#"error("Unmatched pattern in function `{}`")"#,
                 &defn[0].0.name()
             )?;
 
