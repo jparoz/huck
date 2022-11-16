@@ -119,11 +119,10 @@ impl<'a> CodeGenerator<'a> {
                     self.lua.write_str("do\n")?;
                 } else {
                     self.lua.write_str("if ")?;
-                    for i in 0..self.conditions.len() {
-                        self.lua.write_char('(')?;
-                        self.lua.write_str(&self.conditions[i])?;
-                        self.lua.write_char(')')?;
-                        if i < self.conditions.len() - 1 {
+                    let condition_count = self.conditions.len();
+                    for (i, cond) in self.conditions.drain(..).enumerate() {
+                        write!(self.lua, "({})", cond)?;
+                        if i < condition_count - 1 {
                             self.lua.write_str("\nand ")?;
                         }
                     }
@@ -292,11 +291,10 @@ impl<'a> CodeGenerator<'a> {
             self.expr(expr)?;
         } else {
             self.lua.write_str("if ")?;
-            for i in 0..self.conditions.len() {
-                self.lua.write_char('(')?;
-                self.lua.write_str(&self.conditions[i])?;
-                self.lua.write_char(')')?;
-                if i < self.conditions.len() - 1 {
+            let condition_count = self.conditions.len();
+            for (i, cond) in self.conditions.drain(..).enumerate() {
+                write!(self.lua, "({})", cond)?;
+                if i < condition_count - 1 {
                     self.lua.write_str("\nand ")?;
                 }
             }
