@@ -86,10 +86,8 @@ impl<'a> CodeGenerator<'a> {
                 self.lua.write_char(')')?; // @Note: not strictly necessary?
 
                 // Argument (function call syntax)
-                // @Note: this assumes functions are curried (? maybe not if tuples desugar to
-                // bare (func)(a, b) instead of (func)((a, b)) which doesn't make sense anyway)
                 self.lua.write_char('(')?;
-                self.expr(argument)?; // @Currying
+                self.expr(argument)?;
                 self.lua.write_char(')')?;
                 Ok(())
             }
