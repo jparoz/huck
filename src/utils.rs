@@ -80,5 +80,7 @@ pub fn normalize(lua: &str) -> String {
         .unwrap();
     write!(child.stdin.take().unwrap(), "{}", lua).unwrap();
     let output = child.wait_with_output().unwrap();
-    String::from_utf8(output.stdout).unwrap()
+    String::from_utf8(output.stdout)
+        .unwrap()
+        .replace("\n\n", "\n")
 }

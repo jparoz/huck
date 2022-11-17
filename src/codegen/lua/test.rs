@@ -35,3 +35,38 @@ fn function_const() {
         ))
     )
 }
+
+#[test]
+fn function_id() {
+    assert_eq!(
+        transpile(r#"id a = a;"#).unwrap(),
+        normalize(&wrap_lua!(
+            r#"
+                M["id"] = function(_HUCK_0)
+                    local a = _HUCK_0
+                    return a
+                end
+            "#
+        ))
+    )
+}
+
+#[test]
+fn function_not() {
+    assert_eq!(
+        transpile(r#"not True = False; not False = True;"#).unwrap(),
+        normalize(&wrap_lua!(
+            r#"
+                M["not"] = function(_HUCK_0)
+                    if (getmetatable(_HUCK_0).__variant == "True") then
+                        return False
+                    end
+                    if (getmetatable(_HUCK_0).__variant == "False") then
+                        return True
+                    end
+                    error("Unmatched pattern in function `not`")
+                end
+            "#
+        ))
+    )
+}

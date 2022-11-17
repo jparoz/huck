@@ -194,6 +194,8 @@ impl<'a> CodeGenerator<'a> {
 
         // Return the expr
 
+        let mut has_any_conditions = false;
+
         for (lhs, expr) in definition {
             let args = lhs.args();
             if arg_count != args.len() {
@@ -209,6 +211,8 @@ impl<'a> CodeGenerator<'a> {
                     &format!("{}_{}", self.generated_name_prefix, ids[i]),
                 )?;
             }
+
+            has_any_conditions = has_any_conditions || !self.conditions.is_empty();
 
             if self.conditions.is_empty() {
                 // If we have no Huck arguments,
@@ -248,6 +252,15 @@ impl<'a> CodeGenerator<'a> {
                 // End the if
                 self.lua.write_str("\nend\n")?;
             }
+        }
+
+        // Emit a runtime error in case no pattern matches
+        if has_any_conditions {
+            write!(
+                self.lua,
+                "error(\"Unmatched pattern in function `{}`\")",
+                &definition[0].0.name()
+            )?;
         }
 
         // End the functions
