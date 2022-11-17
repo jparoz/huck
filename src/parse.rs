@@ -303,6 +303,7 @@ fn is_var_start_char(c: char) -> bool {
 
 // @Note: In the definition of upper_ident, we assume there are no reserved words beginning with
 // an uppercase letter.
+// @Todo @Checkme: make sure that this behaves well with custom/overloaded ops
 fn is_reserved(word: &str) -> bool {
     match word {
         "module" | "let" | "in" | "do" | "=" | ":" | "\\" | "->" | "<-" => true,

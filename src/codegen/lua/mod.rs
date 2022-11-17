@@ -92,20 +92,22 @@ impl<'a> CodeGenerator<'a> {
                 Ok(())
             }
             ast::Expr::Binop { operator, lhs, rhs } => {
-                // @Note @Fixme: this should check for Lua's builtin operators and use those
-                // if available
+                if is_lua_binop(operator.as_str()) {
+                    write!(self.lua, "({} {} {})", lhs, operator, rhs)?; // @Checkme: test better
+                } else {
+                    // Op
+                    // @Fixme: this should refer to a local, not some weird global table
+                    self.lua
+                        .write_str(&format!("{}[\"{}\"]", self.generated_name_prefix, operator))?;
 
-                // Op
-                // @Fixme: this should refer to a local, not some weird global table
-                self.lua
-                    .write_str(&format!("{}[\"{}\"]", self.generated_name_prefix, operator))?;
+                    // Argument (function call syntax)
+                    self.lua.write_char('(')?;
+                    self.expr(lhs)?;
+                    self.lua.write_str(")(")?;
+                    self.expr(rhs)?;
+                    self.lua.write_char(')')?;
+                }
 
-                // Argument (function call syntax)
-                self.lua.write_char('(')?;
-                self.expr(lhs)?;
-                self.lua.write_str(")(")?;
-                self.expr(rhs)?;
-                self.lua.write_char(')')?;
                 Ok(())
             }
             ast::Expr::Let {
@@ -355,5 +357,15 @@ impl<'a> Default for CodeGenerator<'a> {
             generated_name_prefix: "_HUCK",
             module_name: "M",
         }
+    }
+}
+
+fn is_lua_binop(op: &str) -> bool {
+    // @Todo: maybe we want these ops to have different names in Huck to in Lua.
+    // For now, just pass them through.
+    match op {
+        "+" | "-" | "*" | "/" | "//" | "^" | "%" | "&" | "~" | "|" | ">>" | "<<" | ".." | "<"
+        | "<=" | ">" | ">=" | "==" | "~=" | "and" | "or" => true,
+        _ => false,
     }
 }

@@ -38,12 +38,18 @@ pub enum Name {
     Lambda,
 }
 
-impl<'file> Display for Name {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Name {
+    pub fn as_str(&self) -> &str {
         match self {
-            Name::Ident(s) | Name::Binop(s) => write!(f, "{}", s),
-            Name::Lambda => write!(f, "lambda"),
+            Name::Ident(s) | Name::Binop(s) => &s,
+            Name::Lambda => "lambda",
         }
+    }
+}
+
+impl Display for Name {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
     }
 }
 
