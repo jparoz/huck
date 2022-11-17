@@ -195,7 +195,6 @@ impl<'a> CodeGenerator<'a> {
 
         // Return the expr
 
-        // @Todo: change this to a for loop to support multiple definitions
         for (lhs, expr) in definition {
             let args = lhs.args();
             if arg_count != args.len() {
@@ -212,20 +211,22 @@ impl<'a> CodeGenerator<'a> {
                 )?;
             }
 
-            for b in self.bindings.drain(..) {
-                self.lua.write_str(&b)?;
-            }
-
             if self.conditions.is_empty() {
                 // If we have no Huck arguments,
                 // then we should be a Lua value, not a Lua function;
                 // so we don't return, we just are.
                 if arg_count > 0 {
+                    // First bind the bindings
+                    for b in self.bindings.drain(..) {
+                        self.lua.write_str(&b)?;
+                    }
+                    // Then return the return value
                     self.lua.write_str("return ")?;
                 }
 
                 self.expr(expr)?;
             } else {
+                // Check the conditions
                 self.lua.write_str("if ")?;
                 let condition_count = self.conditions.len();
                 for (i, cond) in self.conditions.drain(..).enumerate() {
@@ -235,8 +236,17 @@ impl<'a> CodeGenerator<'a> {
                     }
                 }
                 self.lua.write_str(" then\n")?;
+
+                // If the conditions are met, then bind the bindings
+                for b in self.bindings.drain(..) {
+                    self.lua.write_str(&b)?;
+                }
+
+                // Return the return value
                 self.lua.write_str("return ")?;
                 self.expr(expr)?;
+
+                // End the if
                 self.lua.write_str("\nend\n")?;
             }
         }
