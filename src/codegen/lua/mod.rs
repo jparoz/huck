@@ -1,8 +1,10 @@
+#[cfg(test)]
+mod test;
+
 use crate::ast;
 use crate::scope::Scope;
 
 use std::fmt::Write;
-use std::sync::atomic::{self, AtomicU64};
 
 use super::Error as CodegenError;
 
@@ -14,13 +16,6 @@ pub fn generate<'file>(scope: &Scope<'file>) -> Result<String, CodegenError> {
 }
 
 type CodegenResult = Result<(), CodegenError>;
-
-// @Cleanup: maybe move this onto CodeGenerator?
-/// Generates a new and unique u64 each time it's called.
-fn unique() -> u64 {
-    static UNIQUE_COUNTER: AtomicU64 = AtomicU64::new(0);
-    UNIQUE_COUNTER.fetch_add(1, atomic::Ordering::Relaxed)
-}
 
 /// Generates Lua code, and maintains all necessary state to do so.
 /// Methods on this struct should generally correspond to Lua constructs,
@@ -35,6 +30,8 @@ struct CodeGenerator<'a> {
 
     generated_name_prefix: &'a str,
     module_name: &'a str,
+
+    id_counter: u64,
 }
 
 impl<'a> CodeGenerator<'a> {
@@ -47,6 +44,8 @@ impl<'a> CodeGenerator<'a> {
 
             generated_name_prefix,
             module_name,
+
+            id_counter: 0,
         }
     }
 
@@ -180,7 +179,7 @@ impl<'a> CodeGenerator<'a> {
 
         // Start the functions
         for i in 0..arg_count {
-            let id = unique();
+            let id = self.unique();
             ids.push(id);
 
             self.lua.write_str("function(")?;
@@ -354,6 +353,12 @@ impl<'a> CodeGenerator<'a> {
             ast::Numeral::Int(s) | ast::Numeral::Float(s) => Ok(write!(self.lua, "{}", s)?),
         }
     }
+
+    fn unique(&mut self) -> u64 {
+        let id = self.id_counter;
+        self.id_counter += 1;
+        id
+    }
 }
 
 impl<'a> Default for CodeGenerator<'a> {
@@ -366,6 +371,8 @@ impl<'a> Default for CodeGenerator<'a> {
 
             generated_name_prefix: "_HUCK",
             module_name: "M",
+
+            id_counter: 0,
         }
     }
 }
