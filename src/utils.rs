@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::io::Write;
 
 use crate::codegen;
 use crate::error::Error as HuckError;
@@ -65,12 +66,19 @@ pub fn transpile(huck: &str) -> Result<String, HuckError> {
     // Generate code
     let lua = codegen::lua::generate(&scope)?;
 
-    // @Todo: call normalize
-
-    Ok(lua)
+    Ok(normalize(&lua))
 }
 
 /// Takes some Lua and normalizes it into a consistent format.
 pub fn normalize(lua: &str) -> String {
-    todo!() // @Todo
+    // @Todo: don't use an external process (?)
+    use std::process::*;
+    let mut child = Command::new("lua-format")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    write!(child.stdin.take().unwrap(), "{}", lua).unwrap();
+    let output = child.wait_with_output().unwrap();
+    String::from_utf8(output.stdout).unwrap()
 }
