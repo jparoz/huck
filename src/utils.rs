@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::codegen;
+use crate::error::Error as HuckError;
 use crate::parse::parse;
 use crate::precedence::ApplyPrecedence;
 use crate::scope::{Scope, TypedDefinition};
@@ -21,9 +22,8 @@ pub fn execute_lua(lua: &str) -> String {
 }
 
 /// Takes some Huck and turns it into Lua, doing every step in between.
-// @Todo: should return Result<String, HuckError>
-pub fn transpile(huck: &str) -> String {
-    let mut parsed = parse(huck).unwrap(); // @Todo: bad unwrap
+pub fn transpile(huck: &str) -> Result<String, HuckError> {
+    let mut parsed = parse(huck)?;
 
     // @Todo: get these precedences in the same way as the prelude is defined
     let precs = HashMap::new();
@@ -42,11 +42,7 @@ pub fn transpile(huck: &str) -> String {
     let mut scope = Scope::new();
 
     // Solve the type constraints
-    // @Todo: don't unwrap
-    let soln = cg.solve().unwrap_or_else(|e| {
-        eprintln!("Type error: {}", e);
-        std::process::exit(1);
-    });
+    let soln = cg.solve()?;
 
     // @Cleanup: This should all be done in a more proper way
     // Apply the solution to the assumption set
@@ -67,12 +63,11 @@ pub fn transpile(huck: &str) -> String {
     // @Todo: optimisations go here
 
     // Generate code
-    // @Todo: don't unwrap
-    let lua = codegen::lua::generate(&scope).unwrap();
+    let lua = codegen::lua::generate(&scope)?;
 
     // @Todo: call normalize
 
-    lua
+    Ok(lua)
 }
 
 /// Takes some Lua and normalizes it into a consistent format.
