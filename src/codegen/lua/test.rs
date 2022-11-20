@@ -70,3 +70,25 @@ fn function_not() {
         ))
     )
 }
+
+#[test]
+fn function_and() {
+    assert_eq!(
+        transpile(r#"True && True = True; _ && _ = False;"#).unwrap(),
+        normalize(&wrap_lua!(
+            r#"
+                M["&&"] = function(_HUCK_0)
+                    return function(_HUCK_1)
+                        if (getmetatable(_HUCK_0).__variant == "True") and
+                            (getmetatable(_HUCK_1).__variant == "True") then
+                                return True
+                            end
+                            local _ = _HUCK_0
+                            local _ = _HUCK_1
+                            return False
+                    end
+                end
+            "#
+        ))
+    )
+}
