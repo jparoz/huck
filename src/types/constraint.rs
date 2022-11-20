@@ -4,7 +4,7 @@ use std::iter;
 
 use log::{info, log_enabled, trace};
 
-use crate::ast::{Assignment, Expr, Lhs, Name, Numeral, Pattern, Term};
+use crate::ast::{Assignment, Definition, Expr, Lhs, Name, Numeral, Pattern, Term};
 use crate::types::{
     self, ApplySub, Primitive, Substitution, Type, TypeScheme, TypeVar, TypeVarSet,
 };
@@ -69,7 +69,7 @@ impl ActiveVars for (&[Constraint], &[Constraint]) {
     }
 }
 
-impl<'a> Display for Constraint {
+impl<'file> Display for Constraint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Constraint::Equality(a, b) => write!(f, "{} ≡ {}", a, b),
@@ -297,8 +297,7 @@ pub trait GenerateConstraints {
     fn generate(&self, cg: &mut ConstraintGenerator) -> Type;
 }
 
-// This impl assumes that each assignment in the Vec is a definition of the same function.
-impl<'a> GenerateConstraints for Vec<Assignment<'a>> {
+impl<'file> GenerateConstraints for Definition<'file> {
     fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
         let beta = cg.fresh();
 
@@ -313,7 +312,7 @@ impl<'a> GenerateConstraints for Vec<Assignment<'a>> {
     }
 }
 
-impl<'a> GenerateConstraints for Assignment<'a> {
+impl<'file> GenerateConstraints for Assignment<'file> {
     fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
         let (lhs, expr) = self;
 
@@ -337,7 +336,7 @@ impl<'a> GenerateConstraints for Assignment<'a> {
     }
 }
 
-impl<'a> GenerateConstraints for Expr<'a> {
+impl<'file> GenerateConstraints for Expr<'file> {
     fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
         match self {
             Expr::Term(Term::Numeral(Numeral::Int(_))) => Type::Prim(Primitive::Int),
@@ -440,7 +439,7 @@ impl<'a> GenerateConstraints for Expr<'a> {
     }
 }
 
-impl<'a> Display for ConstraintGenerator {
+impl<'file> Display for ConstraintGenerator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Constraints:")?;
         for constraint in self.constraints.iter() {
