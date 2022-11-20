@@ -1,3 +1,5 @@
+use log::info;
+
 use std::collections::HashMap;
 use std::io::Write;
 
@@ -65,6 +67,8 @@ pub fn transpile(huck: &str) -> Result<String, HuckError> {
 
     // Generate code
     let lua = codegen::lua::generate(&scope)?;
+
+    info!("Generated Lua code:\n{}", lua);
 
     Ok(normalize(&lua))
 }
