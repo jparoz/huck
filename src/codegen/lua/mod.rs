@@ -10,9 +10,8 @@ use super::Error as CodegenError;
 
 /// Generates Lua for the given Huck Scope.
 pub fn generate<'file>(scope: &Scope<'file>) -> Result<String, CodegenError> {
-    let mut cg = CodeGenerator::default();
-    cg.scope(scope)?;
-    Ok(cg.lua)
+    let mut cg = CodeGenerator::new(scope, "_HUCK");
+    cg.generate()
 }
 
 type CodegenResult = Result<(), CodegenError>;
@@ -28,18 +27,22 @@ struct CodeGenerator<'a> {
     conditions: Vec<String>,
     bindings: Vec<String>,
 
+    scope: &'a Scope<'a>,
+
     generated_name_prefix: &'a str,
 
     id_counter: u64,
 }
 
 impl<'a> CodeGenerator<'a> {
-    fn new(generated_name_prefix: &'a str) -> Self {
+    fn new(scope: &'a Scope, generated_name_prefix: &'a str) -> Self {
         CodeGenerator {
             lua: String::new(),
 
             conditions: Vec::new(),
             bindings: Vec::new(),
+
+            scope,
 
             generated_name_prefix,
 
@@ -89,13 +92,13 @@ impl<'a> CodeGenerator<'a> {
         }
     }
 
-    /// Generate Lua code for the given Scope.
+    /// Generate Lua code for the Scope used in CodeGenerator::new.
     /// This will generate a Lua chunk which returns a table containing the definitions given in the
     /// Huck scope.
-    fn scope<'file>(&mut self, scope: &Scope<'file>) -> CodegenResult {
+    fn generate<'file>(mut self) -> Result<String, CodegenError> {
         let mut return_stat = "return {\n".to_string();
 
-        for (name, typed_defn) in scope.iter() {
+        for (name, typed_defn) in self.scope.iter() {
             write!(self.lua, r#"local {} = "#, self.lua_safe(name))?;
             self.definition(&typed_defn.definition)?;
             self.lua.write_str("\n\n")?;
@@ -105,7 +108,7 @@ impl<'a> CodeGenerator<'a> {
         self.lua.write_str(&return_stat)?;
         self.lua.write_char('}')?;
 
-        Ok(())
+        Ok(self.lua)
     }
 
     /// Generates a Lua expression representing a Huck definition,
@@ -394,21 +397,6 @@ impl<'a> CodeGenerator<'a> {
         let id = self.id_counter;
         self.id_counter += 1;
         id
-    }
-}
-
-impl<'a> Default for CodeGenerator<'a> {
-    fn default() -> Self {
-        CodeGenerator {
-            lua: String::new(),
-
-            conditions: Vec::new(),
-            bindings: Vec::new(),
-
-            generated_name_prefix: "_HUCK",
-
-            id_counter: 0,
-        }
     }
 }
 
