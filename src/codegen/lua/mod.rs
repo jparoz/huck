@@ -29,13 +29,12 @@ struct CodeGenerator<'a> {
     bindings: Vec<String>,
 
     generated_name_prefix: &'a str,
-    module_name: &'a str,
 
     id_counter: u64,
 }
 
 impl<'a> CodeGenerator<'a> {
-    fn new(generated_name_prefix: &'a str, module_name: &'a str) -> Self {
+    fn new(generated_name_prefix: &'a str) -> Self {
         CodeGenerator {
             lua: String::new(),
 
@@ -43,9 +42,50 @@ impl<'a> CodeGenerator<'a> {
             bindings: Vec::new(),
 
             generated_name_prefix,
-            module_name,
 
             id_counter: 0,
+        }
+    }
+
+    /// Returns a Lua-safe version of a Huck identifier.
+    ///
+    /// Guaranteed to return the same string each time it's called with the same argument.
+    fn lua_safe(&self, name: &ast::Name) -> String {
+        match name {
+            // @Todo: remap Lua keywords
+            ast::Name::Ident(s) if is_lua_keyword(s) => {
+                format!("{}_{}", self.generated_name_prefix, s)
+            }
+            ast::Name::Ident(s) => s.to_string(),
+            ast::Name::Lambda => "lambda".to_string(), // @Checkme: should be unreachable
+            ast::Name::Binop(s) => {
+                let mut output = self.generated_name_prefix.to_string();
+
+                for c in s.chars() {
+                    match c {
+                        '=' => output.push_str("_EQUALS"),
+                        '+' => output.push_str("_PLUS"),
+                        '-' => output.push_str("_MINUS"),
+                        '|' => output.push_str("_BAR"),
+                        '!' => output.push_str("_BANG"),
+                        '@' => output.push_str("_AT"),
+                        '#' => output.push_str("_HASH"),
+                        '$' => output.push_str("_DOLLAR"),
+                        '%' => output.push_str("_PERCENT"),
+                        '^' => output.push_str("_CARAT"),
+                        '&' => output.push_str("_AMPERS"),
+                        '*' => output.push_str("_STAR"),
+                        ':' => output.push_str("_COLON"),
+                        '.' => output.push_str("_DOT"),
+                        ',' => output.push_str("_COMMA"),
+                        '/' => output.push_str("_SLASH"),
+                        '~' => output.push_str("_TILDE"),
+                        _ => unreachable!(),
+                    }
+                }
+
+                output
+            }
         }
     }
 
@@ -53,17 +93,19 @@ impl<'a> CodeGenerator<'a> {
     /// This will generate a Lua chunk which returns a table containing the definitions given in the
     /// Huck scope.
     fn scope<'file>(&mut self, scope: &Scope<'file>) -> CodegenResult {
-        write!(self.lua, "local {} = {{}}\n\n", self.module_name)?;
+        let mut return_stat = "return {\n".to_string();
 
         for (name, typed_defn) in scope.iter() {
-            write!(self.lua, r#"{}["{}"] = "#, self.module_name, name)?;
+            write!(self.lua, r#"local {} = "#, self.lua_safe(name))?;
             self.definition(&typed_defn.definition)?;
             self.lua.write_str("\n\n")?;
+            writeln!(return_stat, r#"["{}"] = {},"#, name, self.lua_safe(name))?;
         }
 
-        Ok(self
-            .lua
-            .write_str(&format!("return {}", self.module_name))?)
+        self.lua.write_str(&return_stat)?;
+        self.lua.write_char('}')?;
+
+        Ok(())
     }
 
     /// Generates a Lua expression representing a Huck definition,
@@ -95,9 +137,7 @@ impl<'a> CodeGenerator<'a> {
                     write!(self.lua, "({} {} {})", lhs, operator, rhs)?; // @Checkme: test better
                 } else {
                     // Op
-                    // @Fixme: this should refer to a local, not some weird global table
-                    self.lua
-                        .write_str(&format!("{}[\"{}\"]", self.generated_name_prefix, operator))?;
+                    self.lua.write_str(&self.lua_safe(operator))?;
 
                     // Argument (function call syntax)
                     self.lua.write_char('(')?;
@@ -161,7 +201,7 @@ impl<'a> CodeGenerator<'a> {
             }
 
             // @Inline?
-            ast::Term::Name(name) => self.name(name),
+            ast::Term::Name(name) => Ok(write!(self.lua, "{}", self.lua_safe(name))?),
 
             ast::Term::Parens(expr) => {
                 self.lua.write_char('(')?;
@@ -344,26 +384,6 @@ impl<'a> CodeGenerator<'a> {
         Ok(())
     }
 
-    /// Generates a Lua-safe name for the Huck Name.
-    fn name<'file>(&mut self, name: &ast::Name) -> CodegenResult {
-        match name {
-            // @Todo: remap Lua keywords
-            ast::Name::Ident(s) => Ok(write!(self.lua, "{}", s)?),
-            ast::Name::Lambda => Ok(write!(self.lua, "lambda")?), // @Checkme: should be unreachable
-            ast::Name::Binop(s) => {
-                // @Todo: Convert the binop into some kind of Lua identifier.
-                // Maybe something like this conversion:
-                //      >>=     ->      _HUCK_RANGLE_RANGLE_EQUALS
-                //      <*>     ->      _HUCK_LANGLE_STAR_RANGLE
-                //      &&      ->      _HUCK_AMPERS_AMPERS
-                // Note that the binop might be a valid Lua binop
-                // (which possibly will/should never happen),
-                // but this method should probably still do the conversion.
-                todo!("Convert the binop into some kind of Lua identifier: {}", s)
-            }
-        }
-    }
-
     fn numeric_literal<'file>(&mut self, lit: &ast::Numeral<'file>) -> CodegenResult {
         match lit {
             ast::Numeral::Int(s) | ast::Numeral::Float(s) => Ok(write!(self.lua, "{}", s)?),
@@ -386,7 +406,6 @@ impl<'a> Default for CodeGenerator<'a> {
             bindings: Vec::new(),
 
             generated_name_prefix: "_HUCK",
-            module_name: "M",
 
             id_counter: 0,
         }
@@ -399,6 +418,16 @@ fn is_lua_binop(op: &str) -> bool {
     match op {
         "+" | "-" | "*" | "/" | "//" | "^" | "%" | "&" | "~" | "|" | ">>" | "<<" | ".." | "<"
         | "<=" | ">" | ">=" | "==" | "~=" | "and" | "or" => true,
+        _ => false,
+    }
+}
+
+fn is_lua_keyword(word: &str) -> bool {
+    match word {
+        "and" | "break" | "do" | "else" | "elseif" | "end" | "false" | "for" | "function"
+        | "goto" | "if" | "in" | "local" | "nil" | "not" | "or" | "repeat" | "return" | "then"
+        | "true" | "until" | "while" => true,
+
         _ => false,
     }
 }
