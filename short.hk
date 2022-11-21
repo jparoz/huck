@@ -9,6 +9,18 @@
 (* True && True = True; *)
 (* _ && _ = False; *)
 
+bothAreTrue a b = a && b;
+
+val = 123;
+
+uses_val = val * 2;
+
+mutualA 0 = 0;
+mutualA x = mutualB x - 1;
+
+mutualB 0 = 0;
+mutualB x = mutualA x - 1;
+
 (* id1 = \a -> a; *)
 (* id2 a = a; *)
 

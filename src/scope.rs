@@ -38,6 +38,10 @@ impl<'file> Scope<'file> {
         self.definitions.insert(k, v)
     }
 
+    pub fn contains_key(&self, k: &Name) -> bool {
+        self.definitions.contains_key(k)
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = (&Name, &TypedDefinition)> {
         self.definitions.iter()
     }

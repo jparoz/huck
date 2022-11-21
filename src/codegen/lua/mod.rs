@@ -96,13 +96,21 @@ impl<'a> CodeGenerator<'a> {
     /// This will generate a Lua chunk which returns a table containing the definitions given in the
     /// Huck scope.
     fn generate<'file>(mut self) -> Result<String, CodegenError> {
+        writeln!(self.lua, "local {} = {{}}", self.generated_name_prefix)?;
+
         let mut return_stat = "return {\n".to_string();
 
         for (name, typed_defn) in self.scope.iter() {
-            write!(self.lua, r#"local {} = "#, self.lua_safe(name))?;
+            // @Todo: lookup whether to emit _HUCK["{}"] or {} (look in self.scope)
+            write!(self.lua, r#"{}["{}"] = "#, self.generated_name_prefix, name)?;
             self.definition(&typed_defn.definition)?;
-            self.lua.write_str("\n\n")?;
-            writeln!(return_stat, r#"["{}"] = {},"#, name, self.lua_safe(name))?;
+            self.lua.write_str("\n")?;
+            writeln!(
+                return_stat,
+                r#"["{name}"] = {prefix}["{name}"],"#,
+                name = name,
+                prefix = self.generated_name_prefix,
+            )?;
         }
 
         self.lua.write_str(&return_stat)?;
@@ -137,10 +145,14 @@ impl<'a> CodeGenerator<'a> {
             }
             ast::Expr::Binop { operator, lhs, rhs } => {
                 if is_lua_binop(operator.as_str()) {
-                    write!(self.lua, "({} {} {})", lhs, operator, rhs)?; // @Checkme: test better
+                    self.lua.write_char('(')?;
+                    self.expr(lhs)?;
+                    write!(self.lua, " {} ", operator)?;
+                    self.expr(rhs)?;
+                    self.lua.write_char(')')?;
                 } else {
                     // Op
-                    self.lua.write_str(&self.lua_safe(operator))?;
+                    self.reference(operator)?;
 
                     // Argument (function call syntax)
                     self.lua.write_char('(')?;
@@ -203,8 +215,7 @@ impl<'a> CodeGenerator<'a> {
                 Ok(self.lua.write_char('}')?)
             }
 
-            // @Inline?
-            ast::Term::Name(name) => Ok(write!(self.lua, "{}", self.lua_safe(name))?),
+            ast::Term::Name(name) => self.reference(name),
 
             ast::Term::Parens(expr) => {
                 self.lua.write_char('(')?;
@@ -385,6 +396,22 @@ impl<'a> CodeGenerator<'a> {
         };
 
         Ok(())
+    }
+
+    fn reference<'file>(&mut self, name: &ast::Name) -> CodegenResult {
+        if self.scope.contains_key(name) {
+            // It's a top-level definition,
+            // so we should emit e.g. _HUCK["var"]
+            Ok(write!(
+                self.lua,
+                r#"{}["{}"]"#,
+                self.generated_name_prefix, name
+            )?)
+        } else {
+            // It's a locally-bound definition,
+            // so we should emit e.g. var
+            Ok(write!(self.lua, r#"{}"#, self.lua_safe(name))?)
+        }
     }
 
     fn numeric_literal<'file>(&mut self, lit: &ast::Numeral<'file>) -> CodegenResult {
