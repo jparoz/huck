@@ -9,12 +9,12 @@ use std::fmt::Write;
 use super::Error as CodegenError;
 
 /// Generates Lua for the given Huck Scope.
-pub fn generate<'file>(scope: &Scope<'file>) -> Result<String, CodegenError> {
+pub fn generate<'file>(scope: &Scope<'file>) -> Result<String> {
     let mut cg = CodeGenerator::new(scope, "_HUCK");
     cg.generate()
 }
 
-type CodegenResult = Result<(), CodegenError>;
+type Result<T> = std::result::Result<T, CodegenError>;
 
 /// Generates Lua code, and maintains all necessary state to do so.
 /// Methods on this struct should generally correspond to Lua constructs,
@@ -95,7 +95,7 @@ impl<'a> CodeGenerator<'a> {
     /// Generate Lua code for the Scope used in CodeGenerator::new.
     /// This will generate a Lua chunk which returns a table containing the definitions given in the
     /// Huck scope.
-    fn generate<'file>(mut self) -> Result<String, CodegenError> {
+    fn generate<'file>(mut self) -> Result<String> {
         writeln!(self.lua, "local {} = {{}}", self.generated_name_prefix)?;
 
         let mut return_stat = "return {\n".to_string();
@@ -124,11 +124,11 @@ impl<'a> CodeGenerator<'a> {
     /// This has to be generated from the Vec<Assignment>,
     /// because in the case of multiple definitions,
     /// we have to generate a Lua 'switch' statement.
-    fn definition<'file>(&mut self, defn: &ast::Definition<'file>) -> CodegenResult {
+    fn definition<'file>(&mut self, defn: &ast::Definition<'file>) -> Result<()> {
         self.curried_function(defn)
     }
 
-    fn expr<'file>(&mut self, expr: &ast::Expr<'file>) -> CodegenResult {
+    fn expr<'file>(&mut self, expr: &ast::Expr<'file>) -> Result<()> {
         match expr {
             ast::Expr::Term(term) => self.term(term),
             ast::Expr::App { func, argument } => {
@@ -192,7 +192,7 @@ impl<'a> CodeGenerator<'a> {
         }
     }
 
-    fn term<'file>(&mut self, term: &ast::Term<'file>) -> CodegenResult {
+    fn term<'file>(&mut self, term: &ast::Term<'file>) -> Result<()> {
         match term {
             // @Inline?
             ast::Term::Numeral(num) => self.numeric_literal(num),
@@ -225,7 +225,7 @@ impl<'a> CodeGenerator<'a> {
         }
     }
 
-    fn curried_function<'file>(&mut self, definition: &ast::Definition) -> CodegenResult {
+    fn curried_function<'file>(&mut self, definition: &ast::Definition) -> Result<()> {
         debug_assert!(definition.len() > 0);
 
         let arg_count = definition[0].0.arg_count();
@@ -333,7 +333,7 @@ impl<'a> CodeGenerator<'a> {
         &mut self,
         pat: &ast::Pattern<'file>,
         lua_arg_name: &str,
-    ) -> CodegenResult {
+    ) -> Result<()> {
         // This function takes a Lua argument name,
         // e.g. _HUCK_0, _HUCK_12[3], _HUCK_3[13][334] or whatever.
         // This is to allow nested pattern matches.
@@ -398,7 +398,7 @@ impl<'a> CodeGenerator<'a> {
         Ok(())
     }
 
-    fn reference<'file>(&mut self, name: &ast::Name) -> CodegenResult {
+    fn reference<'file>(&mut self, name: &ast::Name) -> Result<()> {
         if self.scope.contains_key(name) {
             // It's a top-level definition,
             // so we should emit e.g. _HUCK["var"]
@@ -414,7 +414,7 @@ impl<'a> CodeGenerator<'a> {
         }
     }
 
-    fn numeric_literal<'file>(&mut self, lit: &ast::Numeral<'file>) -> CodegenResult {
+    fn numeric_literal<'file>(&mut self, lit: &ast::Numeral<'file>) -> Result<()> {
         match lit {
             ast::Numeral::Int(s) | ast::Numeral::Float(s) => Ok(write!(self.lua, "{}", s)?),
         }
