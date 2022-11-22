@@ -306,7 +306,8 @@ fn is_var_start_char(c: char) -> bool {
 // @Todo @Checkme: make sure that this behaves well with custom/overloaded ops
 fn is_reserved(word: &str) -> bool {
     match word {
-        "module" | "let" | "in" | "do" | "=" | ":" | "\\" | "->" | "<-" => true,
+        "module" | "lazy" | "import" | "let" | "in" | "do" | "=" | ":" | "\\" | "->" | "<-"
+        | "=>" | "," | "()" => true,
         _ => false,
     }
 }

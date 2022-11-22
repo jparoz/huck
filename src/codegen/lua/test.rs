@@ -90,3 +90,17 @@ fn function_and() {
         )
     )
 }
+
+#[test]
+fn literal_list() {
+    assert_eq!(
+        transpile(r#"list = [1, 2, 3];"#).unwrap(),
+        normalize(
+            r#"
+                local _HUCK = {}
+                _HUCK["list"] = {1, 2, 3}
+                return {["list"] = _HUCK["list"]}
+            "#
+        )
+    )
+}
