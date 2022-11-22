@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+if git grep --ignore-case --context 3 nocommit -- :/src
+then
+    echo 'Found an instance of "nocommit", stopping commit!'
+    exit 1
+fi
+
+if cargo test
+then : # do nothing
+else
+    status=$?
+    echo "Test suite had failures, stopping commit!"
+    exit $status
+fi
+
+exit 0
