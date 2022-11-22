@@ -55,7 +55,7 @@ impl<'a> CodeGenerator<'a> {
 
         let mut return_entries = String::new();
 
-        for (name, typed_defn) in self.scope.iter() {
+        for (name, typed_defn) in self.scope.definitions.iter() {
             write!(lua, r#"{}["{}"] = "#, self.generated_name_prefix, name,)?;
             writeln!(lua, "{}", self.definition(&typed_defn.definition)?)?;
             writeln!(
@@ -379,7 +379,7 @@ impl<'a> CodeGenerator<'a> {
     }
 
     fn reference<'file>(&mut self, name: &ast::Name) -> Result<String> {
-        if self.scope.contains_key(name) {
+        if self.scope.definitions.contains_key(name) {
             // It's a top-level definition,
             // so we should emit e.g. _HUCK["var"]
             Ok(format!(r#"{}["{}"]"#, self.generated_name_prefix, name))

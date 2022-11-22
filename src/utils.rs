@@ -1,5 +1,3 @@
-use log::info;
-
 use std::collections::HashMap;
 use std::io::Write;
 
@@ -58,9 +56,9 @@ pub fn transpile(huck: &str) -> Result<String, HuckError> {
         typ.apply(&soln);
 
         let type_scheme = typ.generalize(&assumption_vars);
-        // info!("Inferred type for {} : {}", name, type_scheme);
+        log::info!("Inferred type for {} : {}", name, type_scheme);
         let defn = TypedDefinition::new(type_scheme, assignments);
-        scope.insert(name, defn);
+        scope.definitions.insert(name, defn);
     }
 
     // @Todo: optimisations go here
@@ -68,7 +66,7 @@ pub fn transpile(huck: &str) -> Result<String, HuckError> {
     // Generate code
     let lua = codegen::lua::generate(&scope)?;
 
-    info!("Generated Lua code:\n{}", lua);
+    log::info!("Generated Lua code:\n{}", lua);
 
     Ok(normalize(&lua))
 }

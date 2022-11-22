@@ -20,7 +20,7 @@ impl<'file> TypedDefinition<'file> {
 
 #[derive(Debug)]
 pub struct Scope<'file> {
-    definitions: HashMap<Name, TypedDefinition<'file>>,
+    pub definitions: HashMap<Name, TypedDefinition<'file>>,
 }
 
 impl<'file> Scope<'file> {
@@ -28,25 +28,5 @@ impl<'file> Scope<'file> {
         Scope {
             definitions: HashMap::new(),
         }
-    }
-
-    pub fn get(&self, k: &Name) -> Option<&TypedDefinition> {
-        self.definitions.get(k)
-    }
-
-    pub fn insert(&mut self, k: Name, v: TypedDefinition<'file>) -> Option<TypedDefinition<'file>> {
-        self.definitions.insert(k, v)
-    }
-
-    pub fn contains_key(&self, k: &Name) -> bool {
-        self.definitions.contains_key(k)
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = (&Name, &TypedDefinition)> {
-        self.definitions.iter()
-    }
-
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&Name, &mut TypedDefinition<'file>)> {
-        self.definitions.iter_mut()
     }
 }
