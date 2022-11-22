@@ -42,7 +42,7 @@ impl Name {
     pub fn as_str(&self) -> &str {
         match self {
             Name::Ident(s) | Name::Binop(s) => &s,
-            Name::Lambda => "lambda",
+            Name::Lambda => unreachable!(),
         }
     }
 }
@@ -100,7 +100,7 @@ impl<'file> Display for Lhs<'file> {
                 match name {
                     Name::Ident(s) => write!(f, "{}", s)?,
                     Name::Binop(s) => write!(f, "({})", s)?,
-                    Name::Lambda => write!(f, "lambda")?, // Should this be here??
+                    Name::Lambda => unreachable!(),
                 }
                 for arg in args.iter() {
                     write!(f, " {}", arg)?;

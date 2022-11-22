@@ -81,7 +81,7 @@ impl<'a> CodeGenerator<'a> {
                 format!("{}_{}", self.generated_name_prefix, s)
             }
             ast::Name::Ident(s) => s.to_string(),
-            ast::Name::Lambda => "lambda".to_string(), // @Checkme: should be unreachable
+            ast::Name::Lambda => unreachable!(),
             ast::Name::Binop(s) => {
                 let mut output = self.generated_name_prefix.to_string();
 
