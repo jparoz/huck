@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::ast::{Assignment, Definition, Name};
 use crate::types::TypeScheme;
@@ -20,13 +20,13 @@ impl<'file> TypedDefinition<'file> {
 
 #[derive(Debug)]
 pub struct Scope<'file> {
-    pub definitions: HashMap<Name, TypedDefinition<'file>>,
+    pub definitions: BTreeMap<Name, TypedDefinition<'file>>,
 }
 
 impl<'file> Scope<'file> {
     pub fn new() -> Self {
         Scope {
-            definitions: HashMap::new(),
+            definitions: BTreeMap::new(),
         }
     }
 }

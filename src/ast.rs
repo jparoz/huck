@@ -31,7 +31,7 @@ impl<'file> Chunk<'file> {
 
 pub type Assignment<'file> = (Lhs<'file>, Expr<'file>);
 
-#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub enum Name {
     Ident(String),
     Binop(String),
