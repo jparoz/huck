@@ -10,8 +10,7 @@ use super::Error as CodegenError;
 
 /// Generates Lua for the given Huck Scope.
 pub fn generate<'file>(scope: &Scope<'file>) -> Result<String> {
-    let mut cg = CodeGenerator::new(scope, "_HUCK");
-    cg.generate()
+    CodeGenerator::new(scope, "_HUCK").generate()
 }
 
 type Result<T> = std::result::Result<T, CodegenError>;
@@ -21,8 +20,6 @@ type Result<T> = std::result::Result<T, CodegenError>;
 /// not to Huck constructs.
 #[derive(Debug)]
 struct CodeGenerator<'a> {
-    lua: String,
-
     // These are used in generating curried functions.
     conditions: Vec<String>,
     bindings: Vec<String>,
@@ -37,8 +34,6 @@ struct CodeGenerator<'a> {
 impl<'a> CodeGenerator<'a> {
     fn new(scope: &'a Scope, generated_name_prefix: &'a str) -> Self {
         CodeGenerator {
-            lua: String::new(),
-
             conditions: Vec::new(),
             bindings: Vec::new(),
 
@@ -48,6 +43,32 @@ impl<'a> CodeGenerator<'a> {
 
             id_counter: 0,
         }
+    }
+
+    /// Generate Lua code for the Scope used in CodeGenerator::new.
+    /// This will generate a Lua chunk which returns a table containing the definitions given in the
+    /// Huck scope.
+    fn generate<'file>(mut self) -> Result<String> {
+        let mut lua = String::new();
+
+        writeln!(lua, "local {} = {{}}", self.generated_name_prefix)?;
+
+        let mut return_entries = String::new();
+
+        for (name, typed_defn) in self.scope.iter() {
+            write!(lua, r#"{}["{}"] = "#, self.generated_name_prefix, name,)?;
+            writeln!(lua, "{}", self.definition(&typed_defn.definition)?)?;
+            writeln!(
+                return_entries,
+                r#"["{name}"] = {prefix}["{name}"],"#,
+                name = name,
+                prefix = self.generated_name_prefix,
+            )?;
+        }
+
+        write!(lua, "return {{\n{}}}", return_entries)?;
+
+        Ok(lua)
     }
 
     /// Returns a Lua-safe version of a Huck identifier.
@@ -92,98 +113,64 @@ impl<'a> CodeGenerator<'a> {
         }
     }
 
-    /// Generate Lua code for the Scope used in CodeGenerator::new.
-    /// This will generate a Lua chunk which returns a table containing the definitions given in the
-    /// Huck scope.
-    fn generate<'file>(mut self) -> Result<String> {
-        writeln!(self.lua, "local {} = {{}}", self.generated_name_prefix)?;
-
-        let mut return_stat = "return {\n".to_string();
-
-        for (name, typed_defn) in self.scope.iter() {
-            // @Todo: lookup whether to emit _HUCK["{}"] or {} (look in self.scope)
-            write!(self.lua, r#"{}["{}"] = "#, self.generated_name_prefix, name)?;
-            self.definition(&typed_defn.definition)?;
-            self.lua.write_str("\n")?;
-            writeln!(
-                return_stat,
-                r#"["{name}"] = {prefix}["{name}"],"#,
-                name = name,
-                prefix = self.generated_name_prefix,
-            )?;
-        }
-
-        self.lua.write_str(&return_stat)?;
-        self.lua.write_char('}')?;
-
-        Ok(self.lua)
-    }
-
     /// Generates a Lua expression representing a Huck definition,
     /// even if it's defined on multiple lines.
     /// This has to be generated from the Vec<Assignment>,
     /// because in the case of multiple definitions,
     /// we have to generate a Lua 'switch' statement.
-    fn definition<'file>(&mut self, defn: &ast::Definition<'file>) -> Result<()> {
+    fn definition<'file>(&mut self, defn: &ast::Definition<'file>) -> Result<String> {
         self.curried_function(defn)
     }
 
-    fn expr<'file>(&mut self, expr: &ast::Expr<'file>) -> Result<()> {
+    fn expr<'file>(&mut self, expr: &ast::Expr<'file>) -> Result<String> {
         match expr {
             ast::Expr::Term(term) => self.term(term),
             ast::Expr::App { func, argument } => {
-                // Func (as an expr, surrounded in brackets)
-                self.lua.write_char('(')?; // @Note: not strictly necessary?
-                self.expr(func)?;
-                self.lua.write_char(')')?; // @Note: not strictly necessary?
-
-                // Argument (function call syntax)
-                self.lua.write_char('(')?;
-                self.expr(argument)?;
-                self.lua.write_char(')')?;
-                Ok(())
+                Ok(format!("({})({})", self.expr(func)?, self.expr(argument)?))
             }
             ast::Expr::Binop { operator, lhs, rhs } => {
                 if is_lua_binop(operator.as_str()) {
-                    self.lua.write_char('(')?;
-                    self.expr(lhs)?;
-                    write!(self.lua, " {} ", operator)?;
-                    self.expr(rhs)?;
-                    self.lua.write_char(')')?;
+                    Ok(format!(
+                        "({} {} {})",
+                        self.expr(lhs)?,
+                        operator,
+                        self.expr(rhs)?
+                    ))
                 } else {
-                    // Op
-                    self.reference(operator)?;
-
-                    // Argument (function call syntax)
-                    self.lua.write_char('(')?;
-                    self.expr(lhs)?;
-                    self.lua.write_str(")(")?;
-                    self.expr(rhs)?;
-                    self.lua.write_char(')')?;
+                    Ok(format!(
+                        "{}({})({})",
+                        self.reference(operator)?,
+                        self.expr(lhs)?,
+                        self.expr(rhs)?
+                    ))
                 }
-
-                Ok(())
             }
             ast::Expr::Let {
                 definitions,
                 in_expr,
             } => {
+                let mut lua = String::new();
+
                 // Open a new scope (i.e. an immediately-called function so that return works)
-                self.lua.write_str("(function()\n")?;
+                writeln!(lua, "(function()")?;
 
                 // Make a new local variable for each assignment
                 for definition in definitions.values() {
-                    write!(self.lua, "local {} = ", definition[0].0.name())?;
-                    self.definition(definition)?;
-                    self.lua.write_char('\n')?;
+                    writeln!(
+                        lua,
+                        "local {} = {}",
+                        definition[0].0.name(),
+                        self.definition(definition)?
+                    )?;
                 }
 
                 // Generate the in_expr
-                self.lua.write_str("return ")?;
-                self.expr(in_expr)?;
+                writeln!(lua, "return {}", self.expr(in_expr)?)?;
 
-                self.lua.write_str("\nend)()")?;
-                Ok(())
+                // End and call the function
+                writeln!(lua, "end)()")?;
+
+                Ok(lua)
             }
             ast::Expr::Lambda { lhs, rhs } => {
                 debug_assert!(lhs.arg_count() > 0);
@@ -192,57 +179,50 @@ impl<'a> CodeGenerator<'a> {
         }
     }
 
-    fn term<'file>(&mut self, term: &ast::Term<'file>) -> Result<()> {
+    fn term<'file>(&mut self, term: &ast::Term<'file>) -> Result<String> {
         match term {
-            // @Inline?
-            ast::Term::Numeral(num) => self.numeric_literal(num),
+            ast::Term::Numeral(num) => match num {
+                ast::Numeral::Int(s) | ast::Numeral::Float(s) => Ok(s.to_string()),
+            },
 
             // possible @XXX, @Todo: escape (or check escaping) better
             // @Note: includes the quotes
-            ast::Term::String(s) => Ok(self.lua.write_str(s)?),
+            ast::Term::String(s) => Ok(s.to_string()),
 
             // @Note: this is where the semantics for Huck Lists are decided.
             // The below simply converts them as Lua lists;
             // possibly one day we should instead convert them to Lua iterators.
-            ast::Term::List(v) => {
-                self.lua.write_char('{')?;
-                for (i, e) in v.iter().enumerate() {
-                    self.expr(e)?;
-                    if i < v.len() {
-                        write!(self.lua, ", ")?;
-                    }
-                }
-                Ok(self.lua.write_char('}')?)
-            }
+            ast::Term::List(v) => Ok(format!(
+                "{{{}}}",
+                v.iter()
+                    .map(|e| self.expr(e))
+                    .collect::<Result<Vec<_>>>()?
+                    .join(", ")
+            )),
 
             ast::Term::Name(name) => self.reference(name),
 
-            ast::Term::Parens(expr) => {
-                self.lua.write_char('(')?;
-                self.expr(expr)?;
-                Ok(self.lua.write_char(')')?)
-            }
+            ast::Term::Parens(expr) => Ok(format!("({})", self.expr(expr)?)),
         }
     }
 
-    fn curried_function<'file>(&mut self, definition: &ast::Definition) -> Result<()> {
+    fn curried_function<'file>(&mut self, definition: &ast::Definition) -> Result<String> {
         debug_assert!(definition.len() > 0);
 
         let arg_count = definition[0].0.arg_count();
         let mut ids = Vec::with_capacity(arg_count);
+
+        let mut lua = String::new();
 
         // Start the functions
         for i in 0..arg_count {
             let id = self.unique();
             ids.push(id);
 
-            self.lua.write_str("function(")?;
-            self.lua
-                .write_str(&format!("{}_{}", self.generated_name_prefix, ids[i]))?;
-            self.lua.write_str(")\n")?;
+            writeln!(lua, "function({}_{})", self.generated_name_prefix, ids[i])?;
 
             if i < arg_count - 1 {
-                self.lua.write_str("return ")?;
+                write!(lua, "return ")?;
             }
         }
 
@@ -278,53 +258,53 @@ impl<'a> CodeGenerator<'a> {
                 if arg_count > 0 {
                     // First bind the bindings
                     for b in self.bindings.drain(..) {
-                        self.lua.write_str(&b)?;
+                        lua.write_str(&b)?;
                     }
                     // Then return the return value
-                    self.lua.write_str("return ")?;
+                    write!(lua, "return ")?;
                 }
 
-                self.expr(expr)?;
+                writeln!(lua, "{}", self.expr(expr)?)?;
             } else {
                 // Check the conditions
-                self.lua.write_str("if ")?;
+                lua.write_str("if ")?;
                 let condition_count = self.conditions.len();
                 for (i, cond) in self.conditions.drain(..).enumerate() {
-                    write!(self.lua, "({})", cond)?;
+                    write!(lua, "({})", cond)?;
                     if i < condition_count - 1 {
-                        self.lua.write_str("\nand ")?;
+                        lua.write_str("\nand ")?;
                     }
                 }
-                self.lua.write_str(" then\n")?;
+                writeln!(lua, " then")?;
 
                 // If the conditions are met, then bind the bindings
                 for b in self.bindings.drain(..) {
-                    self.lua.write_str(&b)?;
+                    lua.write_str(&b)?;
                 }
 
                 // Return the return value
-                self.lua.write_str("return ")?;
-                self.expr(expr)?;
+                writeln!(lua, "return {}", self.expr(expr)?)?;
 
                 // End the if
-                self.lua.write_str("\nend\n")?;
+                writeln!(lua, "end")?;
             }
         }
 
         // Emit a runtime error in case no pattern matches
         if has_any_conditions && !has_unconditional_branch {
-            write!(
-                self.lua,
-                "\nerror(\"Unmatched pattern in function `{}`\")",
+            writeln!(
+                lua,
+                r#"error("Unmatched pattern in function `{}`")"#,
                 &definition[0].0.name()
             )?;
         }
 
         // End the functions
         for _ in 0..arg_count {
-            self.lua.write_str("\nend")?;
+            writeln!(lua, "end")?;
         }
-        Ok(())
+
+        Ok(lua)
     }
 
     /// Generates code for a pattern match.
@@ -398,25 +378,15 @@ impl<'a> CodeGenerator<'a> {
         Ok(())
     }
 
-    fn reference<'file>(&mut self, name: &ast::Name) -> Result<()> {
+    fn reference<'file>(&mut self, name: &ast::Name) -> Result<String> {
         if self.scope.contains_key(name) {
             // It's a top-level definition,
             // so we should emit e.g. _HUCK["var"]
-            Ok(write!(
-                self.lua,
-                r#"{}["{}"]"#,
-                self.generated_name_prefix, name
-            )?)
+            Ok(format!(r#"{}["{}"]"#, self.generated_name_prefix, name))
         } else {
             // It's a locally-bound definition,
             // so we should emit e.g. var
-            Ok(write!(self.lua, r#"{}"#, self.lua_safe(name))?)
-        }
-    }
-
-    fn numeric_literal<'file>(&mut self, lit: &ast::Numeral<'file>) -> Result<()> {
-        match lit {
-            ast::Numeral::Int(s) | ast::Numeral::Float(s) => Ok(write!(self.lua, "{}", s)?),
+            Ok(format!(r#"{}"#, self.lua_safe(name)))
         }
     }
 
