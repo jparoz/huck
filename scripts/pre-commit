@@ -6,7 +6,15 @@ then
     exit 1
 fi
 
-if cargo test
+# Stash changes so we test against the code to be committed
+git stash push --keep-index --include-untracked
+
+cargo test
+test_succeeded=$?
+
+git stash pop
+
+if [ $test_succeeded -eq 0 ]
 then : # do nothing
 else
     status=$?
