@@ -76,7 +76,6 @@ impl<'a> CodeGenerator<'a> {
     /// Guaranteed to return the same string each time it's called with the same argument.
     fn lua_safe(&self, name: &ast::Name) -> String {
         match name {
-            // @Todo: remap Lua keywords
             ast::Name::Ident(s) if is_lua_keyword(s) => {
                 format!("{}_{}", self.generated_name_prefix, s)
             }
@@ -185,7 +184,6 @@ impl<'a> CodeGenerator<'a> {
                 ast::Numeral::Int(s) | ast::Numeral::Float(s) => Ok(s.to_string()),
             },
 
-            // possible @XXX, @Todo: escape (or check escaping) better
             // @Note: includes the quotes
             ast::Term::String(s) => Ok(s.to_string()),
 

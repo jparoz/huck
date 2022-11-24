@@ -104,3 +104,17 @@ fn literal_list() {
         )
     )
 }
+
+#[test]
+fn string_escape() {
+    assert_eq!(
+        transpile(r#"string = "Hello\nworld!\nThis is a quote: `\"`.";"#).unwrap(),
+        normalize(
+            r#"
+                local _HUCK = {}
+                _HUCK["string"] = "Hello\nworld!\nThis is a quote: `\"`."
+                return {["string"] = _HUCK["string"]}
+            "#
+        )
+    )
+}
