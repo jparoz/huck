@@ -197,7 +197,7 @@ fn numeral_string(input: &str) -> IResult<&str, &str> {
             alt((tag("0b"), tag("0B"))),
             many1(alt((char('0'), char('1')))),
         ))),
-        recognize_float,
+        preceded(not(tag("+")), recognize_float),
     )))(input)
 }
 
