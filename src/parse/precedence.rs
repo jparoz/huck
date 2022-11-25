@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ast::{Chunk, Expr, Lhs, Name, Pattern, Term};
+use crate::ast::{Expr, Lhs, Module, Name, Pattern, Term};
 
 /*
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -27,7 +27,7 @@ pub trait ApplyPrecedence {
     fn apply(&mut self, precs: &HashMap<Name, Precedence>);
 }
 
-impl<'a> ApplyPrecedence for Chunk<'a> {
+impl<'a> ApplyPrecedence for Module<'a> {
     fn apply(&mut self, precs: &HashMap<Name, Precedence>) {
         // @Note @Cleanup: These defaults should one day be replaced with source code.
 

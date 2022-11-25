@@ -17,8 +17,8 @@ use precedence::ApplyPrecedence;
 #[cfg(test)]
 mod test;
 
-pub fn parse(input: &str) -> Result<Chunk, Error> {
-    match preceded(ws(success(())), chunk)(input) {
+pub fn parse(input: &str) -> Result<Module, Error> {
+    match preceded(ws(success(())), module)(input) {
         Ok((leftover, mut c)) => {
             // @Todo: get these precedences in the same way as the prelude is defined
             let precs = HashMap::new();
@@ -34,7 +34,7 @@ pub fn parse(input: &str) -> Result<Chunk, Error> {
     }
 }
 
-fn chunk(input: &str) -> IResult<&str, Chunk> {
+fn module(input: &str) -> IResult<&str, Module> {
     let (leftovers, assigns) = ws(many0(assign))(input)?;
     let mut env = HashMap::new();
 
@@ -44,7 +44,7 @@ fn chunk(input: &str) -> IResult<&str, Chunk> {
             .push((lhs, expr));
     }
 
-    Ok((leftovers, Chunk::new(env)))
+    Ok((leftovers, Module::new(env)))
 }
 
 fn assign(input: &str) -> IResult<&str, Assignment> {

@@ -14,14 +14,14 @@ use constraint::{ConstraintGenerator, GenerateConstraints};
 use error::Error as TypeError;
 use substitution::{ApplySub, Substitution};
 
-/// Typechecks the given Huck chunk.
-pub fn typecheck(chunk: ast::Chunk) -> Result<Scope, TypeError> {
+/// Typechecks the given Huck module.
+pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
     let mut cg = ConstraintGenerator::new();
 
     let mut types = HashMap::new();
 
     // Generate constraints for each definition, while keeping track of inferred types
-    for (name, defns) in chunk.definitions {
+    for (name, defns) in module.definitions {
         let typ = defns.generate(&mut cg);
         types.insert(name, (typ, defns));
     }

@@ -24,7 +24,7 @@ fn unit() {
             )],
         );
 
-        ast::Chunk::new(definitions)
+        ast::Module::new(definitions)
     })
 }
 
@@ -50,6 +50,6 @@ fn apply_to_unit() {
             )],
         );
 
-        ast::Chunk::new(definitions)
+        ast::Module::new(definitions)
     })
 }

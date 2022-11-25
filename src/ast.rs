@@ -19,13 +19,13 @@ use std::fmt::{self, Display};
 pub type Definition<'file> = Vec<Assignment<'file>>;
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Chunk<'file> {
+pub struct Module<'file> {
     pub definitions: HashMap<Name, Definition<'file>>,
 }
 
-impl<'file> Chunk<'file> {
-    pub fn new(definitions: HashMap<Name, Definition<'file>>) -> Chunk<'file> {
-        Chunk { definitions }
+impl<'file> Module<'file> {
+    pub fn new(definitions: HashMap<Name, Definition<'file>>) -> Module<'file> {
+        Module { definitions }
     }
 }
 
