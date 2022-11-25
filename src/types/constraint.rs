@@ -241,9 +241,11 @@ impl ConstraintGenerator {
             match c {
                 Constraint::Equality(t1, t2) => {
                     let s = t1.unify(t2)?;
+
                     for c in constraints.iter_mut() {
                         c.apply(&s);
                     }
+
                     sub = s.then(sub);
                 }
 
@@ -290,6 +292,7 @@ impl ConstraintGenerator {
 
         trace!("-");
         trace!("FINISH SOLVING");
+        trace!("{}", self);
 
         Ok(sub)
     }

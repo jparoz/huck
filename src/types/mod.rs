@@ -2,13 +2,53 @@ use std::collections::HashSet;
 use std::fmt::{self, Display};
 use std::mem;
 
+use crate::ast;
+use crate::scope::{Scope, TypedDefinition};
+
 pub mod constraint;
 pub mod error;
 pub mod substitution;
-
 pub use error::Error;
+
+use constraint::{ConstraintGenerator, GenerateConstraints};
 use error::Error as TypeError;
-pub use substitution::{ApplySub, Substitution};
+use substitution::{ApplySub, Substitution};
+
+/// Typechecks the given Huck chunk.
+pub fn typecheck(chunk: ast::Chunk) -> Result<Scope, TypeError> {
+    let mut cg = ConstraintGenerator::new();
+
+    let mut types = Vec::new();
+    for (name, defns) in chunk.definitions {
+        let typ = defns.generate(&mut cg);
+        types.push((name, typ, defns));
+    }
+
+    // @Todo: deal with the assumptions somewhere in here
+
+    // Solve the type constraints
+    let soln = cg.solve()?;
+
+    // @Cleanup: This should all be done in a more proper way
+    // Apply the solution to the assumption set
+    for typ in cg.assumptions.values_mut().flatten() {
+        typ.apply(&soln);
+    }
+
+    let mut scope = Scope::new();
+
+    let assumption_vars = cg.assumption_vars();
+    for (name, mut typ, assignments) in types.into_iter() {
+        typ.apply(&soln);
+
+        let type_scheme = typ.generalize(&assumption_vars);
+        log::info!("Inferred type for {} : {}", name, type_scheme);
+        let defn = TypedDefinition::new(type_scheme, assignments);
+        scope.definitions.insert(name, defn);
+    }
+
+    Ok(scope)
+}
 
 #[derive(PartialEq, Eq, Clone, Hash, Debug)]
 pub enum Type {

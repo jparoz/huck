@@ -11,12 +11,19 @@ use std::collections::HashMap;
 
 use crate::ast::*;
 
+mod precedence;
+use precedence::ApplyPrecedence;
+
 #[cfg(test)]
 mod test;
 
 pub fn parse(input: &str) -> Result<Chunk, Error> {
     match preceded(ws(success(())), chunk)(input) {
-        Ok((leftover, c)) => {
+        Ok((leftover, mut c)) => {
+            // @Todo: get these precedences in the same way as the prelude is defined
+            let precs = HashMap::new();
+            c.apply(&precs);
+
             if !leftover.is_empty() {
                 Err(Error::Leftover(leftover.to_string()))
             } else {

@@ -2,7 +2,6 @@ mod ast;
 mod codegen;
 mod error;
 mod parse;
-mod precedence;
 mod scope;
 mod types;
 mod utils;

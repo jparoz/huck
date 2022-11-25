@@ -1,13 +1,9 @@
-use std::collections::HashMap;
 use std::io::Write;
 
 use crate::codegen;
 use crate::error::Error as HuckError;
 use crate::parse::parse;
-use crate::precedence::ApplyPrecedence;
-use crate::scope::{Scope, TypedDefinition};
-use crate::types::constraint::{ConstraintGenerator, GenerateConstraints};
-use crate::types::ApplySub;
+use crate::types::typecheck;
 
 /// Takes Lua code as input, executes it using a Lua interpreter found in PATH,
 /// and returns the contents of stdout in a String.
@@ -24,42 +20,11 @@ pub fn execute_lua(lua: &str) -> String {
 
 /// Takes some Huck and turns it into Lua, doing every step in between.
 pub fn transpile(huck: &str) -> Result<String, HuckError> {
-    let mut parsed = parse(huck)?;
+    // Parse
+    let parsed = parse(huck)?;
 
-    // @Todo: get these precedences in the same way as the prelude is defined
-    let precs = HashMap::new();
-    parsed.apply(&precs);
-
-    let mut cg = ConstraintGenerator::new();
-
-    let mut types = Vec::new();
-    for (name, defns) in parsed.definitions {
-        // Print type of defined function
-        let typ = defns.generate(&mut cg);
-
-        types.push((name, typ, defns));
-    }
-
-    let mut scope = Scope::new();
-
-    // Solve the type constraints
-    let soln = cg.solve()?;
-
-    // @Cleanup: This should all be done in a more proper way
-    // Apply the solution to the assumption set
-    for typ in cg.assumptions.values_mut().flatten() {
-        typ.apply(&soln);
-    }
-
-    let assumption_vars = cg.assumption_vars();
-    for (name, mut typ, assignments) in types.into_iter() {
-        typ.apply(&soln);
-
-        let type_scheme = typ.generalize(&assumption_vars);
-        log::info!("Inferred type for {} : {}", name, type_scheme);
-        let defn = TypedDefinition::new(type_scheme, assignments);
-        scope.definitions.insert(name, defn);
-    }
+    // Typecheck
+    let scope = typecheck(parsed)?;
 
     // @Todo: optimisations go here
 
