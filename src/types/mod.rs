@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::{self, Display};
 use std::mem;
 
@@ -18,21 +18,39 @@ use substitution::{ApplySub, Substitution};
 pub fn typecheck(chunk: ast::Chunk) -> Result<Scope, TypeError> {
     let mut cg = ConstraintGenerator::new();
 
-    let mut types = Vec::new();
+    let mut types = HashMap::new();
+
+    // Generate constraints for each definition, while keeping track of inferred types
     for (name, defns) in chunk.definitions {
         let typ = defns.generate(&mut cg);
-        types.push((name, typ, defns));
+        types.insert(name, (typ, defns));
     }
 
     // @Todo: maybe move this into solve?
     // Add constraints to unify each assumption about the same name
-    let assumptions: Vec<Vec<Type>> = cg.assumptions.values().cloned().collect();
-    for typs in assumptions.into_iter() {
-        log::info!("Emitting constraints about assumptions:");
+    log::info!("Emitting constraints about assumptions:");
+    let mut assumptions: Vec<(ast::Name, Vec<Type>)> = cg
+        .assumptions
+        .iter()
+        .map(|(n, t)| (n.clone(), t.clone()))
+        .collect();
+
+    for (name, ref mut assumed_types) in assumptions.iter_mut() {
+        // Add the type inferred at the definition (if it exists)
+        if let Some(t) = types.get(&name) {
+            assumed_types.push(t.0.clone());
+        } else {
+            // @Todo: Scope error
+        }
+
+        // @Todo: add the type declared by the user (if it exists)
+    }
+
+    for (_, assumed_types) in assumptions.into_iter() {
         // @Todo @Polymorphism @CheckMe:
         // Maybe this shouldn't be equality constraints,
         // but some kind of instance constraints.
-        cg.equate_all(typs);
+        cg.equate_all(assumed_types);
     }
 
     // Solve the type constraints
@@ -49,7 +67,7 @@ pub fn typecheck(chunk: ast::Chunk) -> Result<Scope, TypeError> {
     let mut scope = Scope::new();
 
     let assumption_vars = cg.assumption_vars();
-    for (name, mut typ, assignments) in types.into_iter() {
+    for (name, (mut typ, assignments)) in types.into_iter() {
         typ.apply(&soln);
 
         let type_scheme = typ.generalize(&assumption_vars);

@@ -35,7 +35,7 @@ usesUnit () = "foo";
 returnsUnit x = ();
 
 (* unitArgument : ∀a. a -> String *)
-unitArgument x = usesUnit ();
+(* unitArgument x = usesUnit (); *)
 
 (* compileError : COMPILE ERROR *)
 compileError x = usesUnit 123;
