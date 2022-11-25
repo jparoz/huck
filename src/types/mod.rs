@@ -24,7 +24,16 @@ pub fn typecheck(chunk: ast::Chunk) -> Result<Scope, TypeError> {
         types.push((name, typ, defns));
     }
 
-    // @Todo: deal with the assumptions somewhere in here
+    // @Todo: maybe move this into solve?
+    // Add constraints to unify each assumption about the same name
+    let assumptions: Vec<Vec<Type>> = cg.assumptions.values().cloned().collect();
+    for typs in assumptions.into_iter() {
+        log::info!("Emitting constraints about assumptions:");
+        // @Todo @Polymorphism @CheckMe:
+        // Maybe this shouldn't be equality constraints,
+        // but some kind of instance constraints.
+        cg.equate_all(typs);
+    }
 
     // Solve the type constraints
     let soln = cg.solve()?;
@@ -34,6 +43,8 @@ pub fn typecheck(chunk: ast::Chunk) -> Result<Scope, TypeError> {
     for typ in cg.assumptions.values_mut().flatten() {
         typ.apply(&soln);
     }
+
+    log::trace!("After applying solution: {}", cg);
 
     let mut scope = Scope::new();
 

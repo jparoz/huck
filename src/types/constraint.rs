@@ -2,7 +2,7 @@ use std::collections::{HashMap, VecDeque};
 use std::fmt::{self, Display};
 use std::iter;
 
-use log::{info, log_enabled, trace};
+use log::log_enabled;
 
 use crate::ast::{Assignment, Definition, Expr, Lhs, Name, Numeral, Pattern, Term};
 use crate::types::{
@@ -111,7 +111,7 @@ impl ConstraintGenerator {
     }
 
     fn assume(&mut self, name: Name, typ: Type) {
-        trace!("Assuming type: {} : {}", name, typ);
+        log::trace!("Assuming type: {} : {}", name, typ);
         self.assumptions
             .entry(name)
             .or_insert(Vec::with_capacity(1))
@@ -128,8 +128,16 @@ impl ConstraintGenerator {
     }
 
     pub fn constrain(&mut self, constraint: Constraint) {
-        info!("Emitting constraint: {}", constraint);
+        log::info!("Emitting constraint: {}", constraint);
         self.constraints.push(constraint);
+    }
+
+    // Constrains all types in the given Vec to be equal.
+    pub fn equate_all(&mut self, typs: Vec<Type>) {
+        let beta = self.fresh();
+        for typ in typs {
+            self.constrain(Constraint::Equality(beta.clone(), typ.clone()));
+        }
     }
 
     // Returns the type of the whole pattern item, as well as emitting constraints for sub-items.
@@ -198,7 +206,7 @@ impl ConstraintGenerator {
         if let Some(assumptions) = self.assumptions.remove(name) {
             for assumed in assumptions {
                 self.constrain(Constraint::Equality(assumed, typ.clone()));
-                info!("Bound (mono): {} to type {}", name, typ);
+                log::info!("Bound (mono): {} to type {}", name, typ);
             }
         }
     }
@@ -211,7 +219,7 @@ impl ConstraintGenerator {
                     typ.clone(),
                     self.m_stack.iter().cloned().collect(),
                 ));
-                info!(
+                log::info!(
                     "Bound (poly): {} to type {} (M = {})",
                     name,
                     typ,
@@ -230,14 +238,14 @@ impl ConstraintGenerator {
     }
 
     pub fn solve(&mut self) -> Result<Substitution, types::Error> {
-        trace!("START SOLVING");
+        log::trace!("START SOLVING");
         let mut sub = Substitution::empty();
 
         let mut constraints = VecDeque::from(self.constraints.clone());
 
         while let Some(c) = constraints.pop_front() {
-            trace!("-");
-            info!("Looking at: {}", c);
+            log::trace!("-");
+            log::trace!("Looking at: {}", c);
             match c {
                 Constraint::Equality(t1, t2) => {
                     let s = t1.unify(t2)?;
@@ -251,7 +259,7 @@ impl ConstraintGenerator {
 
                 Constraint::ExplicitInstance(t, ts) => {
                     let cons = Constraint::Equality(t, self.instantiate(ts));
-                    info!("Replacing with new constraint: {}", cons);
+                    log::info!("Replacing with new constraint: {}", cons);
                     constraints.push_back(cons)
                 }
 
@@ -263,36 +271,36 @@ impl ConstraintGenerator {
                         .is_empty() =>
                 {
                     let cons = Constraint::ExplicitInstance(t1, t2.generalize(&m));
-                    info!("Replacing with new constraint: {}", cons);
+                    log::info!("Replacing with new constraint: {}", cons);
                     constraints.push_back(cons)
                 }
 
                 c @ Constraint::ImplicitInstance(..) => {
                     // @Note: This should never diverge, i.e. there should always be at least one
                     // constraint in the set that meets the criteria to be solvable. See HHS02.
-                    info!("Skipping for now");
+                    log::info!("Skipping for now");
                     constraints.push_back(c);
                 }
             }
 
-            trace!("Substitution:");
+            log::trace!("Substitution:");
             if log_enabled!(log::Level::Trace) {
                 for (fr, to) in sub.iter() {
-                    trace!("    {} ↦ {}", fr, to);
+                    log::trace!("    {} ↦ {}", fr, to);
                 }
             }
 
-            trace!("Constraints:");
+            log::trace!("Constraints:");
             if log_enabled!(log::Level::Trace) {
                 for c in constraints.iter() {
-                    trace!("    {}", c);
+                    log::trace!("    {}", c);
                 }
             }
         }
 
-        trace!("-");
-        trace!("FINISH SOLVING");
-        trace!("{}", self);
+        log::trace!("-");
+        log::trace!("FINISH SOLVING");
+        log::trace!("{}", self);
 
         Ok(sub)
     }

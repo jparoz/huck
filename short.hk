@@ -28,9 +28,17 @@
 (* bar any 0 = 0; *)
 (* bar x y = x / y; *)
 
+(* usesUnit : () -> String *)
 usesUnit () = "foo";
+
+(* returnsUnit : ∀a. a -> () *)
 returnsUnit x = ();
+
+(* unitArgument : ∀a. a -> String *)
 unitArgument x = usesUnit ();
+
+(* compileError : COMPILE ERROR *)
+compileError x = usesUnit 123;
 
 (* baz "hello" = "goodbye"; *)
 (* baz s = s ++ "."; *)
