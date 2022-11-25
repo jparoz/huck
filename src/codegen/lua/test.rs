@@ -118,11 +118,3 @@ fn string_escape() {
         )
     )
 }
-
-#[test]
-fn binop_parse_plus() {
-    assert_eq!(
-        transpile(r#"val = 1 + 2;"#).unwrap(),
-        transpile(r#"val=1+2;"#).unwrap()
-    )
-}

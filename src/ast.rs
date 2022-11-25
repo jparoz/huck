@@ -18,7 +18,7 @@ use std::fmt::{self, Display};
 
 pub type Definition<'file> = Vec<Assignment<'file>>;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Chunk<'file> {
     pub definitions: HashMap<Name, Definition<'file>>,
 }
@@ -169,7 +169,7 @@ impl<'file> Display for Pattern<'file> {
     }
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Expr<'file> {
     Term(Term<'file>),
     App {
@@ -234,7 +234,7 @@ impl<'file> Display for Expr<'file> {
     }
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Term<'file> {
     Numeral(Numeral<'file>),
     String(&'file str),

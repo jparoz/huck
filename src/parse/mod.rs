@@ -11,6 +11,9 @@ use std::collections::HashMap;
 
 use crate::ast::*;
 
+#[cfg(test)]
+mod test;
+
 pub fn parse(input: &str) -> Result<Chunk, Error> {
     match preceded(ws(success(())), chunk)(input) {
         Ok((leftover, c)) => {
