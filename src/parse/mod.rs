@@ -150,6 +150,7 @@ fn term(input: &str) -> IResult<&str, Term> {
         map(string, Term::String),
         map(list(expr), Term::List),
         map(name, Term::Name),
+        value(Term::Unit, tag("()")),
         map(parens(expr), |e| Term::Parens(Box::new(e))),
     ))(input)
 }

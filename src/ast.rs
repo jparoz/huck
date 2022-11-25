@@ -241,6 +241,7 @@ pub enum Term<'file> {
     List(Vec<Expr<'file>>),
     Name(Name),
     Parens(Box<Expr<'file>>),
+    Unit,
 }
 
 impl<'file> Display for Term<'file> {
@@ -264,6 +265,7 @@ impl<'file> Display for Term<'file> {
             Parens(e) => {
                 write!(f, "({})", e)
             }
+            Unit => write!(f, "()"),
         }
     }
 }

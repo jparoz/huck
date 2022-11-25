@@ -342,6 +342,7 @@ impl<'file> GenerateConstraints for Expr<'file> {
             Expr::Term(Term::Numeral(Numeral::Int(_))) => Type::Prim(Primitive::Int),
             Expr::Term(Term::Numeral(Numeral::Float(_))) => Type::Prim(Primitive::Float),
             Expr::Term(Term::String(_)) => Type::Prim(Primitive::String),
+            Expr::Term(Term::Unit) => Type::Prim(Primitive::Unit),
             Expr::Term(Term::Parens(e)) => e.generate(cg),
             Expr::Term(Term::List(es)) => {
                 let beta = cg.fresh();

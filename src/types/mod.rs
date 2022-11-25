@@ -227,4 +227,5 @@ pub enum Primitive {
     Int,
     Float,
     String,
+    Unit,
 }
