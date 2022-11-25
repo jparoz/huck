@@ -67,6 +67,7 @@ fn pattern(input: &str) -> IResult<&str, Pattern> {
             |(constructor, args)| Pattern::Destructure { constructor, args },
         ),
         map(constructor, Pattern::UnaryConstructor),
+        value(Pattern::Unit, unit),
         parens(pattern_binop),
         parens(pattern),
     ))(input)
@@ -150,7 +151,7 @@ fn term(input: &str) -> IResult<&str, Term> {
         map(string, Term::String),
         map(list(expr), Term::List),
         map(name, Term::Name),
-        value(Term::Unit, tag("()")),
+        value(Term::Unit, unit),
         map(parens(expr), |e| Term::Parens(Box::new(e))),
     ))(input)
 }
@@ -256,6 +257,10 @@ fn operator_char(input: &str) -> IResult<&str, char> {
 
 fn semi(input: &str) -> IResult<&str, &str> {
     ws(tag(";"))(input)
+}
+
+fn unit(input: &str) -> IResult<&str, &str> {
+    ws(tag("()"))(input)
 }
 
 fn comment(input: &str) -> IResult<&str, &str> {

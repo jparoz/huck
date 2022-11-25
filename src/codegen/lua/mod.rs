@@ -187,7 +187,7 @@ impl<'a> CodeGenerator<'a> {
             // @Note: includes the quotes
             ast::Term::String(s) => Ok(s.to_string()),
 
-            ast::Term::Unit => Ok("()".to_string()),
+            ast::Term::Unit => Ok("nil".to_string()),
 
             // @Note: this is where the semantics for Huck Lists are decided.
             // The below simply converts them as Lua lists;
@@ -373,6 +373,7 @@ impl<'a> CodeGenerator<'a> {
                     lua_arg_name, name
                 ));
             }
+            ast::Pattern::Unit => (), // Don't need to do anything because unit is ignored
         };
 
         Ok(())

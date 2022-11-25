@@ -179,6 +179,8 @@ impl ConstraintGenerator {
                 bind!(iter::once(lhs).chain(iter::once(rhs)), beta)
             }
 
+            Pattern::Unit => Type::Prim(Primitive::Unit),
+
             Pattern::UnaryConstructor(name) => {
                 let beta = self.fresh();
                 self.assume(name.clone(), beta.clone());

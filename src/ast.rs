@@ -132,6 +132,7 @@ pub enum Pattern<'file> {
         rhs: Box<Pattern<'file>>,
     },
     UnaryConstructor(Name),
+    Unit,
     Destructure {
         constructor: Name,
         args: Vec<Pattern<'file>>,
@@ -157,6 +158,7 @@ impl<'file> Display for Pattern<'file> {
                 write!(f, "({} {} {})", lhs, operator, rhs)
             }
             UnaryConstructor(name) => write!(f, "{}", name),
+            Unit => write!(f, "()"),
             Destructure { constructor, args } => {
                 write!(f, "(")?;
                 write!(f, "{}", constructor)?;
