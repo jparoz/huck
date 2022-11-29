@@ -131,6 +131,11 @@ impl Type {
                     }
                 }
                 (Type::List(t1), Type::List(t2)) => pairs.push((*t1, *t2)),
+                (Type::Tuple(ts1), Type::Tuple(ts2)) => {
+                    for (t1, t2) in ts1.into_iter().zip(ts2.into_iter()) {
+                        pairs.push((t1, t2));
+                    }
+                }
                 (Type::Func(a1, b1), Type::Func(a2, b2)) => {
                     pairs.push((*a1, *a2));
                     pairs.push((*b1, *b2));

@@ -54,5 +54,5 @@ tuple = (1, "hi");
 
 usesTuple (n, s) = (n*2, s .. s);
 
-(* @Note: not currently working *)
-(* callsTheTupleFunction = usesTuple (123, "cat"); *)
+xcallsTheTupleFunction = usesTuple (123, "cat");
+ycallsTheTupleFunction = usesTuple tuple;
