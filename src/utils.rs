@@ -1,4 +1,5 @@
 use std::io::Write;
+use std::path::Path;
 
 use crate::codegen;
 use crate::error::Error as HuckError;
@@ -16,6 +17,25 @@ pub fn execute_lua(lua: &str) -> String {
         .output()
         .unwrap();
     String::from_utf8(output.stdout).unwrap()
+}
+
+pub fn transpile_file<P>(path: P) -> Result<(), HuckError>
+where
+    P: AsRef<Path>,
+{
+    match path.as_ref().extension() {
+        Some(ex) if ex == "hk" => (),
+        Some(ex) => log::warn!("unknown filetype transpiled: {:?}", ex),
+        _ => log::warn!("file without extension transpiled: {:?}", path.as_ref()),
+    }
+
+    let huck = std::fs::read_to_string(&path)?;
+
+    let lua = transpile(&huck)?;
+
+    std::fs::write(path.as_ref().with_extension("lua"), lua)?;
+
+    Ok(())
 }
 
 /// Takes some Huck and turns it into Lua, doing every step in between.

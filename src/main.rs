@@ -4,6 +4,8 @@ mod error;
 mod parse;
 mod scope;
 mod types;
+
+#[allow(dead_code)]
 mod utils;
 
 fn main() {
