@@ -118,3 +118,17 @@ fn string_escape() {
         )
     )
 }
+
+#[test]
+fn tuple() {
+    assert_eq!(
+        transpile(r#"tuple = (1, "hi");"#).unwrap(),
+        normalize(
+            r#"
+                local _HUCK = {}
+                _HUCK["tuple"] = {1, "hi"}
+                return {["tuple"] = _HUCK["tuple"]}
+            "#
+        )
+    )
+}

@@ -334,6 +334,10 @@ impl<'a> CodeGenerator<'a> {
             // @Note: the Lua logic is identical for Huck lists and tuples.
             // This is because they have the same representation in Lua: a heterogenous list!
             ast::Pattern::List(list) | ast::Pattern::Tuple(list) => {
+                // @Todo @Fixme: for tuples, this should give a runtime error saying something like
+                // "tuple of incorrect length",
+                // instead of just failing to pattern match.
+                //
                 // Check that the list is the correct length
                 self.conditions
                     .push(format!("#{} == {}", lua_arg_name, list.len()));
