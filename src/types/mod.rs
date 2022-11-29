@@ -5,10 +5,14 @@ use std::mem;
 use crate::ast;
 use crate::scope::{Scope, TypedDefinition};
 
+// @Cleanup: do these all need to be pub?
 pub mod constraint;
 pub mod error;
 pub mod substitution;
 pub use error::Error;
+
+#[cfg(test)]
+mod test;
 
 use constraint::{ConstraintGenerator, GenerateConstraints};
 use error::Error as TypeError;
