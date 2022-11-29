@@ -200,6 +200,14 @@ impl<'a> CodeGenerator<'a> {
                     .join(", ")
             )),
 
+            ast::Term::Tuple(v) => Ok(format!(
+                "{{{}}}",
+                v.iter()
+                    .map(|e| self.expr(e))
+                    .collect::<Result<Vec<_>>>()?
+                    .join(", ")
+            )),
+
             ast::Term::Name(name) => self.reference(name),
 
             ast::Term::Parens(expr) => Ok(format!("({})", self.expr(expr)?)),
@@ -322,7 +330,10 @@ impl<'a> CodeGenerator<'a> {
                 self.bindings
                     .push(format!("local {} = {}\n", s, lua_arg_name));
             }
-            ast::Pattern::List(list) => {
+
+            // @Note: the Lua logic is identical for Huck lists and tuples.
+            // This is because they have the same representation in Lua: a heterogenous list!
+            ast::Pattern::List(list) | ast::Pattern::Tuple(list) => {
                 // Check that the list is the correct length
                 self.conditions
                     .push(format!("#{} == {}", lua_arg_name, list.len()));
@@ -333,12 +344,15 @@ impl<'a> CodeGenerator<'a> {
                     self.pattern_match(&list[j], &new_lua_arg_name)?;
                 }
             }
+
             ast::Pattern::Numeral(lit) => {
                 self.conditions.push(format!("{} == {}", lua_arg_name, lit));
             }
+
             ast::Pattern::String(lit) => {
                 self.conditions.push(format!("{} == {}", lua_arg_name, lit));
             }
+
             ast::Pattern::Destructure { constructor, args } => {
                 // Check that it's the right variant
                 self.conditions.push(format!(
@@ -352,6 +366,7 @@ impl<'a> CodeGenerator<'a> {
                     self.pattern_match(&args[j], &new_lua_arg_name)?;
                 }
             }
+
             ast::Pattern::Binop { lhs, rhs, operator } => {
                 // Check that it's the right variant
                 self.conditions.push(format!(
@@ -365,6 +380,7 @@ impl<'a> CodeGenerator<'a> {
                 // Check that the RHS pattern matches
                 self.pattern_match(&rhs, &format!("{}[{}]", lua_arg_name, 2))?;
             }
+
             ast::Pattern::UnaryConstructor(name) => {
                 debug_assert!(matches!(name, ast::Name::Ident(_)));
                 // Check that it's the right variant
@@ -373,6 +389,7 @@ impl<'a> CodeGenerator<'a> {
                     lua_arg_name, name
                 ));
             }
+
             ast::Pattern::Unit => (), // Don't need to do anything because unit is ignored
         };
 

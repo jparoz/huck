@@ -29,16 +29,16 @@
 (* bar x y = x / y; *)
 
 (* usesUnit : () -> String *)
-usesUnit () = "foo";
+(* usesUnit () = "foo"; *)
 
 (* returnsUnit : ∀a. a -> () *)
-returnsUnit x = ();
+(* returnsUnit x = (); *)
 
 (* unitArgument : ∀a. a -> String *)
 (* unitArgument x = usesUnit (); *)
 
 (* compileError : COMPILE ERROR *)
-compileError x = usesUnit 123;
+(* compileError x = usesUnit 123; *)
 
 (* baz "hello" = "goodbye"; *)
 (* baz s = s ++ "."; *)
@@ -49,3 +49,10 @@ compileError x = usesUnit 123;
 
 (* addIfOne [1, x] = 1 + x; *)
 (* addIfOne [_, x] = x; *)
+
+tuple = (1, "hi");
+
+usesTuple (n, s) = (n*2, s .. s);
+
+(* @Note: not currently working *)
+(* callsTheTupleFunction = usesTuple (123, "cat"); *)

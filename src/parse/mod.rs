@@ -4,7 +4,8 @@ use nom::character::complete::{anychar, char, hex_digit1, one_of, satisfy};
 use nom::combinator::{map, not, opt, peek, recognize, success, value, verify};
 use nom::multi::{many0, many0_count, many1, separated_list0, separated_list1};
 use nom::number::complete::recognize_float;
-use nom::sequence::{delimited, preceded, separated_pair, terminated, tuple};
+use nom::sequence::tuple as nom_tuple;
+use nom::sequence::{delimited, preceded, separated_pair, terminated};
 use nom::IResult;
 
 use std::collections::HashMap;
@@ -53,12 +54,11 @@ fn assign(input: &str) -> IResult<&str, Assignment> {
 
 fn lhs(input: &str) -> IResult<&str, Lhs> {
     alt((
-        map(tuple((pattern, operator, pattern)), |(a, op, b)| {
+        map(nom_tuple((pattern, operator, pattern)), |(a, op, b)| {
             Lhs::Binop { a, op, b }
         }),
-        map(tuple((name, many0(pattern))), |(name, args)| Lhs::Func {
-            name,
-            args,
+        map(nom_tuple((name, many0(pattern))), |(name, args)| {
+            Lhs::Func { name, args }
         }),
     ))(input)
 }
@@ -67,10 +67,11 @@ fn pattern(input: &str) -> IResult<&str, Pattern> {
     alt((
         map(ws(var), Pattern::Bind),
         map(list(pattern), Pattern::List),
+        map(tuple(pattern), Pattern::Tuple),
         map(numeral, Pattern::Numeral),
         map(string, Pattern::String),
         map(
-            parens(tuple((constructor, many1(pattern)))),
+            parens(nom_tuple((constructor, many1(pattern)))),
             |(constructor, args)| Pattern::Destructure { constructor, args },
         ),
         map(constructor, Pattern::UnaryConstructor),
@@ -82,7 +83,7 @@ fn pattern(input: &str) -> IResult<&str, Pattern> {
 
 fn pattern_binop(input: &str) -> IResult<&str, Pattern> {
     map(
-        tuple((pattern, operator, alt((pattern_binop, pattern)))),
+        nom_tuple((pattern, operator, alt((pattern_binop, pattern)))),
         |(lhs, operator, rhs)| Pattern::Binop {
             operator,
             lhs: Box::new(lhs),
@@ -96,7 +97,7 @@ fn expr(input: &str) -> IResult<&str, Expr> {
 }
 
 fn binop(input: &str) -> IResult<&str, Expr> {
-    map(tuple((app, operator, expr)), |(lhs, operator, rhs)| {
+    map(nom_tuple((app, operator, expr)), |(lhs, operator, rhs)| {
         Expr::Binop {
             operator,
             lhs: Box::new(lhs),
@@ -119,7 +120,7 @@ fn app(input: &str) -> IResult<&str, Expr> {
 
 fn let_in(input: &str) -> IResult<&str, Expr> {
     map(
-        tuple((
+        nom_tuple((
             reserved("let"),
             separated_list1(semi, separated_pair(lhs, reserved_op("="), expr)),
             opt(semi),
@@ -144,7 +145,7 @@ fn let_in(input: &str) -> IResult<&str, Expr> {
 
 fn lambda(input: &str) -> IResult<&str, Expr> {
     map(
-        tuple((reserved_op("\\"), many1(pattern), reserved_op("->"), expr)),
+        nom_tuple((reserved_op("\\"), many1(pattern), reserved_op("->"), expr)),
         |(_, args, _, rhs)| Expr::Lambda {
             lhs: Lhs::Lambda { args },
             rhs: Box::new(rhs),
@@ -157,6 +158,7 @@ fn term(input: &str) -> IResult<&str, Term> {
         map(numeral, Term::Numeral),
         map(string, Term::String),
         map(list(expr), Term::List),
+        map(tuple(expr), Term::Tuple),
         map(name, Term::Name),
         value(Term::Unit, unit),
         map(parens(expr), |e| Term::Parens(Box::new(e))),
@@ -165,7 +167,7 @@ fn term(input: &str) -> IResult<&str, Term> {
 
 fn var(input: &str) -> IResult<&str, &str> {
     verify(
-        recognize(tuple((
+        recognize(nom_tuple((
             satisfy(is_var_start_char),
             many0(satisfy(is_name_char)),
         ))),
@@ -174,7 +176,7 @@ fn var(input: &str) -> IResult<&str, &str> {
 }
 
 fn upper_ident(input: &str) -> IResult<&str, &str> {
-    recognize(tuple((
+    recognize(nom_tuple((
         satisfy(char::is_uppercase),
         many0(satisfy(is_name_char)),
     )))(input)
@@ -204,8 +206,8 @@ fn numeral(input: &str) -> IResult<&str, Numeral> {
 
 fn numeral_string(input: &str) -> IResult<&str, &str> {
     ws(alt((
-        recognize(tuple((alt((tag("0x"), tag("0X"))), hex_digit1))),
-        recognize(tuple((
+        recognize(nom_tuple((alt((tag("0x"), tag("0X"))), hex_digit1))),
+        recognize(nom_tuple((
             alt((tag("0b"), tag("0B"))),
             many1(alt((char('0'), char('1')))),
         ))),
@@ -218,7 +220,7 @@ fn numeral_positive(input: &str) -> IResult<&str, &str> {
 }
 
 fn numeral_negative(input: &str) -> IResult<&str, &str> {
-    recognize(tuple((tag("-"), numeral_string)))(input)
+    recognize(nom_tuple((tag("-"), numeral_string)))(input)
 }
 
 fn string(input: &str) -> IResult<&str, &str> {
@@ -242,6 +244,17 @@ where
         ws(tag("[")),
         separated_list0(ws(tag(",")), inner),
         ws(tag("]")),
+    )
+}
+
+fn tuple<'a, F: 'a, O>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, Vec<O>>
+where
+    F: FnMut(&'a str) -> IResult<&'a str, O>,
+{
+    delimited(
+        ws(tag("(")),
+        separated_list1(ws(tag(",")), inner),
+        ws(tag(")")),
     )
 }
 
@@ -271,11 +284,11 @@ fn unit(input: &str) -> IResult<&str, &str> {
 }
 
 fn comment(input: &str) -> IResult<&str, &str> {
-    recognize(tuple((
+    recognize(nom_tuple((
         tag("(*"),
         many0_count(alt((
-            value((), tuple((peek(tag("(*")), comment))),
-            value((), tuple((peek(not(tag("*)"))), anychar))),
+            value((), nom_tuple((peek(tag("(*")), comment))),
+            value((), nom_tuple((peek(not(tag("*)"))), anychar))),
         ))),
         tag("*)"),
     )))(input)

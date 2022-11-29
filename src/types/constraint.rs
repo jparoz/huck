@@ -175,6 +175,7 @@ impl ConstraintGenerator {
 
                 Type::List(Box::new(beta))
             }
+            Pattern::Tuple(pats) => Type::Tuple(pats.iter().map(|pat| self.bind(pat)).collect()),
 
             Pattern::Numeral(Numeral::Int(_)) => Type::Prim(Primitive::Int),
             Pattern::Numeral(Numeral::Float(_)) => Type::Prim(Primitive::Float),
@@ -365,6 +366,7 @@ impl<'file> GenerateConstraints for Expr<'file> {
                 }
                 Type::List(Box::new(beta))
             }
+            Expr::Term(Term::Tuple(es)) => Type::Tuple(es.iter().map(|e| e.generate(cg)).collect()),
 
             Expr::Term(Term::Name(name)) => {
                 let typ = cg.fresh();

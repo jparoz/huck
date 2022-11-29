@@ -124,6 +124,7 @@ impl<'file> Display for Lhs<'file> {
 pub enum Pattern<'file> {
     Bind(&'file str),
     List(Vec<Pattern<'file>>),
+    Tuple(Vec<Pattern<'file>>),
     Numeral(Numeral<'file>),
     String(&'file str),
     Binop {
@@ -147,6 +148,14 @@ impl<'file> Display for Pattern<'file> {
             List(v) => write!(
                 f,
                 "[{}]",
+                v.iter()
+                    .map(|x| format!("{}", x))
+                    .collect::<Vec<std::string::String>>()
+                    .join(", ")
+            ),
+            Tuple(v) => write!(
+                f,
+                "({})",
                 v.iter()
                     .map(|x| format!("{}", x))
                     .collect::<Vec<std::string::String>>()
@@ -243,6 +252,7 @@ pub enum Term<'file> {
     List(Vec<Expr<'file>>),
     Name(Name),
     Parens(Box<Expr<'file>>),
+    Tuple(Vec<Expr<'file>>),
     Unit,
 }
 
@@ -255,6 +265,14 @@ impl<'file> Display for Term<'file> {
             List(v) => write!(
                 f,
                 "[{}]",
+                v.iter()
+                    .map(|x| format!("{}", x))
+                    .collect::<Vec<std::string::String>>()
+                    .join(", ")
+            ),
+            Tuple(v) => write!(
+                f,
+                "({})",
                 v.iter()
                     .map(|x| format!("{}", x))
                     .collect::<Vec<std::string::String>>()

@@ -85,6 +85,7 @@ pub enum Type {
     Var(TypeVar),
     Func(Box<Type>, Box<Type>),
     List(Box<Type>),
+    Tuple(Vec<Type>),
 }
 
 impl Type {
@@ -94,6 +95,9 @@ impl Type {
             Type::Var(var) => TypeVarSet::single(*var),
             Type::Func(a, b) => a.free_vars().union(&b.free_vars()),
             Type::List(t) => t.free_vars(),
+            Type::Tuple(v) => v
+                .iter()
+                .fold(TypeVarSet::empty(), |a, t| a.union(&t.free_vars())),
         }
     }
 
@@ -152,6 +156,9 @@ impl ApplySub for Type {
                 b.apply(sub);
             }
             Type::List(list_t) => list_t.apply(sub),
+            Type::Tuple(ref mut tuple_v) => tuple_v.iter_mut().for_each(|t| {
+                t.apply(sub);
+            }),
             Type::Prim(_) => (),
         }
     }
@@ -167,6 +174,14 @@ impl Display for Type {
             Type::List(inner) => {
                 write!(f, "[{}]", inner)
             }
+            Type::Tuple(v) => write!(
+                f,
+                "({})",
+                v.iter()
+                    .map(|x| format!("{}", x))
+                    .collect::<Vec<std::string::String>>()
+                    .join(", ")
+            ),
         }
     }
 }
