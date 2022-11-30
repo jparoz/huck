@@ -4,6 +4,7 @@ mod test;
 use crate::ast;
 use crate::scope::Scope;
 
+use std::collections::{HashSet, VecDeque};
 use std::fmt::Write;
 
 use super::Error as CodegenError;
@@ -24,6 +25,9 @@ struct CodeGenerator<'a> {
     conditions: Vec<String>,
     bindings: Vec<String>,
 
+    // This is used when generating definitions in proper order.
+    deferred: HashSet<&'a ast::Name>,
+
     scope: &'a Scope<'a>,
 
     generated_name_prefix: &'a str,
@@ -36,6 +40,8 @@ impl<'a> CodeGenerator<'a> {
         CodeGenerator {
             conditions: Vec::new(),
             bindings: Vec::new(),
+
+            deferred: HashSet::new(),
 
             scope,
 
@@ -55,15 +61,55 @@ impl<'a> CodeGenerator<'a> {
 
         let mut return_entries = String::new();
 
-        for (name, typed_defn) in self.scope.definitions.iter() {
-            write!(lua, r#"{}["{}"] = "#, self.generated_name_prefix, name,)?;
-            writeln!(lua, "{}", self.definition(&typed_defn.definition)?)?;
-            writeln!(
-                return_entries,
-                r#"["{name}"] = {prefix}["{name}"],"#,
-                name = name,
-                prefix = self.generated_name_prefix,
-            )?;
+        // Start by putting all definitions in the queue to be generated.
+        let mut queue: VecDeque<_> = self.scope.definitions.iter().collect();
+
+        // As long as the queue isn't empty, try to generate the definition at the front.
+        while let Some((name, typed_defn)) = queue.pop_front() {
+            // @Todo: Implement the following logic:
+            // If we can, generate the definition.
+            // Otherwise,
+            //      remember that we deferred this definition,
+            //      then push it to the back of the queue to be generated later.
+            // If we've already deferred this definition,
+            //      something should happen??
+            //      Does this really mean a cycle, or just doubly-nested dependencies?
+            //      @Todo: figure this out
+            log::debug!("Front of queue: {:?}, {:?}", name, typed_defn);
+
+            macro_rules! assignment {
+                ($name:expr, $typed_defn:expr) => {{
+                    write!(lua, r#"{}["{}"] = "#, self.generated_name_prefix, $name)?;
+                    writeln!(lua, "{}", self.definition(&$typed_defn.definition)?)?;
+                    writeln!(
+                        return_entries,
+                        r#"["{name}"] = {prefix}["{name}"],"#,
+                        name = $name,
+                        prefix = self.generated_name_prefix,
+                    )?;
+                }};
+            }
+
+            debug_assert!(typed_defn.definition.len() > 0);
+            if typed_defn.definition[0].0.arg_count() == 0 {
+                // If there are no arguments, then it's going to be a Lua value.
+                // Thus, it needs to have anything referenced inside it to be generated first.
+                // @Lazy @Laziness: lazy values don't have this restriction.
+
+                // @Todo: something smarter than just leaving values until last.
+                if self.deferred.contains(name) {
+                    // If we've already deferred, just generate it now.
+                    // @XXX @Todo: something smarter
+                    assignment!(name, typed_defn);
+                } else {
+                    self.deferred.insert(name);
+                    queue.push_back((name, typed_defn));
+                }
+            } else {
+                // Because there are arguments, it's going to be a Lua function.
+                // Thus, we can generate in any order.
+                assignment!(name, typed_defn);
+            }
         }
 
         write!(lua, "return {{\n{}}}", return_entries)?;
