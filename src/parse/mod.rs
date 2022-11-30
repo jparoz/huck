@@ -28,6 +28,7 @@ pub fn parse(input: &str) -> Result<Module, Error> {
             if !leftover.is_empty() {
                 Err(Error::Leftover(leftover.to_string()))
             } else {
+                log::trace!("Parsed AST: {:?}", c);
                 Ok(c)
             }
         }
@@ -158,10 +159,10 @@ fn term(input: &str) -> IResult<&str, Term> {
         map(numeral, Term::Numeral),
         map(string, Term::String),
         map(list(expr), Term::List),
-        map(tuple(expr), Term::Tuple),
         map(name, Term::Name),
         value(Term::Unit, unit),
         map(parens(expr), |e| Term::Parens(Box::new(e))),
+        map(tuple(expr), Term::Tuple),
     ))(input)
 }
 
