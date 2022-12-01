@@ -56,3 +56,14 @@ usesTuple (n, s) = (n*2, s .. s);
 
 callsTheTupleFunctionA = usesTuple (123, "cat");
 callsTheTupleFunctionB = usesTuple tuple;
+
+shouldBeLast = shouldBeNext + 123;
+
+mustComeFirst = 456;
+
+shouldBeNext = mustComeFirst + 2;
+
+(* usesCyclic = cyclicA; *)
+(* cyclicA = cyclicB; *)
+(* cyclicB = cyclicC; *)
+(* cyclicC = cyclicA; *)

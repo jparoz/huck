@@ -71,12 +71,12 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
     let mut scope = Scope::new();
 
     let assumption_vars = cg.assumption_vars();
-    for (name, (mut typ, assignments)) in types.into_iter() {
+    for (name, (mut typ, definition)) in types.into_iter() {
         typ.apply(&soln);
 
         let type_scheme = typ.generalize(&assumption_vars);
         log::info!("Inferred type for {} : {}", name, type_scheme);
-        let defn = TypedDefinition::new(type_scheme, assignments);
+        let defn = TypedDefinition::new(type_scheme, definition);
         scope.definitions.insert(name, defn);
     }
 

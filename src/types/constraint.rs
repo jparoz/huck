@@ -313,6 +313,12 @@ pub trait GenerateConstraints {
 
 impl<'file> GenerateConstraints for Definition<'file> {
     fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
+        self.assignments.generate(cg)
+    }
+}
+
+impl<'file> GenerateConstraints for Vec<Assignment<'file>> {
+    fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
         let beta = cg.fresh();
 
         let typs: Vec<Type> = self.iter().map(|defn| defn.generate(cg)).collect();
@@ -407,13 +413,13 @@ impl<'file> GenerateConstraints for Expr<'file> {
             }
 
             Expr::Let {
-                definitions: assignments,
+                definitions,
                 in_expr,
             } => {
                 let beta = in_expr.generate(cg);
 
-                for (name, defns) in assignments {
-                    let typ = defns.generate(cg);
+                for (name, assignments) in definitions {
+                    let typ = assignments.generate(cg);
                     cg.bind_name_poly(&name, &typ);
                 }
 

@@ -18,10 +18,10 @@ fn unit() {
         let name = ast::Name::Ident("unit".to_string());
         definitions.insert(
             name.clone(),
-            vec![(
+            ast::Definition::new(vec![(
                 ast::Lhs::Func { name, args: vec![] },
                 ast::Expr::Term(ast::Term::Unit),
-            )],
+            )]),
         );
 
         ast::Module::new(definitions)
@@ -36,7 +36,7 @@ fn apply_to_unit() {
         let name = ast::Name::Ident("applyToUnit".to_string());
         definitions.insert(
             name.clone(),
-            vec![(
+            ast::Definition::new(vec![(
                 ast::Lhs::Func {
                     name,
                     args: vec![ast::Pattern::Bind("f")],
@@ -47,7 +47,7 @@ fn apply_to_unit() {
                     )))),
                     argument: Box::new(ast::Expr::Term(ast::Term::Unit)),
                 },
-            )],
+            )]),
         );
 
         ast::Module::new(definitions)

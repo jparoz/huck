@@ -1,19 +1,19 @@
 use std::collections::BTreeMap;
 
-use crate::ast::{Assignment, Definition, Name};
+use crate::ast::{Definition, Name};
 use crate::types::TypeScheme;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TypedDefinition<'file> {
     pub type_scheme: TypeScheme,
     pub definition: Definition<'file>,
 }
 
 impl<'file> TypedDefinition<'file> {
-    pub fn new(type_scheme: TypeScheme, assignments: Vec<Assignment<'file>>) -> Self {
+    pub fn new(type_scheme: TypeScheme, definition: Definition<'file>) -> Self {
         TypedDefinition {
             type_scheme,
-            definition: assignments,
+            definition,
         }
     }
 }

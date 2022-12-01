@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::{self, Display};
 
 // @Todo: use these, or something similar
@@ -16,7 +16,33 @@ use std::fmt::{self, Display};
 //     len: usize,
 // }
 
-pub type Definition<'file> = Vec<Assignment<'file>>;
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Definition<'file> {
+    pub assignments: Vec<Assignment<'file>>,
+
+    dependencies: Option<HashSet<Name>>,
+}
+
+impl<'file> Definition<'file> {
+    pub fn new(assignments: Vec<Assignment<'file>>) -> Self {
+        Self {
+            assignments,
+            dependencies: None,
+        }
+    }
+
+    pub fn dependencies(&mut self) -> &HashSet<Name> {
+        self.dependencies.get_or_insert_with(|| {
+            let mut deps = HashSet::new();
+
+            for (_lhs, expr) in self.assignments.iter() {
+                expr.dependencies(&mut deps);
+            }
+
+            deps
+        })
+    }
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct Module<'file> {
@@ -140,6 +166,30 @@ pub enum Pattern<'file> {
     },
 }
 
+impl<'file> Pattern<'file> {
+    /// Returns all the names which are bound by the pattern.
+    fn names_bound(&self) -> Vec<Name> {
+        match self {
+            Pattern::Bind(s) => vec![Name::Ident(s.to_string())],
+
+            Pattern::Destructure { args: pats, .. }
+            | Pattern::Tuple(pats)
+            | Pattern::List(pats) => pats.iter().flat_map(|pat| pat.names_bound()).collect(),
+
+            Pattern::Binop { lhs, rhs, .. } => {
+                let mut names = lhs.names_bound();
+                names.extend(rhs.names_bound());
+                names
+            }
+
+            Pattern::Numeral(_)
+            | Pattern::String(_)
+            | Pattern::UnaryConstructor(_)
+            | Pattern::Unit => Vec::new(),
+        }
+    }
+}
+
 impl<'file> Display for Pattern<'file> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use Pattern::*;
@@ -193,13 +243,85 @@ pub enum Expr<'file> {
         rhs: Box<Expr<'file>>,
     },
     Let {
-        definitions: HashMap<Name, Definition<'file>>,
+        definitions: HashMap<Name, Vec<Assignment<'file>>>,
         in_expr: Box<Expr<'file>>,
     },
     Lambda {
         lhs: Lhs<'file>,
         rhs: Box<Expr<'file>>,
     },
+}
+
+impl<'file> Expr<'file> {
+    pub fn dependencies(&self, deps: &mut HashSet<Name>) {
+        match self {
+            Expr::Term(Term::List(es)) | Expr::Term(Term::Tuple(es)) => {
+                es.iter().for_each(|e| e.dependencies(deps));
+            }
+            Expr::Term(Term::Name(name)) => {
+                deps.insert(name.clone());
+            }
+            Expr::Term(Term::Parens(e)) => e.dependencies(deps),
+            Expr::Term(_) => (),
+
+            Expr::App { func, argument } => {
+                func.dependencies(deps);
+                argument.dependencies(deps);
+            }
+
+            Expr::Binop { operator, lhs, rhs } => {
+                deps.insert(operator.clone());
+                lhs.dependencies(deps);
+                rhs.dependencies(deps);
+            }
+
+            Expr::Let {
+                definitions,
+                in_expr,
+            } => {
+                let mut sub_deps = HashSet::new();
+
+                in_expr.dependencies(&mut sub_deps);
+
+                // Remove variables bound in the definitions
+                for name in definitions.keys() {
+                    // @Note: if .remove() returns false,
+                    // the definition isn't referenced in the in_expr;
+                    // therefore it's dead code.
+                    // Maybe emit a warning about this.
+                    sub_deps.remove(name);
+                }
+
+                deps.extend(sub_deps);
+            }
+
+            Expr::Lambda { lhs, rhs } => {
+                debug_assert!(matches!(lhs, Lhs::Lambda { .. }));
+
+                let args = match lhs {
+                    Lhs::Lambda { args } => args,
+                    _ => unreachable!(),
+                };
+
+                let mut sub_deps = HashSet::new();
+
+                rhs.dependencies(&mut sub_deps);
+
+                // Remove variables bound in the lambda LHS
+                for pat in args.iter() {
+                    for name in pat.names_bound() {
+                        // @Note: if .remove() returns false,
+                        // the definition isn't referenced in the in_expr;
+                        // therefore it's dead code.
+                        // Maybe emit a warning about this.
+                        sub_deps.remove(&name);
+                    }
+                }
+
+                deps.extend(sub_deps);
+            }
+        }
+    }
 }
 
 impl<'file> Display for Expr<'file> {
@@ -218,12 +340,12 @@ impl<'file> Display for Expr<'file> {
             }
             Term(t) => write!(f, "{}", t),
             Let {
-                definitions: assignments,
+                definitions,
                 in_expr,
             } => {
                 write!(f, "let")?;
-                for (_name, defns) in assignments {
-                    for (lhs, rhs) in defns {
+                for (_name, assignments) in definitions {
+                    for (lhs, rhs) in assignments {
                         write!(f, " {} = {}", lhs, rhs)?;
                         write!(f, "{};{}", DIM, RESET)?;
                     }

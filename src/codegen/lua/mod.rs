@@ -4,7 +4,7 @@ mod test;
 use crate::ast;
 use crate::scope::Scope;
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
 use std::fmt::Write;
 
 use super::Error as CodegenError;
@@ -25,8 +25,8 @@ struct CodeGenerator<'a> {
     conditions: Vec<String>,
     bindings: Vec<String>,
 
-    // This is used when generating definitions in proper order.
-    deferred: HashSet<&'a ast::Name>,
+    // This is the set of definitions which have already been generated.
+    generated: HashSet<ast::Name>,
 
     scope: &'a Scope<'a>,
 
@@ -41,7 +41,7 @@ impl<'a> CodeGenerator<'a> {
             conditions: Vec::new(),
             bindings: Vec::new(),
 
-            deferred: HashSet::new(),
+            generated: HashSet::new(),
 
             scope,
 
@@ -62,54 +62,81 @@ impl<'a> CodeGenerator<'a> {
         let mut return_entries = String::new();
 
         // Start by putting all definitions in the queue to be generated.
-        let mut queue: VecDeque<_> = self.scope.definitions.iter().collect();
+        // @Fixme: this probably doesn't need to be entirely cloned
+        let mut current_pass: Vec<_> = self.scope.definitions.clone().into_iter().collect();
+        let mut next_pass = Vec::new();
 
-        // As long as the queue isn't empty, try to generate the definition at the front.
-        while let Some((name, typed_defn)) = queue.pop_front() {
-            // @Todo: Implement the following logic:
-            // If we can, generate the definition.
-            // Otherwise,
-            //      remember that we deferred this definition,
-            //      then push it to the back of the queue to be generated later.
-            // If we've already deferred this definition,
-            //      something should happen??
-            //      Does this really mean a cycle, or just doubly-nested dependencies?
-            //      @Todo: figure this out
-            log::debug!("Front of queue: {:?}, {:?}", name, typed_defn);
+        loop {
+            // Keep track of whether we've generated anything in this pass.
+            let mut generated_anything = false;
 
-            macro_rules! assignment {
-                ($name:expr, $typed_defn:expr) => {{
-                    write!(lua, r#"{}["{}"] = "#, self.generated_name_prefix, $name)?;
-                    writeln!(lua, "{}", self.definition(&$typed_defn.definition)?)?;
+            // If the queue is empty, we're done.
+            if current_pass.len() == 0 {
+                break;
+            }
+
+            for (name, mut typed_defn) in current_pass.drain(..) {
+                debug_assert!(typed_defn.definition.assignments.len() > 0);
+
+                // @Lazy @Laziness: lazy values can be generated in any order
+
+                // If the definition has any arguments, then it will become a Lua function;
+                // this means we can generate it in any order.
+                // Note that if it has missing dependencies, it will error at runtime;
+                // so we should have already caught this in a compile error.
+                let has_any_args = typed_defn.definition.assignments[0].0.arg_count() > 0;
+
+                // If the definition has no un-generated dependencies,
+                // then we're ready generate it.
+                let has_all_deps = typed_defn
+                    .definition
+                    .dependencies()
+                    .iter()
+                    // @Todo @Fixme: this should check the scope as well,
+                    // for e.g. imported functions,
+                    // rather than just checking if it's a builtin Lua binop.
+                    .all(|n| self.generated.contains(n) || is_lua_binop(n.as_str()));
+
+                if has_any_args || has_all_deps {
+                    // Because there are arguments, it's going to be a Lua function.
+                    // Thus, we can generate in any order.
+                    // Mark that we have generated something in this pass.
+                    generated_anything = true;
+
+                    write!(lua, r#"{}["{}"] = "#, self.generated_name_prefix, name)?;
+                    writeln!(lua, "{}", self.definition(&typed_defn.definition)?)?;
                     writeln!(
                         return_entries,
                         r#"["{name}"] = {prefix}["{name}"],"#,
-                        name = $name,
+                        name = name,
                         prefix = self.generated_name_prefix,
                     )?;
-                }};
-            }
 
-            debug_assert!(typed_defn.definition.len() > 0);
-            if typed_defn.definition[0].0.arg_count() == 0 {
-                // If there are no arguments, then it's going to be a Lua value.
-                // Thus, it needs to have anything referenced inside it to be generated first.
-                // @Lazy @Laziness: lazy values don't have this restriction.
-
-                // @Todo: something smarter than just leaving values until last.
-                if self.deferred.contains(name) {
-                    // If we've already deferred, just generate it now.
-                    // @XXX @Todo: something smarter
-                    assignment!(name, typed_defn);
+                    // Mark this definition as generated.
+                    self.generated.insert(name);
                 } else {
-                    self.deferred.insert(name);
-                    queue.push_back((name, typed_defn));
+                    // Skip it for now
+                    next_pass.push((name, typed_defn));
                 }
-            } else {
-                // Because there are arguments, it's going to be a Lua function.
-                // Thus, we can generate in any order.
-                assignment!(name, typed_defn);
             }
+
+            // If we didn't generate anything in this pass,
+            // it means we have a cyclic dependency.
+            // @Checkme: is this the only time this happens?
+            if !generated_anything {
+                return Err(CodegenError::CyclicDependency(
+                    next_pass
+                        .iter()
+                        .map(|t| {
+                            // @Todo @Fixme: filter out entries which depend on the cycle,
+                            // but are not part of the cycle themselves.
+                            t.0.clone()
+                        })
+                        .collect(),
+                ));
+            }
+
+            std::mem::swap(&mut current_pass, &mut next_pass);
         }
 
         write!(lua, "return {{\n{}}}", return_entries)?;
@@ -164,7 +191,7 @@ impl<'a> CodeGenerator<'a> {
     /// because in the case of multiple definitions,
     /// we have to generate a Lua 'switch' statement.
     fn definition<'file>(&mut self, defn: &ast::Definition<'file>) -> Result<String> {
-        self.curried_function(defn)
+        self.curried_function(&defn.assignments)
     }
 
     fn expr<'file>(&mut self, expr: &ast::Expr<'file>) -> Result<String> {
@@ -205,7 +232,7 @@ impl<'a> CodeGenerator<'a> {
                         lua,
                         "local {} = {}",
                         definition[0].0.name(),
-                        self.definition(definition)?
+                        self.curried_function(definition)?
                     )?;
                 }
 
@@ -260,10 +287,13 @@ impl<'a> CodeGenerator<'a> {
         }
     }
 
-    fn curried_function<'file>(&mut self, definition: &ast::Definition) -> Result<String> {
-        debug_assert!(definition.len() > 0);
+    fn curried_function<'file>(
+        &mut self,
+        assignments: &Vec<ast::Assignment<'file>>,
+    ) -> Result<String> {
+        debug_assert!(assignments.len() > 0);
 
-        let arg_count = definition[0].0.arg_count();
+        let arg_count = assignments[0].0.arg_count();
         let mut ids = Vec::with_capacity(arg_count);
 
         let mut lua = String::new();
@@ -285,7 +315,7 @@ impl<'a> CodeGenerator<'a> {
         let mut has_any_conditions = false;
         let mut has_unconditional_branch = false;
 
-        for (lhs, expr) in definition {
+        for (lhs, expr) in assignments {
             let args = lhs.args();
             if arg_count != args.len() {
                 return Err(CodegenError::IncorrectArgumentCount(format!(
@@ -349,7 +379,7 @@ impl<'a> CodeGenerator<'a> {
             writeln!(
                 lua,
                 r#"error("Unmatched pattern in function `{}`")"#,
-                &definition[0].0.name()
+                &assignments[0].0.name()
             )?;
         }
 

@@ -90,7 +90,7 @@ impl<'a> ApplyPrecedence for Module<'a> {
         }
 
         for (_name, defns) in &mut self.definitions {
-            for (lhs, rhs) in defns.iter_mut() {
+            for (lhs, rhs) in defns.assignments.iter_mut() {
                 lhs.apply(&defaults);
                 rhs.apply(&defaults);
             }

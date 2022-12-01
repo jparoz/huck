@@ -42,7 +42,8 @@ fn module(input: &str) -> IResult<&str, Module> {
 
     for (lhs, expr) in assigns {
         env.entry(lhs.name().clone())
-            .or_insert(Vec::new())
+            .or_insert(Definition::new(Vec::new()))
+            .assignments
             .push((lhs, expr));
     }
 
