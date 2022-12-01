@@ -8,7 +8,4 @@ pub enum Error {
 
     #[error("Could not unify type '{0}' with type '{1}' (recursive type)")]
     CouldNotUnifyRecursive(Type, Type),
-
-    #[error("Infinite type TODO")]
-    InfiniteType,
 }
