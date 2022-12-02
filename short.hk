@@ -6,10 +6,28 @@
 (* not True = False; *)
 (* not False = True; *)
 
+
 (* True && True = True; *)
 (* _ && _ = False; *)
+(* infixr 3 &&; *)
+
+(* False || False = False; *)
+(* _ || _ = True; *)
+(* infixr 2 ||; *)
+
+(* boolA = (True && False) || True; *)
+(* boolB = True && (False || True); *)
+(* boolC = True && False || True; *)
 
 (* bothAreTrue a b = a && b; *)
+
+
+infixl 6 +;
+infixl 7 *;
+
+numA = 3 + 4 * 5;
+numB = 3 * 4 + 5;
+
 
 (* valA = valB + 1; *)
 (* valB = valA + 1; *)
@@ -50,18 +68,18 @@
 (* addIfOne [1, x] = 1 + x; *)
 (* addIfOne [_, x] = x; *)
 
-tuple = (1, "hi");
+(* tuple = (1, "hi"); *)
 
-usesTuple (n, s) = (n*2, s .. s);
+(* usesTuple (n, s) = (n*2, s .. s); *)
 
-callsTheTupleFunctionA = usesTuple (123, "cat");
-callsTheTupleFunctionB = usesTuple tuple;
+(* callsTheTupleFunctionA = usesTuple (123, "cat"); *)
+(* callsTheTupleFunctionB = usesTuple tuple; *)
 
-shouldBeLast = shouldBeNext + 123;
+(* shouldBeLast = shouldBeNext + 123; *)
 
-mustComeFirst = 456;
+(* mustComeFirst = 456; *)
 
-shouldBeNext = mustComeFirst + 2;
+(* shouldBeNext = mustComeFirst + 2; *)
 
 (* usesCyclic = cyclicA; *)
 (* cyclicA = cyclicB; *)

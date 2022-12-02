@@ -49,12 +49,6 @@ pub struct Module<'file> {
     pub definitions: HashMap<Name, Definition<'file>>,
 }
 
-impl<'file> Module<'file> {
-    pub fn new(definitions: HashMap<Name, Definition<'file>>) -> Module<'file> {
-        Module { definitions }
-    }
-}
-
 pub type Assignment<'file> = (Lhs<'file>, Expr<'file>);
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]

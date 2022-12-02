@@ -124,6 +124,10 @@ impl<'a> CodeGenerator<'a> {
             // it means we have a cyclic dependency.
             // @Checkme: is this the only time this happens?
             if !generated_anything {
+                log::warn!(
+                    "Error, didn't generate anything in one pass. Next in queue: {:?}",
+                    next_pass
+                );
                 return Err(CodegenError::CyclicDependency(
                     next_pass
                         .iter()

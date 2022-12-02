@@ -1,5 +1,6 @@
 use nom::branch::alt;
 use nom::bytes::complete::{escaped, is_not, tag};
+use nom::character::complete::u8 as nom_u8;
 use nom::character::complete::{anychar, char, hex_digit1, one_of, satisfy};
 use nom::combinator::{map, not, opt, peek, recognize, success, value, verify};
 use nom::multi::{many0, many0_count, many1, separated_list0, separated_list1};
@@ -12,46 +13,84 @@ use std::collections::HashMap;
 
 use crate::ast::*;
 
-mod precedence;
-use precedence::ApplyPrecedence;
+pub mod precedence;
+use precedence::{ApplyPrecedence, Associativity, Precedence};
 
 #[cfg(test)]
 mod test;
 
+// This is an internal type sum, used only in this module.
+enum Statement<'file> {
+    Assignment(Assignment<'file>),
+    Precedence(Name, Precedence),
+}
+
 pub fn parse(input: &str) -> Result<Module, Error> {
     match preceded(ws(success(())), module)(input) {
-        Ok((leftover, mut c)) => {
-            // @Todo: get these precedences in the same way as the prelude is defined
-            let precs = HashMap::new();
-            c.apply(&precs);
+        Ok((leftover, (mut module, precs))) => {
+            log::info!("Parsed precedences: {:?}", precs);
+            module.apply(&precs);
 
             if !leftover.is_empty() {
                 Err(Error::Leftover(leftover.to_string()))
             } else {
-                log::trace!("Parsed AST: {:?}", c);
-                Ok(c)
+                log::trace!("Parsed AST: {:?}", module);
+                Ok(module)
             }
         }
         Err(nom) => Err(Error::Nom(nom.to_string())),
     }
 }
 
-fn module(input: &str) -> IResult<&str, Module> {
-    let (leftovers, assigns) = ws(many0(assign))(input)?;
-    let mut env = HashMap::new();
+fn module(input: &str) -> IResult<&str, (Module, HashMap<Name, Precedence>)> {
+    let (leftovers, statements) = ws(many0(statement))(input)?;
 
-    for (lhs, expr) in assigns {
-        env.entry(lhs.name().clone())
-            .or_insert(Definition::new(Vec::new()))
-            .assignments
-            .push((lhs, expr));
+    let mut definitions = HashMap::new();
+    let mut precedences = HashMap::new();
+
+    for stat in statements {
+        use Statement::*;
+        match stat {
+            Assignment((lhs, expr)) => {
+                definitions
+                    .entry(lhs.name().clone())
+                    .or_insert(Definition::new(Vec::new()))
+                    .assignments
+                    .push((lhs, expr));
+            }
+            Precedence(name, prec) => {
+                precedences.insert(name, prec);
+            }
+        }
     }
 
-    Ok((leftovers, Module::new(env)))
+    Ok((leftovers, (Module { definitions }, precedences)))
+}
+
+fn statement(input: &str) -> IResult<&str, Statement> {
+    alt((
+        map(assign, Statement::Assignment),
+        map(prec, |(name, prec)| Statement::Precedence(name, prec)),
+    ))(input)
 }
 
 fn assign(input: &str) -> IResult<&str, Assignment> {
     terminated(separated_pair(lhs, reserved_op("="), expr), semi)(input)
+}
+
+fn prec(input: &str) -> IResult<&str, (Name, Precedence)> {
+    map(
+        terminated(nom_tuple((associativity, ws(nom_u8), operator)), semi),
+        |(assoc, prec, op)| (op, Precedence(assoc, prec)),
+    )(input)
+}
+
+fn associativity(input: &str) -> IResult<&str, Associativity> {
+    alt((
+        value(Associativity::Left, reserved("infixl")),
+        value(Associativity::Right, reserved("infixr")),
+        value(Associativity::None, reserved("infix")),
+    ))(input)
 }
 
 fn lhs(input: &str) -> IResult<&str, Lhs> {
@@ -307,11 +346,13 @@ where
     terminated(inner, whitespace)
 }
 
+// @Todo: change to 'static
 fn reserved<'a>(s: &'a str) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> {
     debug_assert!(is_reserved(s));
     ws(terminated(tag(s), peek(not(satisfy(is_name_char)))))
 }
 
+// @Todo: change to 'static
 fn reserved_op<'a>(s: &'a str) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> {
     debug_assert!(is_reserved(s));
     ws(terminated(tag(s), peek(not(operator_char))))
@@ -338,7 +379,7 @@ fn is_var_start_char(c: char) -> bool {
 fn is_reserved(word: &str) -> bool {
     match word {
         "module" | "lazy" | "import" | "let" | "in" | "do" | "=" | ":" | "\\" | "->" | "<-"
-        | "=>" | "," | "()" => true,
+        | "infix" | "infixl" | "infixr" | "=>" | "," | "()" => true,
         _ => false,
     }
 }
