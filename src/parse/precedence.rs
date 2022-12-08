@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ast::{Expr, Lhs, Module, Name, Pattern, Term};
+use crate::ast::{Definition, Expr, Lhs, Name, Pattern, Term};
 
 /*
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -13,6 +13,67 @@ impl PrecTable {
 }
 */
 
+// @Note @Cleanup: These defaults should one day be replaced with source code.
+pub fn default_precs() -> HashMap<Name, Precedence> {
+    let mut defaults: HashMap<Name, Precedence> = HashMap::with_capacity(13);
+
+    defaults.insert(
+        Name::Binop("*".to_string()),
+        Precedence(Associativity::Left, 7),
+    );
+    defaults.insert(
+        Name::Binop("/".to_string()),
+        Precedence(Associativity::Left, 7),
+    );
+    defaults.insert(
+        Name::Binop("+".to_string()),
+        Precedence(Associativity::Left, 6),
+    );
+    defaults.insert(
+        Name::Binop("-".to_string()),
+        Precedence(Associativity::Left, 6),
+    );
+    defaults.insert(
+        Name::Binop(",".to_string()),
+        Precedence(Associativity::Right, 1),
+    );
+    defaults.insert(
+        Name::Binop("::".to_string()),
+        Precedence(Associativity::Right, 5),
+    );
+    defaults.insert(
+        Name::Binop("$".to_string()),
+        Precedence(Associativity::Right, 0),
+    );
+    defaults.insert(
+        Name::Binop("==".to_string()),
+        Precedence(Associativity::None, 4),
+    );
+    defaults.insert(
+        Name::Binop("!=".to_string()),
+        Precedence(Associativity::None, 4),
+    );
+    defaults.insert(
+        Name::Binop("<".to_string()),
+        Precedence(Associativity::None, 4),
+    );
+    defaults.insert(
+        Name::Binop("<=".to_string()),
+        Precedence(Associativity::None, 4),
+    );
+    defaults.insert(
+        Name::Binop(">".to_string()),
+        Precedence(Associativity::None, 4),
+    );
+    defaults.insert(
+        Name::Binop(">=".to_string()),
+        Precedence(Associativity::None, 4),
+    );
+
+    defaults
+}
+
+// @Cleanup: move to AST (probably)
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub struct Precedence(pub Associativity, pub u8);
 
@@ -27,73 +88,11 @@ pub trait ApplyPrecedence {
     fn apply(&mut self, precs: &HashMap<Name, Precedence>);
 }
 
-impl<'a> ApplyPrecedence for Module<'a> {
+impl<'a> ApplyPrecedence for Definition<'a> {
     fn apply(&mut self, precs: &HashMap<Name, Precedence>) {
-        // @Note @Cleanup: These defaults should one day be replaced with source code.
-
-        let mut defaults: HashMap<Name, Precedence> = HashMap::with_capacity(13);
-        defaults.insert(
-            Name::Binop("*".to_string()),
-            Precedence(Associativity::Left, 7),
-        );
-        defaults.insert(
-            Name::Binop("/".to_string()),
-            Precedence(Associativity::Left, 7),
-        );
-        defaults.insert(
-            Name::Binop("+".to_string()),
-            Precedence(Associativity::Left, 6),
-        );
-        defaults.insert(
-            Name::Binop("-".to_string()),
-            Precedence(Associativity::Left, 6),
-        );
-        defaults.insert(
-            Name::Binop(",".to_string()),
-            Precedence(Associativity::Right, 1),
-        );
-        defaults.insert(
-            Name::Binop("::".to_string()),
-            Precedence(Associativity::Right, 5),
-        );
-        defaults.insert(
-            Name::Binop("$".to_string()),
-            Precedence(Associativity::Right, 0),
-        );
-        defaults.insert(
-            Name::Binop("==".to_string()),
-            Precedence(Associativity::None, 4),
-        );
-        defaults.insert(
-            Name::Binop("!=".to_string()),
-            Precedence(Associativity::None, 4),
-        );
-        defaults.insert(
-            Name::Binop("<".to_string()),
-            Precedence(Associativity::None, 4),
-        );
-        defaults.insert(
-            Name::Binop("<=".to_string()),
-            Precedence(Associativity::None, 4),
-        );
-        defaults.insert(
-            Name::Binop(">".to_string()),
-            Precedence(Associativity::None, 4),
-        );
-        defaults.insert(
-            Name::Binop(">=".to_string()),
-            Precedence(Associativity::None, 4),
-        );
-
-        for (name, prec) in precs {
-            defaults.insert(name.clone(), *prec);
-        }
-
-        for (_name, defns) in &mut self.definitions {
-            for (lhs, rhs) in defns.assignments.iter_mut() {
-                lhs.apply(&defaults);
-                rhs.apply(&defaults);
-            }
+        for (lhs, rhs) in self.assignments.iter_mut() {
+            lhs.apply(precs);
+            rhs.apply(precs);
         }
     }
 }

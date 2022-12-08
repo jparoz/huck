@@ -1,6 +1,9 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt::{self, Display};
 
+use crate::parse::precedence::Precedence;
+use crate::types::TypeScheme;
+
 // @Todo: use these, or something similar
 //
 // #[derive(PartialEq, Debug)]
@@ -16,21 +19,21 @@ use std::fmt::{self, Display};
 //     len: usize,
 // }
 
+/// A definition is the correct AST for a given Huck definition,
+/// combined from any statements concerning the same Name.
+/// This includes any case definitions (Assignments),
+/// type declarations,
+/// or precedence declarations.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Definition<'file> {
     pub assignments: Vec<Assignment<'file>>,
+    pub explicit_type: Option<TypeScheme>,
+    pub precedence: Option<Precedence>,
 
     dependencies: Option<HashSet<Name>>,
 }
 
 impl<'file> Definition<'file> {
-    pub fn new(assignments: Vec<Assignment<'file>>) -> Self {
-        Self {
-            assignments,
-            dependencies: None,
-        }
-    }
-
     pub fn dependencies(&mut self) -> &HashSet<Name> {
         self.dependencies.get_or_insert_with(|| {
             let mut deps = HashSet::new();
@@ -44,11 +47,37 @@ impl<'file> Definition<'file> {
     }
 }
 
+impl<'file> Default for Definition<'file> {
+    fn default() -> Self {
+        Self {
+            assignments: Vec::new(),
+            explicit_type: None,
+            precedence: None,
+
+            dependencies: None,
+        }
+    }
+}
+
+/// A Module is a dictionary of Huck function definitions.
+/// This is produced from a Vec<Statement>,
+/// by using the parsed precedence rules to reshape the AST,
+/// and collecting statements referring to the same function
+/// into a single Definition struct for each function name.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Module<'file> {
     pub definitions: HashMap<Name, Definition<'file>>,
 }
 
+/// A Statement is a sum type for any of the top-level Huck constructs.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Statement<'file> {
+    Assignment(Assignment<'file>),
+    TypeDeclaration, // @XXX @Todo
+    Precedence(Name, Precedence),
+}
+
+// @Todo: change this to an enum with WithType and WithoutType variants
 pub type Assignment<'file> = (Lhs<'file>, Expr<'file>);
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]

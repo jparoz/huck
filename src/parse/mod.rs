@@ -14,57 +14,60 @@ use std::collections::HashMap;
 use crate::ast::*;
 
 pub mod precedence;
-use precedence::{ApplyPrecedence, Associativity, Precedence};
+use precedence::{default_precs, ApplyPrecedence, Associativity, Precedence};
 
 #[cfg(test)]
 mod test;
 
-// This is an internal type sum, used only in this module.
-enum Statement<'file> {
-    Assignment(Assignment<'file>),
-    Precedence(Name, Precedence),
-}
-
 pub fn parse(input: &str) -> Result<Module, Error> {
-    match preceded(ws(success(())), module)(input) {
-        Ok((leftover, (mut module, precs))) => {
-            log::info!("Parsed precedences: {:?}", precs);
-            module.apply(&precs);
-
+    match preceded(ws(success(())), ws(many0(statement)))(input) {
+        Ok((leftover, statements)) => {
             if !leftover.is_empty() {
-                Err(Error::Leftover(leftover.to_string()))
-            } else {
-                log::trace!("Parsed AST: {:?}", module);
-                Ok(module)
+                return Err(Error::Leftover(leftover.to_string()));
             }
+
+            let mut definitions: HashMap<Name, Definition> = HashMap::new();
+            let mut precs = default_precs();
+
+            for stat in statements {
+                match stat {
+                    Statement::Assignment((lhs, expr)) => {
+                        definitions
+                            .entry(lhs.name().clone())
+                            .or_default()
+                            .assignments
+                            .push((lhs, expr));
+                    }
+                    Statement::Precedence(name, prec) => {
+                        precs.insert(name.clone(), prec);
+                        // If there was already a precedence for this name, that's an error.
+                        if let Some(previous_prec) = definitions
+                            .entry(name.clone())
+                            .or_default()
+                            .precedence
+                            .replace(prec)
+                        {
+                            return Err(Error::MultiplePrecs(name, prec, previous_prec));
+                        }
+                    }
+                    Statement::TypeDeclaration => todo!(),
+                }
+            }
+
+            // @Cleanup: this comment doesn't make too much sense
+            // Now that we've collected all the related statements together,
+            // we need to do some checking;
+            // first we need to modify the AST to take precedence statements into account.
+            for defn in definitions.values_mut() {
+                defn.apply(&precs);
+            }
+
+            // @Todo: check other things here?
+
+            Ok(Module { definitions })
         }
         Err(nom) => Err(Error::Nom(nom.to_string())),
     }
-}
-
-fn module(input: &str) -> IResult<&str, (Module, HashMap<Name, Precedence>)> {
-    let (leftovers, statements) = ws(many0(statement))(input)?;
-
-    let mut definitions = HashMap::new();
-    let mut precedences = HashMap::new();
-
-    for stat in statements {
-        use Statement::*;
-        match stat {
-            Assignment((lhs, expr)) => {
-                definitions
-                    .entry(lhs.name().clone())
-                    .or_insert(Definition::new(Vec::new()))
-                    .assignments
-                    .push((lhs, expr));
-            }
-            Precedence(name, prec) => {
-                precedences.insert(name, prec);
-            }
-        }
-    }
-
-    Ok((leftovers, (Module { definitions }, precedences)))
 }
 
 fn statement(input: &str) -> IResult<&str, Statement> {
@@ -388,6 +391,11 @@ fn is_reserved(word: &str) -> bool {
 pub enum Error {
     #[error("Nom error: {0}")]
     Nom(String),
+
     #[error("Leftover input: {0}")]
     Leftover(String),
+
+    // @Todo: this shouldn't use Debug printing, but should print the source.
+    #[error("Multiple precedence declarations found for `{0}`:\n    {1:?}\n    {2:?}")]
+    MultiplePrecs(Name, Precedence, Precedence),
 }

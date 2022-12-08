@@ -7,9 +7,9 @@
 (* not False = True; *)
 
 
-(* True && True = True; *)
-(* _ && _ = False; *)
-(* infixr 3 &&; *)
+True && True = True;
+_ && _ = False;
+infixr 3 &&;
 
 (* False || False = False; *)
 (* _ || _ = True; *)
@@ -22,8 +22,8 @@
 (* bothAreTrue a b = a && b; *)
 
 
-infixl 6 +;
-infixl 7 *;
+(* infixl 6 +; *)
+(* infixl 7 *; *)
 
 numA = 3 + 4 * 5;
 numB = 3 * 4 + 5;
@@ -43,8 +43,8 @@ numB = 3 * 4 + 5;
 
 (* const a b = a; *)
 
-(* bar any 0 = 0; *)
-(* bar x y = x / y; *)
+bar any 0 = 0;
+bar x y = x / y;
 
 (* usesUnit : () -> String *)
 (* usesUnit () = "foo"; *)
