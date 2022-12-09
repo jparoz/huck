@@ -317,11 +317,28 @@ impl<'file> GenerateConstraints for Definition<'file> {
     }
 }
 
+// @DRY: possible?
 impl<'file> GenerateConstraints for Vec<Assignment<'file>> {
     fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
         let beta = cg.fresh();
 
-        let typs: Vec<Type> = self.iter().map(|defn| defn.generate(cg)).collect();
+        let typs: Vec<Type> = self.iter().map(|assign| assign.generate(cg)).collect();
+        for typ in typs {
+            // @Note: If we want polymorphic bindings at top level, this might want to be a
+            // different type of constraint.
+            cg.constrain(Constraint::Equality(beta.clone(), typ));
+        }
+
+        beta
+    }
+}
+
+// @DRY: possible?
+impl<'file> GenerateConstraints for Vec<(Lhs<'file>, Expr<'file>)> {
+    fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
+        let beta = cg.fresh();
+
+        let typs: Vec<Type> = self.iter().map(|assign| assign.generate(cg)).collect();
         for typ in typs {
             // @Note: If we want polymorphic bindings at top level, this might want to be a
             // different type of constraint.
@@ -333,6 +350,12 @@ impl<'file> GenerateConstraints for Vec<Assignment<'file>> {
 }
 
 impl<'file> GenerateConstraints for Assignment<'file> {
+    fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
+        todo!()
+    }
+}
+
+impl<'file> GenerateConstraints for (Lhs<'file>, Expr<'file>) {
     fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
         let (lhs, expr) = self;
 

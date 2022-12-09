@@ -26,7 +26,7 @@ use crate::types::TypeScheme;
 /// or precedence declarations.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Definition<'file> {
-    pub assignments: Vec<Assignment<'file>>,
+    pub assignments: Vec<(Lhs<'file>, Expr<'file>)>,
     pub explicit_type: Option<TypeScheme>,
     pub precedence: Option<Precedence>,
 
@@ -73,12 +73,16 @@ pub struct Module<'file> {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Statement<'file> {
     Assignment(Assignment<'file>),
+    TypeAnnotation(Name, TypeScheme),
     TypeDeclaration, // @XXX @Todo
     Precedence(Name, Precedence),
 }
 
-// @Todo: change this to an enum with WithType and WithoutType variants
-pub type Assignment<'file> = (Lhs<'file>, Expr<'file>);
+#[derive(Debug, PartialEq, Eq)]
+pub enum Assignment<'file> {
+    WithType(TypeScheme, Lhs<'file>, Expr<'file>),
+    WithoutType(Lhs<'file>, Expr<'file>),
+}
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub enum Name {
@@ -266,7 +270,8 @@ pub enum Expr<'file> {
         rhs: Box<Expr<'file>>,
     },
     Let {
-        definitions: HashMap<Name, Vec<Assignment<'file>>>,
+        // @Todo @Checkme: should this be Assignment instead of the raw tuple?
+        definitions: HashMap<Name, Vec<(Lhs<'file>, Expr<'file>)>>,
         in_expr: Box<Expr<'file>>,
     },
     Lambda {

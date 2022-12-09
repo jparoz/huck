@@ -12,6 +12,7 @@ use nom::IResult;
 use std::collections::HashMap;
 
 use crate::ast::*;
+use crate::types::TypeScheme;
 
 pub mod precedence;
 use precedence::{default_precs, ApplyPrecedence, Associativity, Precedence};
@@ -31,13 +32,29 @@ pub fn parse(input: &str) -> Result<Module, Error> {
 
             for stat in statements {
                 match stat {
-                    Statement::Assignment((lhs, expr)) => {
+                    Statement::Assignment(Assignment::WithoutType(lhs, expr)) => {
                         definitions
                             .entry(lhs.name().clone())
                             .or_default()
                             .assignments
                             .push((lhs, expr));
                     }
+
+                    Statement::Assignment(Assignment::WithType(ts, lhs, expr)) => {
+                        let defn = definitions.entry(lhs.name().clone()).or_default();
+
+                        // If there was already an explicit for this name, that's an error.
+                        if let Some(previous_ts) = defn.explicit_type.replace(ts.clone()) {
+                            return Err(Error::MultipleTypes(lhs.name().clone(), ts, previous_ts));
+                        }
+
+                        defn.assignments.push((lhs, expr));
+                    }
+
+                    Statement::TypeAnnotation(name, type_scheme) => {
+                        todo!();
+                    }
+
                     Statement::Precedence(name, prec) => {
                         precs.insert(name.clone(), prec);
                         // If there was already a precedence for this name, that's an error.
@@ -50,6 +67,7 @@ pub fn parse(input: &str) -> Result<Module, Error> {
                             return Err(Error::MultiplePrecs(name, prec, previous_prec));
                         }
                     }
+
                     Statement::TypeDeclaration => todo!(),
                 }
             }
@@ -78,7 +96,22 @@ fn statement(input: &str) -> IResult<&str, Statement> {
 }
 
 fn assign(input: &str) -> IResult<&str, Assignment> {
-    terminated(separated_pair(lhs, reserved_op("="), expr), semi)(input)
+    terminated(
+        alt((
+            map(
+                separated_pair(
+                    separated_pair(lhs, reserved_op(":"), type_expr),
+                    reserved_op("="),
+                    expr,
+                ),
+                |((lhs, ts), rhs)| Assignment::WithType(ts, lhs, rhs),
+            ),
+            map(separated_pair(lhs, reserved_op("="), expr), |(lhs, rhs)| {
+                Assignment::WithoutType(lhs, rhs)
+            }),
+        )),
+        semi,
+    )(input)
 }
 
 fn prec(input: &str) -> IResult<&str, (Name, Precedence)> {
@@ -138,6 +171,10 @@ fn pattern_binop(input: &str) -> IResult<&str, Pattern> {
 
 fn expr(input: &str) -> IResult<&str, Expr> {
     alt((binop, app, let_in, lambda))(input)
+}
+
+fn type_expr(input: &str) -> IResult<&str, TypeScheme> {
+    todo!()
 }
 
 fn binop(input: &str) -> IResult<&str, Expr> {
@@ -398,4 +435,8 @@ pub enum Error {
     // @Todo: this shouldn't use Debug printing, but should print the source.
     #[error("Multiple precedence declarations found for `{0}`:\n    {1:?}\n    {2:?}")]
     MultiplePrecs(Name, Precedence, Precedence),
+
+    // @Todo: this shouldn't use Debug printing, but should print the source.
+    #[error("Multiple explicit type annotations found for `{0}`:\n    {1:?}\n    {2:?}")]
+    MultipleTypes(Name, TypeScheme, TypeScheme),
 }

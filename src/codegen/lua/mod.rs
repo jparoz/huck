@@ -293,7 +293,7 @@ impl<'a> CodeGenerator<'a> {
 
     fn curried_function<'file>(
         &mut self,
-        assignments: &Vec<ast::Assignment<'file>>,
+        assignments: &Vec<(ast::Lhs<'file>, ast::Expr<'file>)>,
     ) -> Result<String> {
         debug_assert!(assignments.len() > 0);
 
