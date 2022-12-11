@@ -42,6 +42,7 @@ where
 pub fn transpile(huck: &str) -> Result<String, HuckError> {
     // Parse
     let parsed = parse(huck)?;
+    log::info!("Parsed module: {:?}", parsed);
 
     // Typecheck
     let scope = typecheck(parsed)?;

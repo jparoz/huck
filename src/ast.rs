@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::{self, Display};
 
 use crate::parse::precedence::Precedence;
-use crate::types::TypeScheme;
 
 // @Todo: use these, or something similar
 //
@@ -27,7 +26,7 @@ use crate::types::TypeScheme;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Definition<'file> {
     pub assignments: Vec<(Lhs<'file>, Expr<'file>)>,
-    pub explicit_type: Option<TypeScheme>,
+    pub explicit_type: Option<TypeScheme<'file>>,
     pub precedence: Option<Precedence>,
 
     dependencies: Option<HashSet<Name>>,
@@ -73,14 +72,14 @@ pub struct Module<'file> {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Statement<'file> {
     Assignment(Assignment<'file>),
-    TypeAnnotation(Name, TypeScheme),
+    TypeAnnotation(Name, TypeScheme<'file>),
     TypeDeclaration, // @XXX @Todo
     Precedence(Name, Precedence),
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Assignment<'file> {
-    WithType(TypeScheme, Lhs<'file>, Expr<'file>),
+    WithType(TypeScheme<'file>, Lhs<'file>, Expr<'file>),
     WithoutType(Lhs<'file>, Expr<'file>),
 }
 
@@ -438,6 +437,32 @@ impl<'file> Display for Term<'file> {
             Unit => write!(f, "()"),
         }
     }
+}
+
+/// This represents an explicitly-written type scheme, i.e. the RHS of a `:`.
+/// e.g. in `id : forall a. a;` the TypeScheme represents `forall a. a`.
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+pub struct TypeScheme<'file> {
+    pub vars: Vec<&'file str>, // @Checkme: &str, or maybe Name?
+    pub typ: TypeExpr<'file>,
+}
+
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+pub enum TypeExpr<'file> {
+    Term(TypeTerm<'file>),
+    App(Box<TypeExpr<'file>>, Box<TypeExpr<'file>>),
+    Arrow(Box<TypeExpr<'file>>, Box<TypeExpr<'file>>),
+    // @Todo: type-level binops
+}
+
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+pub enum TypeTerm<'file> {
+    Concrete(&'file str),
+    Var(&'file str),
+    Parens(Box<TypeExpr<'file>>),
+    List(Box<TypeExpr<'file>>),
+    Tuple(Vec<TypeExpr<'file>>),
+    Unit,
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]

@@ -12,7 +12,6 @@ use nom::IResult;
 use std::collections::HashMap;
 
 use crate::ast::*;
-use crate::types::TypeScheme;
 
 pub mod precedence;
 use precedence::{default_precs, ApplyPrecedence, Associativity, Precedence};
@@ -45,14 +44,28 @@ pub fn parse(input: &str) -> Result<Module, Error> {
 
                         // If there was already an explicit for this name, that's an error.
                         if let Some(previous_ts) = defn.explicit_type.replace(ts.clone()) {
-                            return Err(Error::MultipleTypes(lhs.name().clone(), ts, previous_ts));
+                            return Err(Error::MultipleTypes(
+                                lhs.name().clone(),
+                                format!("\n    {:?}\n    {:?}", ts, previous_ts),
+                            ));
                         }
 
                         defn.assignments.push((lhs, expr));
                     }
 
-                    Statement::TypeAnnotation(name, type_scheme) => {
-                        todo!();
+                    Statement::TypeAnnotation(name, ts) => {
+                        // If there was already an explicit for this name, that's an error.
+                        if let Some(previous_ts) = definitions
+                            .entry(name.clone())
+                            .or_default()
+                            .explicit_type
+                            .replace(ts.clone())
+                        {
+                            return Err(Error::MultipleTypes(
+                                name,
+                                format!("\n    {:?}\n    {:?}", ts, previous_ts),
+                            ));
+                        }
                     }
 
                     Statement::Precedence(name, prec) => {
@@ -91,6 +104,10 @@ pub fn parse(input: &str) -> Result<Module, Error> {
 fn statement(input: &str) -> IResult<&str, Statement> {
     alt((
         map(assign, Statement::Assignment),
+        map(
+            terminated(separated_pair(name, reserved_op(":"), type_scheme), semi),
+            |(name, scheme)| Statement::TypeAnnotation(name, scheme),
+        ),
         map(prec, |(name, prec)| Statement::Precedence(name, prec)),
     ))(input)
 }
@@ -99,12 +116,8 @@ fn assign(input: &str) -> IResult<&str, Assignment> {
     terminated(
         alt((
             map(
-                separated_pair(
-                    separated_pair(lhs, reserved_op(":"), type_expr),
-                    reserved_op("="),
-                    expr,
-                ),
-                |((lhs, ts), rhs)| Assignment::WithType(ts, lhs, rhs),
+                nom_tuple((lhs, reserved_op(":"), type_scheme, reserved_op("="), expr)),
+                |(lhs, _, ts, _, rhs)| Assignment::WithType(ts, lhs, rhs),
             ),
             map(separated_pair(lhs, reserved_op("="), expr), |(lhs, rhs)| {
                 Assignment::WithoutType(lhs, rhs)
@@ -173,8 +186,58 @@ fn expr(input: &str) -> IResult<&str, Expr> {
     alt((binop, app, let_in, lambda))(input)
 }
 
-fn type_expr(input: &str) -> IResult<&str, TypeScheme> {
-    todo!()
+fn type_scheme(input: &str) -> IResult<&str, TypeScheme> {
+    map(
+        nom_tuple((
+            opt(preceded(
+                reserved("forall"),
+                terminated(many1(ws(var)), ws(tag("."))),
+            )),
+            type_expr,
+        )),
+        |(vars, typ)| {
+            // @Todo: check that all the vars are unique
+
+            TypeScheme {
+                vars: vars.into_iter().flatten().collect(),
+                typ,
+            }
+        },
+    )(input)
+}
+
+fn type_expr(input: &str) -> IResult<&str, TypeExpr> {
+    alt((
+        // @Todo: type-level binops
+        // Can possibly just modify the below line to use type_operator instead of reserved_op("->")
+        map(
+            nom_tuple((type_app, reserved_op("->"), type_expr)),
+            |(f, _, x)| TypeExpr::Arrow(Box::new(f), Box::new(x)),
+        ),
+        type_app,
+    ))(input)
+}
+
+fn type_app(input: &str) -> IResult<&str, TypeExpr> {
+    map(many1(type_term), |ts| {
+        ts.into_iter()
+            .map(|t| TypeExpr::Term(t))
+            .reduce(|a, b| TypeExpr::App(Box::new(a), Box::new(b)))
+            .unwrap() // safe unwrap because we're mapping over many1
+    })(input)
+}
+
+fn type_term(input: &str) -> IResult<&str, TypeTerm> {
+    alt((
+        map(ws(upper_ident), TypeTerm::Concrete),
+        map(ws(var), TypeTerm::Var),
+        map(delimited(ws(tag("[")), type_expr, ws(tag("]"))), |t| {
+            TypeTerm::List(Box::new(t))
+        }),
+        value(TypeTerm::Unit, unit),
+        map(parens(type_expr), |t| TypeTerm::Parens(Box::new(t))),
+        map(tuple(type_expr), TypeTerm::Tuple),
+    ))(input)
 }
 
 fn binop(input: &str) -> IResult<&str, Expr> {
@@ -419,7 +482,7 @@ fn is_var_start_char(c: char) -> bool {
 fn is_reserved(word: &str) -> bool {
     match word {
         "module" | "lazy" | "import" | "let" | "in" | "do" | "=" | ":" | "\\" | "->" | "<-"
-        | "infix" | "infixl" | "infixr" | "=>" | "," | "()" => true,
+        | "infix" | "infixl" | "infixr" | "forall" | "=>" | "," | "()" => true,
         _ => false,
     }
 }
@@ -437,6 +500,6 @@ pub enum Error {
     MultiplePrecs(Name, Precedence, Precedence),
 
     // @Todo: this shouldn't use Debug printing, but should print the source.
-    #[error("Multiple explicit type annotations found for `{0}`:\n    {1:?}\n    {2:?}")]
-    MultipleTypes(Name, TypeScheme, TypeScheme),
+    #[error("Multiple explicit type annotations found for `{0}`:{1}")]
+    MultipleTypes(Name, String),
 }

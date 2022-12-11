@@ -227,6 +227,7 @@ impl Display for TypeScheme {
     }
 }
 
+// @Todo: make this an enum with TypeVar::Generated(usize) and TypeVar::Explicit(&str)
 #[derive(Hash, PartialEq, Eq, Clone, Copy, Debug)]
 pub struct TypeVar(pub usize);
 
