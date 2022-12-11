@@ -449,14 +449,12 @@ where
     terminated(inner, whitespace)
 }
 
-// @Todo: change to 'static
-fn reserved<'a>(s: &'a str) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> {
+fn reserved<'a>(s: &'static str) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> {
     debug_assert!(is_reserved(s));
     ws(terminated(tag(s), peek(not(satisfy(is_name_char)))))
 }
 
-// @Todo: change to 'static
-fn reserved_op<'a>(s: &'a str) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> {
+fn reserved_op<'a>(s: &'static str) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> {
     debug_assert!(is_reserved(s));
     ws(terminated(tag(s), peek(not(operator_char))))
 }
