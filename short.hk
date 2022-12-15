@@ -6,3 +6,10 @@ numB : Int = 3 * 4 + 5;
 id : forall a. a -> a;
 id a = a;
 (* id = \a -> a; *)
+
+unit : () = ();
+
+wrongType = 123;
+
+(* illegalType : a -> a; *)
+(* illegalType x = x; *)

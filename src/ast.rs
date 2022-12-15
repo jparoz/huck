@@ -451,6 +451,8 @@ pub struct TypeScheme<'file> {
 pub enum TypeExpr<'file> {
     Term(TypeTerm<'file>),
     App(Box<TypeExpr<'file>>, Box<TypeExpr<'file>>),
+
+    // @Todo: rename either this or Type::Func to match each other
     Arrow(Box<TypeExpr<'file>>, Box<TypeExpr<'file>>),
     // @Todo: type-level binops
 }

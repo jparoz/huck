@@ -14,7 +14,7 @@ pub use error::Error;
 #[cfg(test)]
 mod test;
 
-use constraint::{ConstraintGenerator, GenerateConstraints};
+use constraint::{Constraint, ConstraintGenerator, GenerateConstraints};
 use error::Error as TypeError;
 use substitution::{ApplySub, Substitution};
 
@@ -25,9 +25,23 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
     let mut types = HashMap::new();
 
     // Generate constraints for each definition, while keeping track of inferred types
-    for (name, defns) in module.definitions {
-        let typ = defns.generate(&mut cg);
-        types.insert(name, (typ, defns));
+    for (name, defn) in module.definitions {
+        let typ = defn.generate(&mut cg);
+
+        if let Some(ref explicit_type_scheme) = defn.explicit_type {
+            let ts = cg.convert_ast_type_scheme(explicit_type_scheme);
+            let explicit_type = cg.instantiate(ts);
+
+            // Constrain that the explicitly given type must be an instance of the inferred type
+            // @Checkme
+            cg.constrain(Constraint::ImplicitInstance(
+                explicit_type,
+                typ.clone(),
+                typ.free_vars(),
+            ));
+        }
+
+        types.insert(name, (typ, defn));
     }
 
     // @Todo: maybe move this into solve?
@@ -48,6 +62,7 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
         }
 
         // @Todo: add the type declared by the user (if it exists)
+        // @Note: maybe this is already done above?
     }
 
     for (_, assumed_types) in assumptions.into_iter() {
@@ -80,6 +95,10 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
         scope.definitions.insert(name, defn);
     }
 
+    // @Todo (maybe): properly check that there are no free type variables
+    // in a top-level definition
+    // debug_assert!(typ.free_vars().is_empty());
+
     Ok(scope)
 }
 
@@ -90,6 +109,8 @@ pub enum Type {
     Func(Box<Type>, Box<Type>),
     List(Box<Type>),
     Tuple(Vec<Type>),
+    // @Todo: type constructors (i.e. type application)
+    // @Todo: type binops (maybe as type constructors)
 }
 
 impl Type {
@@ -228,6 +249,9 @@ impl Display for TypeScheme {
 }
 
 // @Todo: make this an enum with TypeVar::Generated(usize) and TypeVar::Explicit(&str)
+// @Note: or maybe not? Possibly ast::TypeTerm::Var covers the need,
+//        and we can just store a dictionary somewhere mapping from
+//        ast::TypeTerm::Var to types::TypeVar.
 #[derive(Hash, PartialEq, Eq, Clone, Copy, Debug)]
 pub struct TypeVar(pub usize);
 

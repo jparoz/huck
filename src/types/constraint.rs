@@ -4,7 +4,7 @@ use std::iter;
 
 use log::log_enabled;
 
-use crate::ast::{Assignment, Definition, Expr, Lhs, Name, Numeral, Pattern, Term};
+use crate::ast::{self, Definition, Expr, Lhs, Name, Numeral, Pattern, Term};
 use crate::types::{
     self, ApplySub, Primitive, Substitution, Type, TypeScheme, TypeVar, TypeVarSet,
 };
@@ -84,21 +84,25 @@ impl<'file> Display for Constraint {
 }
 
 #[derive(Debug)]
-pub struct ConstraintGenerator {
+pub struct ConstraintGenerator<'file> {
     constraints: Vec<Constraint>,
 
     // @Cleanup: shouldn't be pub
     pub assumptions: HashMap<Name, Vec<Type>>,
 
+    /// Stack of type variables currently in scope for the type scheme we're parsing.
+    type_vars: HashMap<&'file str, TypeVar>,
+
     next_typevar_id: usize,
     m_stack: Vec<TypeVar>,
 }
 
-impl ConstraintGenerator {
+impl<'file> ConstraintGenerator<'file> {
     pub fn new() -> Self {
         ConstraintGenerator {
             constraints: Vec::new(),
             assumptions: HashMap::new(),
+            type_vars: HashMap::new(),
             next_typevar_id: 0,
             m_stack: Vec::new(),
         }
@@ -108,6 +112,76 @@ impl ConstraintGenerator {
         let id = self.next_typevar_id;
         self.next_typevar_id += 1;
         Type::Var(TypeVar(id))
+    }
+
+    pub fn convert_ast_type_scheme(&mut self, input: &ast::TypeScheme<'file>) -> TypeScheme {
+        let vars: TypeVarSet = input
+            .vars
+            .iter()
+            .map(|v| {
+                let fresh = if let Type::Var(fresh) = self.fresh() {
+                    fresh
+                } else {
+                    unreachable!()
+                };
+
+                self.type_vars.insert(v, fresh);
+                fresh
+            })
+            .collect();
+
+        let typ = self.convert_ast_type_expr(&input.typ);
+
+        // @Checkme
+        self.type_vars = HashMap::new();
+
+        TypeScheme { vars, typ }
+    }
+
+    pub fn convert_ast_type_expr(&mut self, input: &ast::TypeExpr<'file>) -> Type {
+        let typ = match input {
+            ast::TypeExpr::Term(ast::TypeTerm::Unit) => Type::Prim(Primitive::Unit),
+            ast::TypeExpr::Term(ast::TypeTerm::Concrete("Int")) => Type::Prim(Primitive::Int),
+            ast::TypeExpr::Term(ast::TypeTerm::Concrete("Float")) => Type::Prim(Primitive::Float),
+            ast::TypeExpr::Term(ast::TypeTerm::Concrete("String")) => Type::Prim(Primitive::String),
+            ast::TypeExpr::Term(ast::TypeTerm::Concrete(s)) => todo!("type declarations"),
+
+            ast::TypeExpr::Term(ast::TypeTerm::Var(v)) => {
+                if let Some(tv) = self.type_vars.get(v) {
+                    Type::Var(*tv)
+                } else {
+                    // @Todo @Errors: maybe an error? or something?
+
+                    // @Note: returning self.fresh() seems to give behaviour something like
+                    // implcit forall. Further investigation is needed though if wanting to use.
+                    // For now, just error instead.
+                    // self.fresh()
+
+                    // @Todo @Errors: error
+                    todo!()
+                }
+            }
+
+            ast::TypeExpr::Term(ast::TypeTerm::Parens(e)) => self.convert_ast_type_expr(e),
+            ast::TypeExpr::Term(ast::TypeTerm::List(e)) => {
+                Type::List(Box::new(self.convert_ast_type_expr(e)))
+            }
+            ast::TypeExpr::Term(ast::TypeTerm::Tuple(exprs)) => Type::Tuple(
+                exprs
+                    .iter()
+                    .map(|e| self.convert_ast_type_expr(e))
+                    .collect(),
+            ),
+
+            ast::TypeExpr::App(_, _) => todo!("type constructors"),
+
+            ast::TypeExpr::Arrow(f, x) => Type::Func(
+                Box::new(self.convert_ast_type_expr(f)),
+                Box::new(self.convert_ast_type_expr(x)),
+            ),
+        };
+
+        typ
     }
 
     fn assume(&mut self, name: Name, typ: Type) {
@@ -317,23 +391,6 @@ impl<'file> GenerateConstraints for Definition<'file> {
     }
 }
 
-// @DRY: possible?
-impl<'file> GenerateConstraints for Vec<Assignment<'file>> {
-    fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
-        let beta = cg.fresh();
-
-        let typs: Vec<Type> = self.iter().map(|assign| assign.generate(cg)).collect();
-        for typ in typs {
-            // @Note: If we want polymorphic bindings at top level, this might want to be a
-            // different type of constraint.
-            cg.constrain(Constraint::Equality(beta.clone(), typ));
-        }
-
-        beta
-    }
-}
-
-// @DRY: possible?
 impl<'file> GenerateConstraints for Vec<(Lhs<'file>, Expr<'file>)> {
     fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
         let beta = cg.fresh();
@@ -346,12 +403,6 @@ impl<'file> GenerateConstraints for Vec<(Lhs<'file>, Expr<'file>)> {
         }
 
         beta
-    }
-}
-
-impl<'file> GenerateConstraints for Assignment<'file> {
-    fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
-        todo!()
     }
 }
 
@@ -484,7 +535,7 @@ impl<'file> GenerateConstraints for Expr<'file> {
     }
 }
 
-impl<'file> Display for ConstraintGenerator {
+impl<'file> Display for ConstraintGenerator<'file> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Constraints:")?;
         for constraint in self.constraints.iter() {
