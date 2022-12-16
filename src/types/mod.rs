@@ -14,7 +14,7 @@ pub use error::Error;
 #[cfg(test)]
 mod test;
 
-use constraint::{Constraint, ConstraintGenerator, GenerateConstraints};
+use constraint::{ConstraintGenerator, GenerateConstraints};
 use error::Error as TypeError;
 use substitution::{ApplySub, Substitution};
 
@@ -28,48 +28,27 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
     for (name, defn) in module.definitions {
         let typ = defn.generate(&mut cg);
 
-        if let Some(ref explicit_type_scheme) = defn.explicit_type {
-            let ts = cg.convert_ast_type_scheme(explicit_type_scheme);
-            let explicit_type = cg.instantiate(ts);
-
-            // Constrain that the explicitly given type must be an instance of the inferred type
-            // @Checkme
-            cg.constrain(Constraint::ImplicitInstance(
-                explicit_type,
-                typ.clone(),
-                typ.free_vars(),
-            ));
-        }
-
         types.insert(name, (typ, defn));
     }
 
-    // @Todo: maybe move this into solve?
     // Add constraints to unify each assumption about the same name
-    log::info!("Emitting constraints about assumptions:");
-    let mut assumptions: Vec<(ast::Name, Vec<Type>)> = cg
+    log::trace!("Emitting constraints about assumptions:");
+    let assumptions: Vec<(ast::Name, Vec<Type>)> = cg
         .assumptions
         .iter()
         .map(|(n, t)| (n.clone(), t.clone()))
         .collect();
 
-    for (name, ref mut assumed_types) in assumptions.iter_mut() {
-        // Add the type inferred at the definition (if it exists)
+    // For each name, constrain that all assumed types are instances of
+    // the definition's inferred type.
+    // If there is no inferred type for the name (i.e. it's not in scope),
+    // then it's a scope error.
+    for (name, assumed_types) in assumptions.into_iter() {
         if let Some(t) = types.get(&name) {
-            assumed_types.push(t.0.clone());
+            cg.all_instances_of(assumed_types, t.0.generalize(&TypeVarSet::empty()));
         } else {
             // @Todo: Scope error
         }
-
-        // @Todo: add the type declared by the user (if it exists)
-        // @Note: maybe this is already done above?
-    }
-
-    for (_, assumed_types) in assumptions.into_iter() {
-        // @Todo @Polymorphism @CheckMe:
-        // Maybe this shouldn't be equality constraints,
-        // but some kind of instance constraints.
-        cg.equate_all(assumed_types);
     }
 
     // Solve the type constraints
@@ -126,6 +105,7 @@ impl Type {
         }
     }
 
+    /// Takes a Type and quantifies all free type variables, except the ones given in type_set.
     pub fn generalize(&self, type_set: &TypeVarSet) -> TypeScheme {
         TypeScheme {
             vars: self.free_vars().difference(type_set),

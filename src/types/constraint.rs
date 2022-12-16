@@ -150,14 +150,12 @@ impl<'file> ConstraintGenerator<'file> {
                 if let Some(tv) = self.type_vars.get(v) {
                     Type::Var(*tv)
                 } else {
-                    // @Todo @Errors: maybe an error? or something?
-
                     // @Note: returning self.fresh() seems to give behaviour something like
                     // implcit forall. Further investigation is needed though if wanting to use.
                     // For now, just error instead.
                     // self.fresh()
 
-                    // @Todo @Errors: error
+                    // @Todo @Errors: ill-formed type expression (should be a syntax error)
                     todo!()
                 }
             }
@@ -202,15 +200,24 @@ impl<'file> ConstraintGenerator<'file> {
     }
 
     pub fn constrain(&mut self, constraint: Constraint) {
-        log::info!("Emitting constraint: {}", constraint);
+        log::trace!("Emitting constraint: {}", constraint);
         self.constraints.push(constraint);
     }
 
-    // Constrains all types in the given Vec to be equal.
-    pub fn equate_all(&mut self, typs: Vec<Type>) {
+    /// Constrains all types in the given Vec to be equal, and returns that type.
+    pub fn equate_all(&mut self, typs: Vec<Type>) -> Type {
         let beta = self.fresh();
         for typ in typs {
             self.constrain(Constraint::Equality(beta.clone(), typ.clone()));
+        }
+        beta
+    }
+
+    /// Constrains that all types in the given Vec should be instances of
+    /// the same shared type scheme.
+    pub fn all_instances_of(&mut self, typs: Vec<Type>, ts: TypeScheme) {
+        for typ in typs {
+            self.constrain(Constraint::ExplicitInstance(typ, ts.clone()));
         }
     }
 
@@ -281,7 +288,7 @@ impl<'file> ConstraintGenerator<'file> {
         if let Some(assumptions) = self.assumptions.remove(name) {
             for assumed in assumptions {
                 self.constrain(Constraint::Equality(assumed, typ.clone()));
-                log::info!("Bound (mono): {} to type {}", name, typ);
+                log::trace!("Bound (mono): {} to type {}", name, typ);
             }
         }
     }
@@ -294,7 +301,7 @@ impl<'file> ConstraintGenerator<'file> {
                     typ.clone(),
                     self.m_stack.iter().cloned().collect(),
                 ));
-                log::info!(
+                log::trace!(
                     "Bound (poly): {} to type {} (M = {})",
                     name,
                     typ,
@@ -304,6 +311,8 @@ impl<'file> ConstraintGenerator<'file> {
         }
     }
 
+    /// Takes a TypeScheme and replaces all quantified variables with fresh variables;
+    /// then returns the resulting Type.
     pub fn instantiate(&mut self, mut ts: TypeScheme) -> Type {
         let sub = ts.vars.into_iter().fold(Substitution::empty(), |sub, var| {
             sub.then(Substitution::single(var, self.fresh()))
@@ -334,7 +343,7 @@ impl<'file> ConstraintGenerator<'file> {
 
                 Constraint::ExplicitInstance(t, ts) => {
                     let cons = Constraint::Equality(t, self.instantiate(ts));
-                    log::info!("Replacing with new constraint: {}", cons);
+                    log::trace!("Replacing with new constraint: {}", cons);
                     constraints.push_back(cons)
                 }
 
@@ -346,27 +355,25 @@ impl<'file> ConstraintGenerator<'file> {
                         .is_empty() =>
                 {
                     let cons = Constraint::ExplicitInstance(t1, t2.generalize(&m));
-                    log::info!("Replacing with new constraint: {}", cons);
+                    log::trace!("Replacing with new constraint: {}", cons);
                     constraints.push_back(cons)
                 }
 
                 c @ Constraint::ImplicitInstance(..) => {
                     // @Note: This should never diverge, i.e. there should always be at least one
                     // constraint in the set that meets the criteria to be solvable. See HHS02.
-                    log::info!("Skipping for now");
+                    log::trace!("Skipping for now");
                     constraints.push_back(c);
                 }
             }
 
-            log::trace!("Substitution:");
             if log_enabled!(log::Level::Trace) {
+                log::trace!("Substitution:");
                 for (fr, to) in sub.iter() {
                     log::trace!("    {} ↦ {}", fr, to);
                 }
-            }
 
-            log::trace!("Constraints:");
-            if log_enabled!(log::Level::Trace) {
+                log::trace!("Constraints:");
                 for c in constraints.iter() {
                     log::trace!("    {}", c);
                 }
@@ -381,18 +388,34 @@ impl<'file> ConstraintGenerator<'file> {
     }
 }
 
-pub trait GenerateConstraints {
-    fn generate(&self, cg: &mut ConstraintGenerator) -> Type;
+pub trait GenerateConstraints<'file> {
+    fn generate(&self, cg: &mut ConstraintGenerator<'file>) -> Type;
 }
 
-impl<'file> GenerateConstraints for Definition<'file> {
-    fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
-        self.assignments.generate(cg)
+impl<'file> GenerateConstraints<'file> for Definition<'file> {
+    fn generate(&self, cg: &mut ConstraintGenerator<'file>) -> Type {
+        // Typecheck each assignment in the definition.
+        let mut typs: Vec<Type> = self
+            .assignments
+            .iter()
+            .map(|assign| assign.generate(cg))
+            .collect();
+
+        // If there's an explicit type, include that as well.
+        if let Some(ref explicit_type_scheme) = self.explicit_type {
+            let ts = cg.convert_ast_type_scheme(explicit_type_scheme);
+            typs.push(cg.instantiate(ts));
+        }
+
+        // Constrain that each inferred assignment,
+        // and the explicit type,
+        // should all be equal.
+        cg.equate_all(typs)
     }
 }
 
-impl<'file> GenerateConstraints for Vec<(Lhs<'file>, Expr<'file>)> {
-    fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
+impl<'file> GenerateConstraints<'file> for Vec<(Lhs<'file>, Expr<'file>)> {
+    fn generate(&self, cg: &mut ConstraintGenerator<'file>) -> Type {
         let beta = cg.fresh();
 
         let typs: Vec<Type> = self.iter().map(|assign| assign.generate(cg)).collect();
@@ -406,8 +429,8 @@ impl<'file> GenerateConstraints for Vec<(Lhs<'file>, Expr<'file>)> {
     }
 }
 
-impl<'file> GenerateConstraints for (Lhs<'file>, Expr<'file>) {
-    fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
+impl<'file> GenerateConstraints<'file> for (Lhs<'file>, Expr<'file>) {
+    fn generate(&self, cg: &mut ConstraintGenerator<'file>) -> Type {
         let (lhs, expr) = self;
 
         macro_rules! bind {
@@ -430,8 +453,8 @@ impl<'file> GenerateConstraints for (Lhs<'file>, Expr<'file>) {
     }
 }
 
-impl<'file> GenerateConstraints for Expr<'file> {
-    fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
+impl<'file> GenerateConstraints<'file> for Expr<'file> {
+    fn generate(&self, cg: &mut ConstraintGenerator<'file>) -> Type {
         match self {
             Expr::Term(Term::Numeral(Numeral::Int(_))) => Type::Prim(Primitive::Int),
             Expr::Term(Term::Numeral(Numeral::Float(_))) => Type::Prim(Primitive::Float),

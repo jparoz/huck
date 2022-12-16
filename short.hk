@@ -7,9 +7,14 @@ id : forall a. a -> a;
 id a = a;
 (* id = \a -> a; *)
 
-unit : () = ();
+usesIdFloat = id 1.23;
+usesIdInt = id 123;
 
-wrongType = 123;
+specificId : Int -> Int = id;
+usesSpecificId = specificId 123;
+
+(* @Fixme: uncommenting this, or other explicit types, causes dodgy stuff *)
+(* unit : () = (); *)
 
 (* illegalType : a -> a; *)
 (* illegalType x = x; *)
