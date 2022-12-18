@@ -288,6 +288,13 @@ impl TypeVarSet {
 
 impl ApplySub for TypeVarSet {
     fn apply(&mut self, sub: &Substitution) {
+        // If it's the empty substitution, return early because there's nothing to do.
+        // This was added to prevent a bug where applying the empty substitution
+        // would cause all the forall quantifiers to fall off, which is bad.
+        if sub.is_empty() {
+            return;
+        }
+
         let old_set = mem::replace(self, TypeVarSet::empty());
         for v in old_set.0.into_iter() {
             for (fr, to) in sub.iter() {

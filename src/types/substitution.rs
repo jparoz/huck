@@ -37,6 +37,10 @@ impl Substitution {
     pub fn get(&self, k: &TypeVar) -> Option<&Type> {
         self.0.get(k)
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 impl Display for Substitution {

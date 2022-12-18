@@ -10,11 +10,12 @@ id a = a;
 usesIdFloat = id 1.23;
 usesIdInt = id 123;
 
-specificId : Int -> Int = id;
-usesSpecificId = specificId 123;
+specificIdInt : Int -> Int = id;
+usesSpecificIdInt = specificIdInt 123;
 
-(* @Fixme: uncommenting this, or other explicit types, causes dodgy stuff *)
-(* unit : () = (); *)
+specificIdFloat : Float -> Float = id;
+
+unit : () = ();
 
 (* illegalType : a -> a; *)
 (* illegalType x = x; *)
