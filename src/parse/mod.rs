@@ -27,8 +27,11 @@ pub fn parse(input: &str) -> Result<Module, Error> {
             }
 
             let mut definitions: BTreeMap<Name, Definition> = BTreeMap::new();
+            let mut type_declarations = Vec::new();
             let mut precs = default_precs();
 
+            // Collect all the statements together into Definitions
+            // (and precs).
             for stat in statements {
                 match stat {
                     Statement::Assignment(Assignment::WithoutType(lhs, expr)) => {
@@ -46,6 +49,7 @@ pub fn parse(input: &str) -> Result<Module, Error> {
                         if let Some(previous_ts) = defn.explicit_type.replace(ts.clone()) {
                             return Err(Error::MultipleTypes(
                                 lhs.name().clone(),
+                                // @Cleanup: don't have this dodgy whitespace
                                 format!("\n    {:?}\n    {:?}", ts, previous_ts),
                             ));
                         }
@@ -63,6 +67,7 @@ pub fn parse(input: &str) -> Result<Module, Error> {
                         {
                             return Err(Error::MultipleTypes(
                                 name,
+                                // @Cleanup: don't have this dodgy whitespace
                                 format!("\n    {:?}\n    {:?}", ts, previous_ts),
                             ));
                         }
@@ -81,21 +86,21 @@ pub fn parse(input: &str) -> Result<Module, Error> {
                         }
                     }
 
-                    Statement::TypeDeclaration => todo!(),
+                    Statement::TypeDeclaration(type_decl) => type_declarations.push(type_decl),
                 }
             }
 
-            // @Cleanup: this comment doesn't make too much sense
-            // Now that we've collected all the related statements together,
-            // we need to do some checking;
-            // first we need to modify the AST to take precedence statements into account.
+            // Modify the AST to take precedence statements into account.
             for defn in definitions.values_mut() {
                 defn.apply(&precs);
             }
 
             // @Todo: check other things here?
 
-            Ok(Module { definitions })
+            Ok(Module {
+                definitions,
+                type_declarations,
+            })
         }
         Err(nom) => Err(Error::Nom(nom.to_string())),
     }
@@ -107,6 +112,18 @@ fn statement(input: &str) -> IResult<&str, Statement> {
         map(
             terminated(separated_pair(name, reserved_op(":"), type_scheme), semi),
             |(name, scheme)| Statement::TypeAnnotation(name, scheme),
+        ),
+        map(
+            nom_tuple((
+                reserved("type"),
+                constructor_lhs,
+                reserved_op("="),
+                separated_list1(ws(tag("|")), constructor_definition),
+                semi,
+            )),
+            |(_, (name, vars), _, constr_defn, _)| {
+                Statement::TypeDeclaration(TypeDeclaration(name, vars, constr_defn))
+            },
         ),
         map(prec, |(name, prec)| Statement::Precedence(name, prec)),
     ))(input)
@@ -161,10 +178,10 @@ fn pattern(input: &str) -> IResult<&str, Pattern> {
         map(numeral, Pattern::Numeral),
         map(string, Pattern::String),
         map(
-            parens(nom_tuple((constructor, many1(pattern)))),
+            parens(nom_tuple((upper_name, many1(pattern)))),
             |(constructor, args)| Pattern::Destructure { constructor, args },
         ),
-        map(constructor, Pattern::UnaryConstructor),
+        map(upper_name, Pattern::UnaryConstructor),
         value(Pattern::Unit, unit),
         parens(pattern_binop),
         parens(pattern),
@@ -334,8 +351,19 @@ fn name(input: &str) -> IResult<&str, Name> {
     )))(input)
 }
 
-fn constructor(input: &str) -> IResult<&str, Name> {
+fn upper_name(input: &str) -> IResult<&str, Name> {
     ws(map(upper_ident, |s| Name::Ident(s.to_string())))(input)
+}
+
+/// Parses one term in a type constructor declaration. e.g. in the following:
+///     type Foo = Bar | Baz Int;
+/// `constructor_definition` would parse either "Bar" or "Baz Int".
+fn constructor_definition(input: &str) -> IResult<&str, ConstructorDefinition> {
+    nom_tuple((upper_name, many0(type_term)))(input)
+}
+
+fn constructor_lhs(input: &str) -> IResult<&str, (Name, Vec<&str>)> {
+    nom_tuple((upper_name, many0(ws(var))))(input)
 }
 
 fn numeral(input: &str) -> IResult<&str, Numeral> {
@@ -480,7 +508,7 @@ fn is_var_start_char(c: char) -> bool {
 fn is_reserved(word: &str) -> bool {
     match word {
         "module" | "lazy" | "import" | "let" | "in" | "do" | "=" | ":" | "\\" | "->" | "<-"
-        | "infix" | "infixl" | "infixr" | "forall" | "=>" | "," | "()" => true,
+        | "infix" | "infixl" | "infixr" | "forall" | "type" | "=>" | "," | "()" => true,
         _ => false,
     }
 }

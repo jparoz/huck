@@ -1,21 +1,10 @@
-numA : Int;
-numA = 3 + 4 * 5;
+type MyBool = MyTrue | MyFalse;
 
-numB : Int = 3 * 4 + 5;
+(* myNot : MyBool -> MyBool; *)
+(* myNot MyTrue = MyFalse; *)
+(* myNot MyFalse = MyTrue; *)
 
-id : forall a. a -> a;
-id a = a;
-(* id = \a -> a; *)
 
-usesIdFloat = id 1.23;
-usesIdInt = id 123;
+type Foo = Bar | Baz Int;
 
-specificIdInt : Int -> Int = id;
-usesSpecificIdInt = specificIdInt 123;
-
-specificIdFloat : Float -> Float = id;
-
-unit : () = ();
-
-(* illegalType : a -> a; *)
-(* illegalType x = x; *)
+type Banana a = Orange a | Green a | Blue;

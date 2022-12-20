@@ -25,7 +25,10 @@ fn unit() {
                 ast::Expr::Term(ast::Term::Unit),
             ));
 
-        ast::Module { definitions }
+        ast::Module {
+            definitions,
+            type_declarations: Vec::new(),
+        }
     })
 }
 
@@ -52,6 +55,9 @@ fn apply_to_unit() {
                 },
             ));
 
-        ast::Module { definitions }
+        ast::Module {
+            definitions,
+            type_declarations: Vec::new(),
+        }
     })
 }
