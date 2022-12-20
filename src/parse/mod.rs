@@ -9,7 +9,7 @@ use nom::sequence::tuple as nom_tuple;
 use nom::sequence::{delimited, preceded, separated_pair, terminated};
 use nom::IResult;
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::ast::*;
 
@@ -26,7 +26,7 @@ pub fn parse(input: &str) -> Result<Module, Error> {
                 return Err(Error::Leftover(leftover.to_string()));
             }
 
-            let mut definitions: HashMap<Name, Definition> = HashMap::new();
+            let mut definitions: BTreeMap<Name, Definition> = BTreeMap::new();
             let mut precs = default_precs();
 
             for stat in statements {
@@ -272,7 +272,7 @@ fn let_in(input: &str) -> IResult<&str, Expr> {
             expr,
         )),
         |(_, assigns, _, _, in_expr)| {
-            let mut local_env = HashMap::new();
+            let mut local_env = BTreeMap::new();
             for (lhs, expr) in assigns {
                 local_env
                     .entry(lhs.name().clone())

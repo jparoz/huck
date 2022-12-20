@@ -1,18 +1,18 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fmt::{self, Display};
 
 use super::{Type, TypeVar};
 
 #[derive(Debug)]
-pub struct Substitution(HashMap<TypeVar, Type>);
+pub struct Substitution(BTreeMap<TypeVar, Type>);
 
 impl Substitution {
     pub fn empty() -> Self {
-        Substitution(HashMap::new())
+        Substitution(BTreeMap::new())
     }
 
     pub fn single(fr: TypeVar, to: Type) -> Self {
-        Substitution(HashMap::from([(fr, to)]))
+        Substitution(BTreeMap::from([(fr, to)]))
     }
 
     /// s1.then(s2) == s2 . s1

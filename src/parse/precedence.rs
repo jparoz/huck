@@ -1,76 +1,63 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::ast::{Definition, Expr, Lhs, Name, Pattern, Term};
 
-/*
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub struct PrecTable(HashMap<Name, Precedence>);
-
-impl PrecTable {
-    pub fn new() -> Self {
-        PrecTable(HashMap::new())
-    }
-}
-*/
-
 // @Note @Cleanup: These defaults should one day be replaced with source code.
-pub fn default_precs() -> HashMap<Name, Precedence> {
-    let mut defaults: HashMap<Name, Precedence> = HashMap::with_capacity(13);
-
-    defaults.insert(
-        Name::Binop("*".to_string()),
-        Precedence(Associativity::Left, 7),
-    );
-    defaults.insert(
-        Name::Binop("/".to_string()),
-        Precedence(Associativity::Left, 7),
-    );
-    defaults.insert(
-        Name::Binop("+".to_string()),
-        Precedence(Associativity::Left, 6),
-    );
-    defaults.insert(
-        Name::Binop("-".to_string()),
-        Precedence(Associativity::Left, 6),
-    );
-    defaults.insert(
-        Name::Binop(",".to_string()),
-        Precedence(Associativity::Right, 1),
-    );
-    defaults.insert(
-        Name::Binop("::".to_string()),
-        Precedence(Associativity::Right, 5),
-    );
-    defaults.insert(
-        Name::Binop("$".to_string()),
-        Precedence(Associativity::Right, 0),
-    );
-    defaults.insert(
-        Name::Binop("==".to_string()),
-        Precedence(Associativity::None, 4),
-    );
-    defaults.insert(
-        Name::Binop("!=".to_string()),
-        Precedence(Associativity::None, 4),
-    );
-    defaults.insert(
-        Name::Binop("<".to_string()),
-        Precedence(Associativity::None, 4),
-    );
-    defaults.insert(
-        Name::Binop("<=".to_string()),
-        Precedence(Associativity::None, 4),
-    );
-    defaults.insert(
-        Name::Binop(">".to_string()),
-        Precedence(Associativity::None, 4),
-    );
-    defaults.insert(
-        Name::Binop(">=".to_string()),
-        Precedence(Associativity::None, 4),
-    );
-
-    defaults
+pub fn default_precs() -> BTreeMap<Name, Precedence> {
+    BTreeMap::from([
+        (
+            Name::Binop("*".to_string()),
+            Precedence(Associativity::Left, 7),
+        ),
+        (
+            Name::Binop("/".to_string()),
+            Precedence(Associativity::Left, 7),
+        ),
+        (
+            Name::Binop("+".to_string()),
+            Precedence(Associativity::Left, 6),
+        ),
+        (
+            Name::Binop("-".to_string()),
+            Precedence(Associativity::Left, 6),
+        ),
+        (
+            Name::Binop(",".to_string()),
+            Precedence(Associativity::Right, 1),
+        ),
+        (
+            Name::Binop("::".to_string()),
+            Precedence(Associativity::Right, 5),
+        ),
+        (
+            Name::Binop("$".to_string()),
+            Precedence(Associativity::Right, 0),
+        ),
+        (
+            Name::Binop("==".to_string()),
+            Precedence(Associativity::None, 4),
+        ),
+        (
+            Name::Binop("!=".to_string()),
+            Precedence(Associativity::None, 4),
+        ),
+        (
+            Name::Binop("<".to_string()),
+            Precedence(Associativity::None, 4),
+        ),
+        (
+            Name::Binop("<=".to_string()),
+            Precedence(Associativity::None, 4),
+        ),
+        (
+            Name::Binop(">".to_string()),
+            Precedence(Associativity::None, 4),
+        ),
+        (
+            Name::Binop(">=".to_string()),
+            Precedence(Associativity::None, 4),
+        ),
+    ])
 }
 
 // @Cleanup: move to AST (probably)
@@ -85,11 +72,11 @@ pub enum Associativity {
 }
 
 pub trait ApplyPrecedence {
-    fn apply(&mut self, precs: &HashMap<Name, Precedence>);
+    fn apply(&mut self, precs: &BTreeMap<Name, Precedence>);
 }
 
 impl<'a> ApplyPrecedence for Definition<'a> {
-    fn apply(&mut self, precs: &HashMap<Name, Precedence>) {
+    fn apply(&mut self, precs: &BTreeMap<Name, Precedence>) {
         for (lhs, rhs) in self.assignments.iter_mut() {
             lhs.apply(precs);
             rhs.apply(precs);
@@ -98,7 +85,7 @@ impl<'a> ApplyPrecedence for Definition<'a> {
 }
 
 impl<'a> ApplyPrecedence for Lhs<'a> {
-    fn apply(&mut self, precs: &HashMap<Name, Precedence>) {
+    fn apply(&mut self, precs: &BTreeMap<Name, Precedence>) {
         match self {
             Lhs::Func { args, .. } | Lhs::Lambda { args } => {
                 for arg in args {
@@ -114,7 +101,7 @@ impl<'a> ApplyPrecedence for Lhs<'a> {
 }
 
 impl<'a> ApplyPrecedence for Pattern<'a> {
-    fn apply(&mut self, precs: &HashMap<Name, Precedence>) {
+    fn apply(&mut self, precs: &BTreeMap<Name, Precedence>) {
         match self {
             Pattern::List(args) => {
                 for arg in args {
@@ -175,7 +162,7 @@ impl<'a> ApplyPrecedence for Pattern<'a> {
 }
 
 impl<'a> ApplyPrecedence for Expr<'a> {
-    fn apply(&mut self, precs: &HashMap<Name, Precedence>) {
+    fn apply(&mut self, precs: &BTreeMap<Name, Precedence>) {
         match self {
             Expr::Binop {
                 operator: ref mut l_op,

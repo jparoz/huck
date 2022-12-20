@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{self, Display};
 
 use crate::parse::precedence::Precedence;
@@ -29,13 +29,13 @@ pub struct Definition<'file> {
     pub explicit_type: Option<TypeScheme<'file>>,
     pub precedence: Option<Precedence>,
 
-    dependencies: Option<HashSet<Name>>,
+    dependencies: Option<BTreeSet<Name>>,
 }
 
 impl<'file> Definition<'file> {
-    pub fn dependencies(&mut self) -> &HashSet<Name> {
+    pub fn dependencies(&mut self) -> &BTreeSet<Name> {
         self.dependencies.get_or_insert_with(|| {
-            let mut deps = HashSet::new();
+            let mut deps = BTreeSet::new();
 
             for (_lhs, expr) in self.assignments.iter() {
                 expr.dependencies(&mut deps);
@@ -65,7 +65,7 @@ impl<'file> Default for Definition<'file> {
 /// into a single Definition struct for each function name.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Module<'file> {
-    pub definitions: HashMap<Name, Definition<'file>>,
+    pub definitions: BTreeMap<Name, Definition<'file>>,
 }
 
 /// A Statement is a sum type for any of the top-level Huck constructs.
@@ -270,7 +270,7 @@ pub enum Expr<'file> {
     },
     Let {
         // @Todo @Checkme: should this be Assignment instead of the raw tuple?
-        definitions: HashMap<Name, Vec<(Lhs<'file>, Expr<'file>)>>,
+        definitions: BTreeMap<Name, Vec<(Lhs<'file>, Expr<'file>)>>,
         in_expr: Box<Expr<'file>>,
     },
     Lambda {
@@ -280,7 +280,7 @@ pub enum Expr<'file> {
 }
 
 impl<'file> Expr<'file> {
-    pub fn dependencies(&self, deps: &mut HashSet<Name>) {
+    pub fn dependencies(&self, deps: &mut BTreeSet<Name>) {
         match self {
             Expr::Term(Term::List(es)) | Expr::Term(Term::Tuple(es)) => {
                 es.iter().for_each(|e| e.dependencies(deps));
@@ -306,7 +306,7 @@ impl<'file> Expr<'file> {
                 definitions,
                 in_expr,
             } => {
-                let mut sub_deps = HashSet::new();
+                let mut sub_deps = BTreeSet::new();
 
                 in_expr.dependencies(&mut sub_deps);
 
@@ -330,7 +330,7 @@ impl<'file> Expr<'file> {
                     _ => unreachable!(),
                 };
 
-                let mut sub_deps = HashSet::new();
+                let mut sub_deps = BTreeSet::new();
 
                 rhs.dependencies(&mut sub_deps);
 

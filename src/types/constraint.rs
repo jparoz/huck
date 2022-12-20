@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, VecDeque};
 use std::fmt::{self, Display};
 use std::iter;
 
@@ -88,10 +88,10 @@ pub struct ConstraintGenerator<'file> {
     constraints: Vec<Constraint>,
 
     // @Cleanup: shouldn't be pub
-    pub assumptions: HashMap<Name, Vec<Type>>,
+    pub assumptions: BTreeMap<Name, Vec<Type>>,
 
     /// Stack of type variables currently in scope for the type scheme we're parsing.
-    type_vars: HashMap<&'file str, TypeVar>,
+    type_vars: BTreeMap<&'file str, TypeVar>,
 
     next_typevar_id: usize,
     m_stack: Vec<TypeVar>,
@@ -101,8 +101,8 @@ impl<'file> ConstraintGenerator<'file> {
     pub fn new() -> Self {
         ConstraintGenerator {
             constraints: Vec::new(),
-            assumptions: HashMap::new(),
-            type_vars: HashMap::new(),
+            assumptions: BTreeMap::new(),
+            type_vars: BTreeMap::new(),
             next_typevar_id: 0,
             m_stack: Vec::new(),
         }
@@ -133,7 +133,7 @@ impl<'file> ConstraintGenerator<'file> {
         let typ = self.convert_ast_type_expr(&input.typ);
 
         // @Checkme
-        self.type_vars = HashMap::new();
+        self.type_vars = BTreeMap::new();
 
         TypeScheme { vars, typ }
     }

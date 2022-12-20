@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{self, Display};
 use std::mem;
 
@@ -22,7 +22,7 @@ use substitution::{ApplySub, Substitution};
 pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
     let mut cg = ConstraintGenerator::new();
 
-    let mut types = HashMap::new();
+    let mut types = BTreeMap::new();
 
     // Generate constraints for each definition, while keeping track of inferred types
     for (name, defn) in module.definitions {
@@ -232,7 +232,7 @@ impl Display for TypeScheme {
 // @Note: or maybe not? Possibly ast::TypeTerm::Var covers the need,
 //        and we can just store a dictionary somewhere mapping from
 //        ast::TypeTerm::Var to types::TypeVar.
-#[derive(Hash, PartialEq, Eq, Clone, Copy, Debug)]
+#[derive(Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub struct TypeVar(pub usize);
 
 impl Display for TypeVar {
@@ -242,15 +242,15 @@ impl Display for TypeVar {
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct TypeVarSet(HashSet<TypeVar>);
+pub struct TypeVarSet(BTreeSet<TypeVar>);
 
 impl TypeVarSet {
     pub fn empty() -> TypeVarSet {
-        TypeVarSet(HashSet::new())
+        TypeVarSet(BTreeSet::new())
     }
 
     pub fn single(elem: TypeVar) -> TypeVarSet {
-        TypeVarSet(HashSet::from([elem]))
+        TypeVarSet(BTreeSet::from([elem]))
     }
 
     pub fn insert(&mut self, elem: TypeVar) -> bool {
@@ -312,7 +312,7 @@ impl ApplySub for TypeVarSet {
 
 impl FromIterator<TypeVar> for TypeVarSet {
     fn from_iter<I: IntoIterator<Item = TypeVar>>(iter: I) -> Self {
-        TypeVarSet(HashSet::from_iter(iter))
+        TypeVarSet(BTreeSet::from_iter(iter))
     }
 }
 

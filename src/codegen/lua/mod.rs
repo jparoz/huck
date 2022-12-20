@@ -4,7 +4,7 @@ mod test;
 use crate::ast;
 use crate::scope::Scope;
 
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::fmt::Write;
 
 use super::Error as CodegenError;
@@ -26,7 +26,7 @@ struct CodeGenerator<'a> {
     bindings: Vec<String>,
 
     // This is the set of definitions which have already been generated.
-    generated: HashSet<ast::Name>,
+    generated: BTreeSet<ast::Name>,
 
     scope: &'a Scope<'a>,
 
@@ -41,7 +41,7 @@ impl<'a> CodeGenerator<'a> {
             conditions: Vec::new(),
             bindings: Vec::new(),
 
-            generated: HashSet::new(),
+            generated: BTreeSet::new(),
 
             scope,
 

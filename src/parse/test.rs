@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use crate::{ast, parse::parse};
 
@@ -13,7 +13,7 @@ fn binop_plus() {
 #[test]
 fn unit() {
     assert_eq!(parse(r#"unit = ();"#).unwrap(), {
-        let mut definitions: HashMap<ast::Name, ast::Definition> = HashMap::new();
+        let mut definitions: BTreeMap<ast::Name, ast::Definition> = BTreeMap::new();
 
         let name = ast::Name::Ident("unit".to_string());
         definitions
@@ -32,7 +32,7 @@ fn unit() {
 #[test]
 fn apply_to_unit() {
     assert_eq!(parse(r#"applyToUnit f = f ();"#).unwrap(), {
-        let mut definitions: HashMap<ast::Name, ast::Definition> = HashMap::new();
+        let mut definitions: BTreeMap<ast::Name, ast::Definition> = BTreeMap::new();
 
         let name = ast::Name::Ident("applyToUnit".to_string());
         definitions
