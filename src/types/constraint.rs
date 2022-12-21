@@ -119,6 +119,7 @@ impl<'file> ConstraintGenerator<'file> {
             .vars
             .iter()
             .map(|v| {
+                // @Todo @Cleanup: make a function like self.fresh_var() instead of this thing
                 let fresh = if let Type::Var(fresh) = self.fresh() {
                     fresh
                 } else {
@@ -420,8 +421,6 @@ impl<'file> GenerateConstraints<'file> for Vec<(Lhs<'file>, Expr<'file>)> {
 
         let typs: Vec<Type> = self.iter().map(|assign| assign.generate(cg)).collect();
         for typ in typs {
-            // @Note: If we want polymorphic bindings at top level, this might want to be a
-            // different type of constraint.
             cg.constrain(Constraint::Equality(beta.clone(), typ));
         }
 
