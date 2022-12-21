@@ -27,7 +27,7 @@ fn unit() {
 
         ast::Module {
             definitions,
-            type_declarations: Vec::new(),
+            type_definitions: Vec::new(),
         }
     })
 }
@@ -57,7 +57,7 @@ fn apply_to_unit() {
 
         ast::Module {
             definitions,
-            type_declarations: Vec::new(),
+            type_definitions: Vec::new(),
         }
     })
 }

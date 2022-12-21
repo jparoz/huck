@@ -145,7 +145,7 @@ impl<'file> ConstraintGenerator<'file> {
             ast::TypeExpr::Term(ast::TypeTerm::Concrete("Int")) => Type::Prim(Primitive::Int),
             ast::TypeExpr::Term(ast::TypeTerm::Concrete("Float")) => Type::Prim(Primitive::Float),
             ast::TypeExpr::Term(ast::TypeTerm::Concrete("String")) => Type::Prim(Primitive::String),
-            ast::TypeExpr::Term(ast::TypeTerm::Concrete(s)) => todo!("type declarations"),
+            ast::TypeExpr::Term(ast::TypeTerm::Concrete(s)) => todo!("type definitions"),
 
             ast::TypeExpr::Term(ast::TypeTerm::Var(v)) => {
                 if let Some(tv) = self.type_vars.get(v) {

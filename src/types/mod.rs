@@ -28,6 +28,7 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
     for (name, defn) in module.definitions {
         let typ = defn.generate(&mut cg);
 
+        // @Checkme: redefinitions? Should probably at least assert that it .is_none()
         types.insert(name, (typ, defn));
     }
 

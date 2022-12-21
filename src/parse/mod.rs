@@ -27,7 +27,7 @@ pub fn parse(input: &str) -> Result<Module, Error> {
             }
 
             let mut definitions: BTreeMap<Name, Definition> = BTreeMap::new();
-            let mut type_declarations = Vec::new();
+            let mut type_definitions = Vec::new();
             let mut precs = default_precs();
 
             // Collect all the statements together into Definitions
@@ -86,7 +86,7 @@ pub fn parse(input: &str) -> Result<Module, Error> {
                         }
                     }
 
-                    Statement::TypeDeclaration(type_decl) => type_declarations.push(type_decl),
+                    Statement::TypeDefinition(type_decl) => type_definitions.push(type_decl),
                 }
             }
 
@@ -99,7 +99,7 @@ pub fn parse(input: &str) -> Result<Module, Error> {
 
             Ok(Module {
                 definitions,
-                type_declarations,
+                type_definitions,
             })
         }
         Err(nom) => Err(Error::Nom(nom.to_string())),
@@ -122,7 +122,7 @@ fn statement(input: &str) -> IResult<&str, Statement> {
                 semi,
             )),
             |(_, (name, vars), _, constr_defn, _)| {
-                Statement::TypeDeclaration(TypeDeclaration(name, vars, constr_defn))
+                Statement::TypeDefinition(TypeDefinition(name, vars, constr_defn))
             },
         ),
         map(prec, |(name, prec)| Statement::Precedence(name, prec)),
@@ -355,7 +355,7 @@ fn upper_name(input: &str) -> IResult<&str, Name> {
     ws(map(upper_ident, |s| Name::Ident(s.to_string())))(input)
 }
 
-/// Parses one term in a type constructor declaration. e.g. in the following:
+/// Parses one term in a type constructor definition. e.g. in the following:
 ///     type Foo = Bar | Baz Int;
 /// `constructor_definition` would parse either "Bar" or "Baz Int".
 fn constructor_definition(input: &str) -> IResult<&str, ConstructorDefinition> {

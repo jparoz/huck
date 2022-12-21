@@ -21,7 +21,7 @@ use crate::parse::precedence::Precedence;
 /// A definition is the correct AST for a given Huck definition,
 /// combined from any statements concerning the same Name.
 /// This includes any case definitions (Assignments),
-/// type declarations,
+/// type definitions,
 /// or precedence declarations.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Definition<'file> {
@@ -66,7 +66,7 @@ impl<'file> Default for Definition<'file> {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Module<'file> {
     pub definitions: BTreeMap<Name, Definition<'file>>,
-    pub type_declarations: Vec<TypeDeclaration<'file>>,
+    pub type_definitions: Vec<TypeDefinition<'file>>,
 }
 
 /// A Statement is a sum type for any of the top-level Huck constructs.
@@ -75,7 +75,7 @@ pub enum Statement<'file> {
     Assignment(Assignment<'file>),
     TypeAnnotation(Name, TypeScheme<'file>),
     Precedence(Name, Precedence),
-    TypeDeclaration(TypeDeclaration<'file>),
+    TypeDefinition(TypeDefinition<'file>),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -472,7 +472,7 @@ pub enum TypeTerm<'file> {
 /// Vec of the introduced type variable names,
 /// Vec of the constructors and arguments.
 #[derive(Debug, PartialEq, Eq)]
-pub struct TypeDeclaration<'file>(
+pub struct TypeDefinition<'file>(
     pub Name,
     pub Vec<&'file str>,
     pub Vec<ConstructorDefinition<'file>>,
