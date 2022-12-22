@@ -6,7 +6,7 @@ use log::log_enabled;
 
 use crate::ast::{self, Definition, Expr, Lhs, Name, Numeral, Pattern, Term};
 use crate::types::{
-    self, ApplySub, Primitive, Substitution, Type, TypeScheme, TypeVar, TypeVarSet,
+    self, ApplySub, Substitution, Type, TypeDefinition, TypeScheme, TypeVar, TypeVarSet,
 };
 
 pub trait ActiveVars {
@@ -84,71 +84,119 @@ impl<'file> Display for Constraint {
 }
 
 #[derive(Debug)]
-pub struct ConstraintGenerator<'file> {
+pub struct ConstraintGenerator {
     constraints: Vec<Constraint>,
 
     // @Cleanup: shouldn't be pub
     pub assumptions: BTreeMap<Name, Vec<Type>>,
 
-    /// Stack of type variables currently in scope for the type scheme we're parsing.
-    type_vars: BTreeMap<&'file str, TypeVar>,
-
     next_typevar_id: usize,
     m_stack: Vec<TypeVar>,
 }
 
-impl<'file> ConstraintGenerator<'file> {
+impl<'file> ConstraintGenerator {
     pub fn new() -> Self {
         ConstraintGenerator {
             constraints: Vec::new(),
             assumptions: BTreeMap::new(),
-            type_vars: BTreeMap::new(),
             next_typevar_id: 0,
             m_stack: Vec::new(),
         }
     }
 
-    fn fresh(&mut self) -> Type {
+    fn fresh_var(&mut self) -> TypeVar {
         let id = self.next_typevar_id;
         self.next_typevar_id += 1;
-        Type::Var(TypeVar(id))
+        TypeVar(id)
+    }
+
+    fn fresh(&mut self) -> Type {
+        Type::Var(self.fresh_var())
     }
 
     pub fn convert_ast_type_scheme(&mut self, input: &ast::TypeScheme<'file>) -> TypeScheme {
+        let mut vars_map = BTreeMap::new();
         let vars: TypeVarSet = input
             .vars
             .iter()
             .map(|v| {
-                // @Todo @Cleanup: make a function like self.fresh_var() instead of this thing
-                let fresh = if let Type::Var(fresh) = self.fresh() {
-                    fresh
-                } else {
-                    unreachable!()
-                };
-
-                self.type_vars.insert(v, fresh);
+                let fresh = self.fresh_var();
+                vars_map.insert(*v, fresh);
                 fresh
             })
             .collect();
 
-        let typ = self.convert_ast_type_expr(&input.typ);
-
-        // @Checkme
-        self.type_vars = BTreeMap::new();
+        let typ = self.convert_ast_type_expr(&input.typ, &vars_map);
 
         TypeScheme { vars, typ }
     }
 
-    pub fn convert_ast_type_expr(&mut self, input: &ast::TypeExpr<'file>) -> Type {
-        let typ = match input {
-            ast::TypeExpr::Term(ast::TypeTerm::Unit) => Type::Prim(Primitive::Unit),
-            ast::TypeExpr::Term(ast::TypeTerm::Concrete("Int")) => Type::Prim(Primitive::Int),
-            ast::TypeExpr::Term(ast::TypeTerm::Concrete("Float")) => Type::Prim(Primitive::Float),
-            ast::TypeExpr::Term(ast::TypeTerm::Concrete("String")) => Type::Prim(Primitive::String),
-            ast::TypeExpr::Term(ast::TypeTerm::Concrete(s)) => todo!("type definitions"),
+    pub fn convert_ast_type_definition(
+        &mut self,
+        type_defn: &ast::TypeDefinition<'file>,
+    ) -> TypeDefinition {
+        let ast::TypeDefinition(name, vars_s, constrs) = type_defn;
 
-            ast::TypeExpr::Term(ast::TypeTerm::Var(v)) => {
-                if let Some(tv) = self.type_vars.get(v) {
+        let mut vars_map = BTreeMap::new();
+        let vars: TypeVarSet = vars_s
+            .iter()
+            .map(|v| {
+                let fresh = self.fresh_var();
+                vars_map.insert(*v, fresh);
+                fresh
+            })
+            .collect();
+
+        // @Todo @Fixme: type constructors need to have type `a -> Foo a`, not type `a -> Foo`
+        let typ = Type::Concrete(name.to_string());
+
+        let mut constructors = Vec::new();
+
+        for (constr_name, args) in constrs {
+            let constr_type = args
+                .into_iter()
+                .rev()
+                .map(|term| self.convert_ast_type_term(term, &vars_map))
+                .fold(typ.clone(), |res, a| Type::Func(Box::new(a), Box::new(res)));
+
+            constructors.push((constr_name.clone(), constr_type));
+        }
+
+        TypeDefinition {
+            name: name.clone(),
+            vars,
+            typ,
+            constructors,
+        }
+    }
+
+    pub fn convert_ast_type_expr(
+        &mut self,
+        input: &ast::TypeExpr<'file>,
+        vars_map: &BTreeMap<&str, TypeVar>,
+    ) -> Type {
+        match input {
+            ast::TypeExpr::Term(term) => self.convert_ast_type_term(term, vars_map),
+            ast::TypeExpr::App(_, _) => todo!("type constructors"),
+            ast::TypeExpr::Arrow(f, x) => Type::Func(
+                Box::new(self.convert_ast_type_expr(f, vars_map)),
+                Box::new(self.convert_ast_type_expr(x, vars_map)),
+            ),
+        }
+    }
+
+    pub fn convert_ast_type_term(
+        &mut self,
+        input: &ast::TypeTerm<'file>,
+        vars_map: &BTreeMap<&str, TypeVar>,
+    ) -> Type {
+        match input {
+            // @Todo @Checkme: type constructors
+            ast::TypeTerm::Concrete(s) => Type::Concrete(s.to_string()),
+            ast::TypeTerm::Unit => Type::Concrete("()".to_string()),
+
+            ast::TypeTerm::Var(v) => {
+                if let Some(tv) = vars_map.get(v) {
                     Type::Var(*tv)
                 } else {
                     // @Note: returning self.fresh() seems to give behaviour something like
@@ -161,26 +209,15 @@ impl<'file> ConstraintGenerator<'file> {
                 }
             }
 
-            ast::TypeExpr::Term(ast::TypeTerm::Parens(e)) => self.convert_ast_type_expr(e),
-            ast::TypeExpr::Term(ast::TypeTerm::List(e)) => {
-                Type::List(Box::new(self.convert_ast_type_expr(e)))
-            }
-            ast::TypeExpr::Term(ast::TypeTerm::Tuple(exprs)) => Type::Tuple(
+            ast::TypeTerm::Parens(e) => self.convert_ast_type_expr(e, vars_map),
+            ast::TypeTerm::List(e) => Type::List(Box::new(self.convert_ast_type_expr(e, vars_map))),
+            ast::TypeTerm::Tuple(exprs) => Type::Tuple(
                 exprs
                     .iter()
-                    .map(|e| self.convert_ast_type_expr(e))
+                    .map(|e| self.convert_ast_type_expr(e, vars_map))
                     .collect(),
             ),
-
-            ast::TypeExpr::App(_, _) => todo!("type constructors"),
-
-            ast::TypeExpr::Arrow(f, x) => Type::Func(
-                Box::new(self.convert_ast_type_expr(f)),
-                Box::new(self.convert_ast_type_expr(x)),
-            ),
-        };
-
-        typ
+        }
     }
 
     fn assume(&mut self, name: Name, typ: Type) {
@@ -259,18 +296,16 @@ impl<'file> ConstraintGenerator<'file> {
             }
             Pattern::Tuple(pats) => Type::Tuple(pats.iter().map(|pat| self.bind(pat)).collect()),
 
-            Pattern::Numeral(Numeral::Int(_)) => Type::Prim(Primitive::Int),
-            Pattern::Numeral(Numeral::Float(_)) => Type::Prim(Primitive::Float),
-
-            Pattern::String(_) => Type::Prim(Primitive::String),
+            Pattern::Numeral(Numeral::Int(_)) => Type::Concrete("Int".to_string()),
+            Pattern::Numeral(Numeral::Float(_)) => Type::Concrete("Float".to_string()),
+            Pattern::String(_) => Type::Concrete("Float".to_string()),
+            Pattern::Unit => Type::Concrete("()".to_string()),
 
             Pattern::Binop { operator, lhs, rhs } => {
                 let beta = self.fresh();
                 self.assume(operator.clone(), beta.clone());
                 bind!(iter::once(lhs).chain(iter::once(rhs)), beta)
             }
-
-            Pattern::Unit => Type::Prim(Primitive::Unit),
 
             Pattern::UnaryConstructor(name) => {
                 let beta = self.fresh();
@@ -390,11 +425,11 @@ impl<'file> ConstraintGenerator<'file> {
 }
 
 pub trait GenerateConstraints<'file> {
-    fn generate(&self, cg: &mut ConstraintGenerator<'file>) -> Type;
+    fn generate(&self, cg: &mut ConstraintGenerator) -> Type;
 }
 
 impl<'file> GenerateConstraints<'file> for Definition<'file> {
-    fn generate(&self, cg: &mut ConstraintGenerator<'file>) -> Type {
+    fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
         // Typecheck each assignment in the definition.
         let mut typs: Vec<Type> = self
             .assignments
@@ -416,7 +451,7 @@ impl<'file> GenerateConstraints<'file> for Definition<'file> {
 }
 
 impl<'file> GenerateConstraints<'file> for Vec<(Lhs<'file>, Expr<'file>)> {
-    fn generate(&self, cg: &mut ConstraintGenerator<'file>) -> Type {
+    fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
         let beta = cg.fresh();
 
         let typs: Vec<Type> = self.iter().map(|assign| assign.generate(cg)).collect();
@@ -429,7 +464,7 @@ impl<'file> GenerateConstraints<'file> for Vec<(Lhs<'file>, Expr<'file>)> {
 }
 
 impl<'file> GenerateConstraints<'file> for (Lhs<'file>, Expr<'file>) {
-    fn generate(&self, cg: &mut ConstraintGenerator<'file>) -> Type {
+    fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
         let (lhs, expr) = self;
 
         macro_rules! bind {
@@ -453,12 +488,13 @@ impl<'file> GenerateConstraints<'file> for (Lhs<'file>, Expr<'file>) {
 }
 
 impl<'file> GenerateConstraints<'file> for Expr<'file> {
-    fn generate(&self, cg: &mut ConstraintGenerator<'file>) -> Type {
+    fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
         match self {
-            Expr::Term(Term::Numeral(Numeral::Int(_))) => Type::Prim(Primitive::Int),
-            Expr::Term(Term::Numeral(Numeral::Float(_))) => Type::Prim(Primitive::Float),
-            Expr::Term(Term::String(_)) => Type::Prim(Primitive::String),
-            Expr::Term(Term::Unit) => Type::Prim(Primitive::Unit),
+            Expr::Term(Term::Numeral(Numeral::Int(_))) => Type::Concrete("Int".to_string()),
+            Expr::Term(Term::Numeral(Numeral::Float(_))) => Type::Concrete("Float".to_string()),
+            Expr::Term(Term::String(_)) => Type::Concrete("String".to_string()),
+            Expr::Term(Term::Unit) => Type::Concrete("()".to_string()),
+
             Expr::Term(Term::Parens(e)) => e.generate(cg),
             Expr::Term(Term::List(es)) => {
                 let beta = cg.fresh();
@@ -557,7 +593,7 @@ impl<'file> GenerateConstraints<'file> for Expr<'file> {
     }
 }
 
-impl<'file> Display for ConstraintGenerator<'file> {
+impl<'file> Display for ConstraintGenerator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Constraints:")?;
         for constraint in self.constraints.iter() {

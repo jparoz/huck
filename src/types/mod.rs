@@ -23,6 +23,7 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
     let mut cg = ConstraintGenerator::new();
 
     let mut types = BTreeMap::new();
+    let mut type_definitions = BTreeMap::new();
 
     // Generate constraints for each definition, while keeping track of inferred types
     for (name, defn) in module.definitions {
@@ -31,6 +32,19 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
         // @Checkme: redefinitions? Should probably at least assert that it .is_none()
         types.insert(name, (typ, defn));
     }
+
+    // Generate constraints for each type definition
+    for ast_type_defn in module.type_definitions {
+        let type_defn = cg.convert_ast_type_definition(&ast_type_defn);
+
+        // @Checkme: redefinitions? Should probably at least assert that it .is_none()
+        type_definitions.insert(type_defn.name.clone(), type_defn);
+
+        // @Todo: maybe add something else to something somewhere?
+        // @Todo: do something with type_definitions later @XXX
+    }
+
+    log::debug!("Converted type definitions: {:?}", type_definitions);
 
     // Add constraints to unify each assumption about the same name
     log::trace!("Emitting constraints about assumptions:");
@@ -84,7 +98,7 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
 
 #[derive(PartialEq, Eq, Clone, Hash, Debug)]
 pub enum Type {
-    Prim(Primitive),
+    Concrete(String),
     Var(TypeVar),
     Func(Box<Type>, Box<Type>),
     List(Box<Type>),
@@ -96,7 +110,9 @@ pub enum Type {
 impl Type {
     pub fn free_vars(&self) -> TypeVarSet {
         match self {
-            Type::Prim(_) => TypeVarSet::empty(),
+            // @Checkme: type constructors
+            Type::Concrete(_) => TypeVarSet::empty(),
+
             Type::Var(var) => TypeVarSet::single(*var),
             Type::Func(a, b) => a.free_vars().union(&b.free_vars()),
             Type::List(t) => t.free_vars(),
@@ -170,7 +186,9 @@ impl ApplySub for Type {
             Type::Tuple(ref mut tuple_v) => tuple_v.iter_mut().for_each(|t| {
                 t.apply(sub);
             }),
-            Type::Prim(_) => (),
+
+            // @Checkme: type constructors
+            Type::Concrete(_) => (),
         }
     }
 }
@@ -179,9 +197,11 @@ impl Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Type::Var(var) => write!(f, "{}", var),
-            Type::Prim(p) => write!(f, "{:?}", p), // @Fixme: Display not Debug
+            Type::Concrete(s) => write!(f, "{}", s),
+
             // @Todo: be smarter about when to include brackets
             Type::Func(a, b) => write!(f, "({} -> {})", a, b),
+
             Type::List(inner) => {
                 write!(f, "[{}]", inner)
             }
@@ -328,10 +348,19 @@ impl Display for TypeVarSet {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Hash, Debug)]
-pub enum Primitive {
-    Int,
-    Float,
-    String,
-    Unit,
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct TypeDefinition {
+    // Is this needed on here? @Nocommit
+    /// The name of the type defined in this TypeDefinition.
+    pub name: ast::Name,
+
+    /// The type variables introduced in the left-hand-side of the definition.
+    pub vars: TypeVarSet,
+
+    /// The type defined in this TypeDefinition.
+    pub typ: Type,
+
+    /// A Vec of the constructors introduced in the right-hand-side of the definition,
+    /// along with their types.
+    pub constructors: Vec<(ast::Name, Type)>,
 }
