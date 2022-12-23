@@ -42,7 +42,7 @@ where
 pub fn transpile(huck: &str) -> Result<String, HuckError> {
     // Parse
     let parsed = parse(huck)?;
-    log::info!("Parsed module: {:?}", parsed);
+    log::trace!("Parsed module: {:?}", parsed);
 
     // Typecheck
     let scope = typecheck(parsed)?;
@@ -52,7 +52,7 @@ pub fn transpile(huck: &str) -> Result<String, HuckError> {
     // Generate code
     let lua = codegen::lua::generate(&scope)?;
 
-    log::info!("Generated Lua code:\n{}", lua);
+    log::trace!("Generated Lua code:\n{}", lua);
 
     Ok(normalize(&lua))
 }
