@@ -237,8 +237,7 @@ impl<'file> ConstraintGenerator {
         self.assumptions
             .values()
             .flatten()
-            .map(|t| t.free_vars().iter().cloned().collect::<Vec<TypeVar>>())
-            .flatten()
+            .flat_map(|t| t.free_vars().into_iter())
             .collect()
     }
 
