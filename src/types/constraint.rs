@@ -249,6 +249,10 @@ impl<'file> ConstraintGenerator {
 
     /// Constrains all types in the given Vec to be equal, and returns that type.
     pub fn equate_all(&mut self, typs: Vec<Type>) -> Type {
+        if typs.len() == 1 {
+            return typs[0].clone();
+        }
+
         let beta = self.fresh();
         for typ in typs {
             self.constrain(Constraint::Equality(beta.clone(), typ.clone()));
