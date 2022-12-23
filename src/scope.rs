@@ -10,20 +10,13 @@ pub struct TypedDefinition<'file> {
     pub definition: Definition<'file>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Scope<'file> {
     pub definitions: BTreeMap<Name, TypedDefinition<'file>>,
     pub type_definitions: BTreeMap<Name, TypeDefinition>,
 }
 
 impl<'file> Scope<'file> {
-    pub fn new() -> Self {
-        Scope {
-            definitions: BTreeMap::new(),
-            type_definitions: BTreeMap::new(),
-        }
-    }
-
     pub fn contains(&self, name: &Name) -> bool {
         self.definitions.contains_key(name) || self.type_definitions.contains_key(name)
     }

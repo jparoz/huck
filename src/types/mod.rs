@@ -78,7 +78,7 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
 
     log::trace!("After applying solution: {}", cg);
 
-    let mut scope = Scope::new();
+    let mut scope = Scope::default();
 
     // Insert definitions into the Scope.
     let assumption_vars = cg.assumption_vars();
