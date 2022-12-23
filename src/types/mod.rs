@@ -3,6 +3,7 @@ use std::fmt::{self, Display};
 use std::mem;
 
 use crate::ast;
+use crate::codegen::lua::is_lua_binop;
 use crate::scope::{Scope, TypedDefinition};
 
 // @Cleanup: do these all need to be pub?
@@ -29,6 +30,7 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
     // Generate constraints for each definition, while keeping track of inferred types
     for (name, defn) in module.definitions {
         let typ = defn.generate(&mut cg);
+        log::trace!("Initial inferred type for {}: {}", name, typ);
 
         // @Checkme: redefinitions? Should probably at least assert that it .is_none()
         types.insert(name, (typ, defn));
@@ -61,11 +63,19 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
     // the definition's inferred type.
     // If there is no inferred type for the name (i.e. it's not in scope),
     // then it's a scope error.
+    //
+    // @Todo @Cleanup: this should possibly/probably work on Scope or some ProtoScope,
+    // rather than multiple if lets.
     for (name, assumed_types) in assumptions.into_iter() {
         if let Some(t) = types.get(&name) {
             cg.all_instances_of(assumed_types, t.0.generalize(&TypeVarSet::empty()));
+        } else if let Some(t) = constructors.get(&name) {
+            cg.all_instances_of(assumed_types, t.generalize(&TypeVarSet::empty()));
+        } else if is_lua_binop(name.as_str()) {
+            // Do nothing. @XXX @Cleanup: don't do this
         } else {
             // @Todo: Scope error
+            todo!("scope error: {name}");
         }
     }
 
@@ -87,7 +97,15 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
     for (name, (mut typ, definition)) in types.into_iter() {
         typ.apply(&soln);
 
+        // @Checkme: commented the following in favour of the uncommented line below.
+        // Not 100% sure which is correct;
+        // but the uncommented line seems to have the right type.
+        // Question: is generalize doing the right thing????
+        // This needs more investigation,
+        // probably need to reread the paper
+        // to gain clarity on assumptions.
         let type_scheme = typ.generalize(&assumption_vars);
+        // let type_scheme = typ.generalize(&TypeVarSet::empty());
         log::info!("Inferred type for {} : {}", name, type_scheme);
         let defn = TypedDefinition {
             type_scheme,

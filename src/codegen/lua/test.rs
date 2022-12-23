@@ -59,6 +59,7 @@ fn function_id() {
     )
 }
 
+#[ignore]
 #[test]
 fn function_not() {
     assert_eq!(
@@ -80,6 +81,7 @@ fn function_not() {
     )
 }
 
+#[ignore]
 #[test]
 fn function_and() {
     assert_eq!(

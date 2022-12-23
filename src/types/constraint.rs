@@ -164,6 +164,9 @@ impl<'file> ConstraintGenerator {
                 .map(|term| self.convert_ast_type_term(term, &vars_map))
                 .fold(typ.clone(), |res, a| Type::Func(Box::new(a), Box::new(res)));
 
+            // @Checkme: poly or mono?
+            self.bind_name_poly(constr_name, &constr_type);
+
             // @Todo @Checkme: no name conflicts
             constructors.insert(constr_name.clone(), constr_type);
         }

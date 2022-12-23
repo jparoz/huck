@@ -588,7 +588,8 @@ impl<'a> CodeGenerator<'a> {
     }
 }
 
-fn is_lua_binop(op: &str) -> bool {
+// @Cleanup: not pub
+pub fn is_lua_binop(op: &str) -> bool {
     // @Todo: maybe we want these ops to have different names in Huck to in Lua.
     // For now, just pass them through.
     match op {
