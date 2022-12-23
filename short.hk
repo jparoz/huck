@@ -8,3 +8,6 @@ type MyBool = MyTrue | MyFalse;
 type Foo = Bar | Baz Int;
 
 type Banana a = Orange a | Green a | Blue;
+
+(* usesBanana : Banana a -> a; *)
+usesBanana (Orange x) = x;

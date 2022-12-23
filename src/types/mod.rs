@@ -38,6 +38,9 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
         let type_defn = cg.convert_ast_type_definition(&ast_type_defn);
 
         // @Checkme: redefinitions? Should probably at least assert that it .is_none()
+        // Seems like this will need to be the place to prevent
+        // multiple type definitions with the same name,
+        // or at least it's the most obvious place to check it for now.
         type_definitions.insert(type_defn.name.clone(), type_defn);
 
         // @Todo: maybe add something else to something somewhere?
@@ -77,14 +80,24 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
 
     let mut scope = Scope::new();
 
+    // Insert definitions into the Scope.
     let assumption_vars = cg.assumption_vars();
     for (name, (mut typ, definition)) in types.into_iter() {
         typ.apply(&soln);
 
         let type_scheme = typ.generalize(&assumption_vars);
         log::info!("Inferred type for {} : {}", name, type_scheme);
-        let defn = TypedDefinition::new(type_scheme, definition);
+        let defn = TypedDefinition {
+            type_scheme,
+            definition,
+        };
         scope.definitions.insert(name, defn);
+    }
+
+    // Insert type definitions into the Scope.
+    for (name, type_defn) in type_definitions.into_iter() {
+        log::debug!("Doing something with type definition: {:?}", type_defn); // @Nocommit
+        scope.type_definitions.insert(name, type_defn);
     }
 
     // @Todo (maybe): properly check that there are no free type variables
@@ -350,7 +363,6 @@ impl Display for TypeVarSet {
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct TypeDefinition {
-    // Is this needed on here? @Nocommit
     /// The name of the type defined in this TypeDefinition.
     pub name: ast::Name,
 

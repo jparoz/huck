@@ -3,6 +3,7 @@ mod test;
 
 use crate::ast;
 use crate::scope::Scope;
+use crate::types::{Type, TypeDefinition};
 
 use std::collections::BTreeSet;
 use std::fmt::Write;
@@ -25,6 +26,9 @@ struct CodeGenerator<'a> {
     conditions: Vec<String>,
     bindings: Vec<String>,
 
+    // This is a String containing the contents of the Lua table which shall be returned.
+    return_entries: String,
+
     // This is the set of definitions which have already been generated.
     generated: BTreeSet<ast::Name>,
 
@@ -41,6 +45,8 @@ impl<'a> CodeGenerator<'a> {
             conditions: Vec::new(),
             bindings: Vec::new(),
 
+            return_entries: String::new(),
+
             generated: BTreeSet::new(),
 
             scope,
@@ -52,14 +58,23 @@ impl<'a> CodeGenerator<'a> {
     }
 
     /// Generate Lua code for the Scope used in CodeGenerator::new.
-    /// This will generate a Lua chunk which returns a table containing the definitions given in the
-    /// Huck scope.
+    /// This will generate a Lua chunk which returns a table
+    /// containing the definitions given in the Huck scope.
     fn generate<'file>(mut self) -> Result<String> {
         let mut lua = String::new();
 
         writeln!(lua, "local {} = {{}}", self.generated_name_prefix)?;
 
-        let mut return_entries = String::new();
+        // First, generate code for all the type definitions (i.e. for their constructors).
+        // This can be done first
+        // because they don't have a real RHS,
+        // so they can't refer to anything else.
+
+        for (name, type_defn) in self.scope.type_definitions.iter() {
+            write!(lua, "{}", self.type_definition(name, type_defn)?)?;
+        }
+
+        // Next, we can generate all the definitions.
 
         // Start by putting all definitions in the queue to be generated.
         // @Fixme: this probably doesn't need to be entirely cloned
@@ -100,20 +115,12 @@ impl<'a> CodeGenerator<'a> {
                 if has_any_args || has_all_deps {
                     // Because there are arguments, it's going to be a Lua function.
                     // Thus, we can generate in any order.
-                    // Mark that we have generated something in this pass.
-                    generated_anything = true;
-
-                    write!(lua, r#"{}["{}"] = "#, self.generated_name_prefix, name)?;
-                    writeln!(lua, "{}", self.definition(&typed_defn.definition)?)?;
-                    writeln!(
-                        return_entries,
-                        r#"["{name}"] = {prefix}["{name}"],"#,
-                        name = name,
-                        prefix = self.generated_name_prefix,
-                    )?;
+                    write!(lua, "{}", self.definition(&name, &typed_defn.definition)?)?;
 
                     // Mark this definition as generated.
                     self.generated.insert(name);
+                    // Mark that we have generated something in this pass.
+                    generated_anything = true;
                 } else {
                     // Skip it for now
                     next_pass.push((name, typed_defn));
@@ -143,7 +150,7 @@ impl<'a> CodeGenerator<'a> {
             std::mem::swap(&mut current_pass, &mut next_pass);
         }
 
-        write!(lua, "return {{\n{}}}", return_entries)?;
+        write!(lua, "return {{\n{}}}", self.return_entries)?;
 
         Ok(lua)
     }
@@ -194,8 +201,24 @@ impl<'a> CodeGenerator<'a> {
     /// This has to be generated from the Vec<Assignment>,
     /// because in the case of multiple definitions,
     /// we have to generate a Lua 'switch' statement.
-    fn definition<'file>(&mut self, defn: &ast::Definition<'file>) -> Result<String> {
-        self.curried_function(&defn.assignments)
+    fn definition<'file>(
+        &mut self,
+        name: &ast::Name,
+        defn: &ast::Definition<'file>,
+    ) -> Result<String> {
+        let mut lua = String::new();
+
+        // Write the definition to the `lua` string.
+        write!(lua, r#"{}["{}"] = "#, self.generated_name_prefix, name)?;
+        writeln!(lua, "{}", self.curried_function(&defn.assignments)?)?;
+        writeln!(
+            self.return_entries,
+            r#"["{name}"] = {prefix}["{name}"],"#,
+            name = name,
+            prefix = self.generated_name_prefix,
+        )?;
+
+        Ok(lua)
     }
 
     fn expr<'file>(&mut self, expr: &ast::Expr<'file>) -> Result<String> {
@@ -379,6 +402,7 @@ impl<'a> CodeGenerator<'a> {
         }
 
         // Emit a runtime error in case no pattern matches
+        // @Todo @Warn: emit a compile time warning as well
         if has_any_conditions && !has_unconditional_branch {
             writeln!(
                 lua,
@@ -480,8 +504,69 @@ impl<'a> CodeGenerator<'a> {
         Ok(())
     }
 
+    /// Generates all the type constructors found in the type definition.
+    fn type_definition(&mut self, name: &ast::Name, type_defn: &TypeDefinition) -> Result<String> {
+        let mut lua = String::new();
+
+        // Write each constructor to the `lua` string.
+        for (name, typ) in type_defn.constructors.iter() {
+            write!(lua, r#"{}["{}"] = "#, self.generated_name_prefix, name)?;
+            writeln!(lua, "{}", self.constructor(name, typ)?)?;
+            writeln!(
+                self.return_entries,
+                r#"["{name}"] = {prefix}["{name}"],"#,
+                name = name,
+                prefix = self.generated_name_prefix,
+            )?;
+        }
+
+        Ok(lua)
+    }
+
+    /// Generates code for a constructor.
+    fn constructor(&mut self, name: &ast::Name, mut constr_type: &Type) -> Result<String> {
+        // @Todo: maybe we should do some runtime type checking in Lua?
+
+        let mut ids = Vec::new();
+
+        let mut lua = String::new();
+
+        // Start the functions
+        log::debug!("constr_type: {:?}", constr_type);
+        while let Type::Func(_a, b) = constr_type {
+            let id = self.unique();
+            ids.push(id);
+
+            writeln!(lua, "function({}_{})", self.generated_name_prefix, id)?;
+            write!(lua, "return ")?;
+
+            constr_type = &b;
+        }
+
+        // @Todo: assert that we have the terminal type left?
+
+        let tupled_args = ids
+            .iter()
+            .map(|id| format!("{}_{}", self.generated_name_prefix, id))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        writeln!(
+            lua,
+            r#"setmetatable({{{}}}, {{__variant = "{}"}})"#,
+            tupled_args, name
+        )?;
+
+        // End the functions
+        for _ in 0..ids.len() {
+            writeln!(lua, "end")?;
+        }
+
+        Ok(lua)
+    }
+
     fn reference<'file>(&mut self, name: &ast::Name) -> Result<String> {
-        if self.scope.definitions.contains_key(name) {
+        if self.scope.contains(name) {
             // It's a top-level definition,
             // so we should emit e.g. _HUCK["var"]
             Ok(format!(r#"{}["{}"]"#, self.generated_name_prefix, name))
