@@ -44,8 +44,6 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
         // @Todo: do something with type_definitions later @XXX
     }
 
-    log::debug!("Converted type definitions: {:?}", type_definitions);
-
     // Add constraints to unify each assumption about the same name
     log::trace!("Emitting constraints about assumptions:");
     let assumptions: Vec<(ast::Name, Vec<Type>)> = cg
@@ -103,7 +101,7 @@ pub enum Type {
     Func(Box<Type>, Box<Type>),
     List(Box<Type>),
     Tuple(Vec<Type>),
-    // @Todo: type constructors (i.e. type application)
+    App(Box<Type>, Box<Type>),
     // @Todo: type binops (maybe as type constructors)
 }
 
@@ -114,7 +112,7 @@ impl Type {
             Type::Concrete(_) => TypeVarSet::empty(),
 
             Type::Var(var) => TypeVarSet::single(*var),
-            Type::Func(a, b) => a.free_vars().union(&b.free_vars()),
+            Type::Func(a, b) | Type::App(a, b) => a.free_vars().union(&b.free_vars()),
             Type::List(t) => t.free_vars(),
             Type::Tuple(v) => v
                 .iter()
@@ -178,7 +176,7 @@ impl ApplySub for Type {
                     *self = replacement.clone();
                 }
             }
-            Type::Func(a, b) => {
+            Type::Func(a, b) | Type::App(a, b) => {
                 a.apply(sub);
                 b.apply(sub);
             }
@@ -201,6 +199,8 @@ impl Display for Type {
 
             // @Todo: be smarter about when to include brackets
             Type::Func(a, b) => write!(f, "({} -> {})", a, b),
+
+            Type::App(a, b) => write!(f, "{} {}", a, b),
 
             Type::List(inner) => {
                 write!(f, "[{}]", inner)

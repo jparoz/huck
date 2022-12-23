@@ -137,18 +137,23 @@ impl<'file> ConstraintGenerator {
     ) -> TypeDefinition {
         let ast::TypeDefinition(name, vars_s, constrs) = type_defn;
 
+        // We'll build all these structures by iterating over the type arguments.
         let mut vars_map = BTreeMap::new();
-        let vars: TypeVarSet = vars_s
-            .iter()
-            .map(|v| {
-                let fresh = self.fresh_var();
-                vars_map.insert(*v, fresh);
-                fresh
-            })
-            .collect();
+        let mut vars = TypeVarSet::empty();
+        let mut typ = Type::Concrete(name.to_string());
 
-        // @Todo @Fixme: type constructors need to have type `a -> Foo a`, not type `a -> Foo`
-        let typ = Type::Concrete(name.to_string());
+        for v in vars_s.iter() {
+            // Make a new type variable to stand in for the &str literal type variable
+            let fresh = self.fresh_var();
+
+            // Store it in both the map and set versions
+            vars_map.insert(*v, fresh);
+            vars.insert(fresh);
+
+            // The final returned type of the constructor needs to reflect this type argument;
+            // so we mark that here.
+            typ = Type::App(Box::new(typ), Box::new(Type::Var(fresh)));
+        }
 
         let mut constructors = Vec::new();
 
