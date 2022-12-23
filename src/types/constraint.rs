@@ -155,7 +155,7 @@ impl<'file> ConstraintGenerator {
             typ = Type::App(Box::new(typ), Box::new(Type::Var(fresh)));
         }
 
-        let mut constructors = Vec::new();
+        let mut constructors = BTreeMap::new();
 
         for (constr_name, args) in constrs {
             let constr_type = args
@@ -164,7 +164,8 @@ impl<'file> ConstraintGenerator {
                 .map(|term| self.convert_ast_type_term(term, &vars_map))
                 .fold(typ.clone(), |res, a| Type::Func(Box::new(a), Box::new(res)));
 
-            constructors.push((constr_name.clone(), constr_type));
+            // @Todo @Checkme: no name conflicts
+            constructors.insert(constr_name.clone(), constr_type);
         }
 
         TypeDefinition {

@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::ast::{Definition, Name};
 use crate::types::{TypeDefinition, TypeScheme};
@@ -14,10 +14,11 @@ pub struct TypedDefinition<'file> {
 pub struct Scope<'file> {
     pub definitions: BTreeMap<Name, TypedDefinition<'file>>,
     pub type_definitions: BTreeMap<Name, TypeDefinition>,
+    pub constructors: BTreeSet<Name>,
 }
 
 impl<'file> Scope<'file> {
     pub fn contains(&self, name: &Name) -> bool {
-        self.definitions.contains_key(name) || self.type_definitions.contains_key(name)
+        self.definitions.contains_key(name) || self.constructors.contains(name)
     }
 }

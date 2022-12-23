@@ -24,6 +24,7 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
 
     let mut types = BTreeMap::new();
     let mut type_definitions = BTreeMap::new();
+    let mut constructors = BTreeMap::new();
 
     // Generate constraints for each definition, while keeping track of inferred types
     for (name, defn) in module.definitions {
@@ -37,14 +38,15 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
     for ast_type_defn in module.type_definitions {
         let type_defn = cg.convert_ast_type_definition(&ast_type_defn);
 
-        // @Checkme: redefinitions? Should probably at least assert that it .is_none()
+        for (constr_name, constr_type) in type_defn.constructors.clone() {
+            constructors.insert(constr_name.clone(), constr_type.clone());
+        }
+
+        // @Todo @Checkme: redefinitions? Should probably at least assert that it .is_none()
         // Seems like this will need to be the place to prevent
         // multiple type definitions with the same name,
         // or at least it's the most obvious place to check it for now.
         type_definitions.insert(type_defn.name.clone(), type_defn);
-
-        // @Todo: maybe add something else to something somewhere?
-        // @Todo: do something with type_definitions later @XXX
     }
 
     // Add constraints to unify each assumption about the same name
@@ -95,10 +97,10 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
     }
 
     // Insert type definitions into the Scope.
-    for (name, type_defn) in type_definitions.into_iter() {
-        log::debug!("Doing something with type definition: {:?}", type_defn); // @Nocommit
-        scope.type_definitions.insert(name, type_defn);
-    }
+    scope.type_definitions = type_definitions;
+
+    // Insert constructors into the Scope.
+    scope.constructors = constructors.keys().cloned().collect();
 
     // @Todo (maybe): properly check that there are no free type variables
     // in a top-level definition
@@ -374,5 +376,5 @@ pub struct TypeDefinition {
 
     /// A Vec of the constructors introduced in the right-hand-side of the definition,
     /// along with their types.
-    pub constructors: Vec<(ast::Name, Type)>,
+    pub constructors: BTreeMap<ast::Name, Type>,
 }
