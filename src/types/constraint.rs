@@ -183,10 +183,13 @@ impl<'file> ConstraintGenerator {
     ) -> Type {
         match input {
             ast::TypeExpr::Term(term) => self.convert_ast_type_term(term, vars_map),
-            ast::TypeExpr::App(_, _) => todo!("type constructors"),
-            ast::TypeExpr::Arrow(f, x) => Type::Func(
+            ast::TypeExpr::App(f, x) => Type::App(
                 Box::new(self.convert_ast_type_expr(f, vars_map)),
                 Box::new(self.convert_ast_type_expr(x, vars_map)),
+            ),
+            ast::TypeExpr::Arrow(a, b) => Type::Func(
+                Box::new(self.convert_ast_type_expr(a, vars_map)),
+                Box::new(self.convert_ast_type_expr(b, vars_map)),
             ),
         }
     }

@@ -171,7 +171,8 @@ impl Type {
                         pairs.push((t1, t2));
                     }
                 }
-                (Type::Func(a1, b1), Type::Func(a2, b2)) => {
+                (Type::Func(a1, b1), Type::Func(a2, b2))
+                | (Type::App(a1, b1), Type::App(a2, b2)) => {
                     pairs.push((*a1, *a2));
                     pairs.push((*b1, *b2));
                 }
