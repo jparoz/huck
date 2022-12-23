@@ -21,9 +21,9 @@ use crate::parse::precedence::Precedence;
 /// A definition is the correct AST for a given Huck definition,
 /// combined from any statements concerning the same Name.
 /// This includes any case definitions (Assignments),
-/// type definitions,
+/// explicit type declarations,
 /// or precedence declarations.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Default)]
 pub struct Definition<'file> {
     pub assignments: Vec<(Lhs<'file>, Expr<'file>)>,
     pub explicit_type: Option<TypeScheme<'file>>,
@@ -43,18 +43,6 @@ impl<'file> Definition<'file> {
 
             deps
         })
-    }
-}
-
-impl<'file> Default for Definition<'file> {
-    fn default() -> Self {
-        Self {
-            assignments: Vec::new(),
-            explicit_type: None,
-            precedence: None,
-
-            dependencies: None,
-        }
     }
 }
 
