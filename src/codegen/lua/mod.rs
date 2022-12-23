@@ -70,8 +70,8 @@ impl<'a> CodeGenerator<'a> {
         // because they don't have a real RHS,
         // so they can't refer to anything else.
 
-        for (name, type_defn) in self.scope.type_definitions.iter() {
-            write!(lua, "{}", self.type_definition(name, type_defn)?)?;
+        for (_name, type_defn) in self.scope.type_definitions.iter() {
+            write!(lua, "{}", self.type_definition(type_defn)?)?;
         }
 
         // Next, we can generate all the definitions.
@@ -117,8 +117,6 @@ impl<'a> CodeGenerator<'a> {
                     // Thus, we can generate in any order.
                     write!(lua, "{}", self.definition(&name, &typed_defn.definition)?)?;
 
-                    // Mark this definition as generated.
-                    self.generated.insert(name);
                     // Mark that we have generated something in this pass.
                     generated_anything = true;
                 } else {
@@ -217,6 +215,9 @@ impl<'a> CodeGenerator<'a> {
             name = name,
             prefix = self.generated_name_prefix,
         )?;
+
+        // Mark this definition as generated.
+        self.generated.insert(name.clone());
 
         Ok(lua)
     }
@@ -403,6 +404,7 @@ impl<'a> CodeGenerator<'a> {
 
         // Emit a runtime error in case no pattern matches
         // @Todo @Warn: emit a compile time warning as well
+        // @Todo: do some exhaustiveness checking before emitting these warnings/errors
         if has_any_conditions && !has_unconditional_branch {
             writeln!(
                 lua,
@@ -505,7 +507,7 @@ impl<'a> CodeGenerator<'a> {
     }
 
     /// Generates all the type constructors found in the type definition.
-    fn type_definition(&mut self, name: &ast::Name, type_defn: &TypeDefinition) -> Result<String> {
+    fn type_definition(&mut self, type_defn: &TypeDefinition) -> Result<String> {
         let mut lua = String::new();
 
         // Write each constructor to the `lua` string.
@@ -518,6 +520,9 @@ impl<'a> CodeGenerator<'a> {
                 name = name,
                 prefix = self.generated_name_prefix,
             )?;
+
+            // Mark this constructor as generated.
+            self.generated.insert(name.clone());
         }
 
         Ok(lua)
@@ -532,7 +537,6 @@ impl<'a> CodeGenerator<'a> {
         let mut lua = String::new();
 
         // Start the functions
-        log::debug!("constr_type: {:?}", constr_type);
         while let Type::Func(_a, b) = constr_type {
             let id = self.unique();
             ids.push(id);
