@@ -1,9 +1,10 @@
-use crate::parse::parse;
+use crate::scope::Scope;
+use crate::{ast::Name, parse::parse};
 
 use super::{
     constraint::{ConstraintGenerator, GenerateConstraints},
     substitution::ApplySub,
-    Type, TypeVar,
+    typecheck, Type, TypeScheme, TypeVar, TypeVarSet,
 };
 
 fn typ(s: &str) -> Type {
@@ -19,6 +20,11 @@ fn typ(s: &str) -> Type {
     typ.apply(&soln);
 
     typ
+}
+
+fn typ_module(s: &str) -> Scope {
+    let parsed = parse(s).unwrap();
+    typecheck(parsed).unwrap()
 }
 
 #[test]
@@ -111,4 +117,184 @@ fn function_add() {
             Box::new(Type::Concrete("Int".to_string()))
         )
     );
+}
+
+#[test]
+fn constructor_unary() {
+    let scope = typ_module(
+        r#"
+            type Foo = Bar;
+            val = Bar;
+        "#,
+    );
+
+    let val = scope
+        .definitions
+        .get(&Name::Ident("val".to_string()))
+        .unwrap();
+
+    assert_eq!(
+        val.type_scheme,
+        TypeScheme {
+            vars: TypeVarSet::empty(),
+            typ: Type::Concrete("Foo".to_string()),
+        }
+    )
+}
+
+#[test]
+fn constructor_unary_returned() {
+    let scope = typ_module(
+        r#"
+            type Foo = Bar;
+            val a = Bar;
+        "#,
+    );
+
+    let val = scope
+        .definitions
+        .get(&Name::Ident("val".to_string()))
+        .unwrap();
+    assert_eq!(
+        val.type_scheme,
+        TypeScheme {
+            vars: TypeVarSet::single(TypeVar(1)),
+            typ: Type::Func(
+                Box::new(Type::Var(TypeVar(1))),
+                Box::new(Type::Concrete("Foo".to_string())),
+            ),
+        }
+    )
+}
+
+#[test]
+fn constructor_unary_argument() {
+    let scope = typ_module(
+        r#"
+            type Foo = Bar;
+            val Bar = 123;
+        "#,
+    );
+
+    let val = scope
+        .definitions
+        .get(&Name::Ident("val".to_string()))
+        .unwrap();
+
+    assert_eq!(
+        val.type_scheme,
+        TypeScheme {
+            vars: TypeVarSet::empty(),
+            typ: Type::Func(
+                Box::new(Type::Concrete("Foo".to_string())),
+                Box::new(Type::Concrete("Int".to_string())),
+            ),
+        }
+    )
+}
+
+#[test]
+fn constructor_newtype() {
+    let scope = typ_module(
+        r#"
+            type Foo = Foo Int;
+            val = Foo 123;
+        "#,
+    );
+
+    let val = scope
+        .definitions
+        .get(&Name::Ident("val".to_string()))
+        .unwrap();
+
+    assert_eq!(
+        val.type_scheme,
+        TypeScheme {
+            vars: TypeVarSet::empty(),
+            typ: Type::Concrete("Foo".to_string()),
+        }
+    )
+}
+
+#[test]
+fn constructor_newtype_generic_int() {
+    let scope = typ_module(
+        r#"
+            type Foo a = Foo a;
+            val = Foo 123;
+        "#,
+    );
+
+    let val = scope
+        .definitions
+        .get(&Name::Ident("val".to_string()))
+        .unwrap();
+
+    assert_eq!(
+        val.type_scheme,
+        TypeScheme {
+            vars: TypeVarSet::empty(),
+            typ: Type::App(
+                Box::new(Type::Concrete("Foo".to_string())),
+                Box::new(Type::Concrete("Int".to_string()))
+            ),
+        }
+    )
+}
+
+#[test]
+fn constructor_newtype_generic_var() {
+    let scope = typ_module(
+        r#"
+            type Foo a = Foo a;
+            val x = Foo x;
+        "#,
+    );
+
+    let val = scope
+        .definitions
+        .get(&Name::Ident("val".to_string()))
+        .unwrap();
+
+    let var = TypeVar(5);
+    assert_eq!(
+        val.type_scheme,
+        TypeScheme {
+            vars: TypeVarSet::single(var),
+            typ: Type::Func(
+                Box::new(Type::Var(var)),
+                Box::new(Type::App(
+                    Box::new(Type::Concrete("Foo".to_string())),
+                    Box::new(Type::Var(var))
+                ))
+            ),
+        }
+    )
+}
+
+// @Todo @Fixme: this should pass!
+#[ignore]
+#[test]
+fn constructor_newtype_generic_unwrap_int() {
+    let scope = typ_module(
+        r#"
+            type Foo a = Foo a;
+            toBeUnwrapped = Foo 123;
+            unwrap (Foo x) = x;
+            val = unwrap toBeUnwrapped;
+        "#,
+    );
+
+    let val = scope
+        .definitions
+        .get(&Name::Ident("val".to_string()))
+        .unwrap();
+
+    assert_eq!(
+        val.type_scheme,
+        TypeScheme {
+            vars: TypeVarSet::empty(),
+            typ: Type::Concrete("Int".to_string())
+        }
+    )
 }
