@@ -274,10 +274,10 @@ impl<'file> ConstraintGenerator {
         }
     }
 
-    // Returns the type of the whole pattern item, as well as emitting constraints for sub-items.
+    /// Returns the type of the whole pattern item, as well as emitting constraints for sub-items.
     fn bind(&mut self, pat: &Pattern) -> Type {
-        macro_rules! bind {
-            ($iter:expr, $cons_type:expr) => {
+        macro_rules! bind_function_args {
+            ($cons_type:expr, $iter:expr) => {
                 $iter.fold($cons_type, |acc, arg| {
                     let arg_type = self.bind(arg);
                     let partial_res_type = self.fresh();
@@ -319,7 +319,7 @@ impl<'file> ConstraintGenerator {
             Pattern::Binop { operator, lhs, rhs } => {
                 let beta = self.fresh();
                 self.assume(operator.clone(), beta.clone());
-                bind!(iter::once(lhs).chain(iter::once(rhs)), beta)
+                bind_function_args!(beta, iter::once(lhs).chain(iter::once(rhs)))
             }
 
             Pattern::UnaryConstructor(name) => {
@@ -330,7 +330,7 @@ impl<'file> ConstraintGenerator {
             Pattern::Destructure { constructor, args } => {
                 let beta = self.fresh();
                 self.assume(constructor.clone(), beta.clone());
-                bind!(args.iter(), beta)
+                bind_function_args!(beta, args.iter())
             }
         }
     }
