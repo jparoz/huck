@@ -194,7 +194,7 @@ fn constructor_unary_argument() {
 }
 
 #[test]
-fn constructor_newtype() {
+fn constructor_newtype_int() {
     let scope = typ_module(
         r#"
             type Foo = Foo Int;
@@ -212,6 +212,33 @@ fn constructor_newtype() {
         TypeScheme {
             vars: TypeVarSet::empty(),
             typ: Type::Concrete("Foo".to_string()),
+        }
+    )
+}
+
+// @Todo @Fixme: this should pass!
+#[ignore]
+#[test]
+fn constructor_newtype_unwrap_int() {
+    let scope = typ_module(
+        r#"
+            type Foo = Foo Int;
+            toBeUnwrapped = Foo 123;
+            unwrap (Foo x) = x;
+            val = unwrap toBeUnwrapped;
+        "#,
+    );
+
+    let val = scope
+        .definitions
+        .get(&Name::Ident("val".to_string()))
+        .unwrap();
+
+    assert_eq!(
+        val.type_scheme,
+        TypeScheme {
+            vars: TypeVarSet::empty(),
+            typ: Type::Concrete("Int".to_string())
         }
     )
 }
