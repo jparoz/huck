@@ -216,8 +216,6 @@ fn constructor_newtype_int() {
     )
 }
 
-// @Todo @Fixme: this should pass!
-#[ignore]
 #[test]
 fn constructor_newtype_unwrap_int() {
     let scope = typ_module(
@@ -299,8 +297,6 @@ fn constructor_newtype_generic_var() {
     )
 }
 
-// @Todo @Fixme: this should pass!
-#[ignore]
 #[test]
 fn constructor_newtype_generic_unwrap_int() {
     let scope = typ_module(
@@ -309,6 +305,78 @@ fn constructor_newtype_generic_unwrap_int() {
             toBeUnwrapped = Foo 123;
             unwrap (Foo x) = x;
             val = unwrap toBeUnwrapped;
+        "#,
+    );
+
+    let val = scope
+        .definitions
+        .get(&Name::Ident("val".to_string()))
+        .unwrap();
+
+    assert_eq!(
+        val.type_scheme,
+        TypeScheme {
+            vars: TypeVarSet::empty(),
+            typ: Type::Concrete("Int".to_string())
+        }
+    )
+}
+
+#[test]
+fn function_apply_to_literal() {
+    let scope = typ_module(
+        r#"
+            foo 123 = 234;
+            val = foo 1;
+        "#,
+    );
+
+    let val = scope
+        .definitions
+        .get(&Name::Ident("val".to_string()))
+        .unwrap();
+
+    assert_eq!(
+        val.type_scheme,
+        TypeScheme {
+            vars: TypeVarSet::empty(),
+            typ: Type::Concrete("Int".to_string())
+        }
+    )
+}
+
+#[test]
+fn function_apply_to_variable() {
+    let scope = typ_module(
+        r#"
+            foo 123 = 234;
+            anInt = 3;
+            val = foo anInt;
+        "#,
+    );
+
+    let val = scope
+        .definitions
+        .get(&Name::Ident("val".to_string()))
+        .unwrap();
+
+    assert_eq!(
+        val.type_scheme,
+        TypeScheme {
+            vars: TypeVarSet::empty(),
+            typ: Type::Concrete("Int".to_string())
+        }
+    )
+}
+
+#[test]
+fn function_apply_to_variable_indirect() {
+    let scope = typ_module(
+        r#"
+            bar 123 = 234;
+            foo x = bar x;
+            anInt = 3;
+            val = foo anInt;
         "#,
     );
 

@@ -59,18 +59,19 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
         .map(|(n, t)| (n.clone(), t.clone()))
         .collect();
 
-    // For each name, constrain that all assumed types are instances of
-    // the definition's inferred type.
-    // If there is no inferred type for the name (i.e. it's not in scope),
-    // then it's a scope error.
+    // Polymorphically bind all top-level variables.
     //
     // @Todo @Cleanup: this should possibly/probably work on Scope or some ProtoScope,
     // rather than multiple if lets.
+    //
+    // @Todo @Cleanup: move this (and the `types` variable) into a method on ConstraintGenerator.
     for (name, assumed_types) in assumptions.into_iter() {
+        // If there is no inferred type for the name (i.e. it's not in scope),
+        // then it's a scope error.
         if let Some(t) = types.get(&name) {
-            cg.all_instances_of(assumed_types, t.0.generalize(&TypeVarSet::empty()));
+            cg.bind_name_poly(&name, &t.0); // @Checkme: poly or mono?
         } else if let Some(t) = constructors.get(&name) {
-            cg.all_instances_of(assumed_types, t.generalize(&TypeVarSet::empty()));
+            cg.bind_name_poly(&name, &t); // @Checkme: poly or mono?
         } else if is_lua_binop(name.as_str()) {
             // Do nothing. @XXX @Cleanup: don't do this
         } else {

@@ -266,14 +266,6 @@ impl<'file> ConstraintGenerator {
         beta
     }
 
-    /// Constrains that all types in the given Vec should be instances of
-    /// the same shared type scheme.
-    pub fn all_instances_of(&mut self, typs: Vec<Type>, ts: TypeScheme) {
-        for typ in typs {
-            self.constrain(Constraint::ExplicitInstance(typ, ts.clone()));
-        }
-    }
-
     /// Returns the type of the whole pattern item, as well as emitting constraints for sub-items.
     fn bind(&mut self, pat: &Pattern) -> Type {
         macro_rules! bind_function_args {
@@ -344,7 +336,8 @@ impl<'file> ConstraintGenerator {
         }
     }
 
-    fn bind_name_poly(&mut self, name: &Name, typ: &Type) {
+    // @XXX: not pub
+    pub fn bind_name_poly(&mut self, name: &Name, typ: &Type) {
         if let Some(assumptions) = self.assumptions.remove(name) {
             for assumed in assumptions {
                 self.constrain(Constraint::ImplicitInstance(
