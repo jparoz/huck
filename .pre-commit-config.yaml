@@ -1,0 +1,46 @@
+repos:
+  - repo: local
+    hooks:
+      - id: nocommit
+        name: Check for `nocommit` instances
+        description: Check if any committed files contain the string `nocommit`
+        entry: sh -c "! git grep --quiet --ignore-case nocommit -- :/src"
+        language: system
+        pass_filenames: false
+      - id: cargo-test
+        name: cargo test
+        description: Run cargo test on the committed code
+        entry: cargo test
+        language: system
+        pass_filenames: false
+
+
+
+##!/usr/bin/env bash
+
+## Stash changes so we test against the code to be committed
+#git stash push --keep-index --include-untracked
+
+#git grep --ignore-case --context 3 nocommit -- :/src
+#grep_nocommit_failed=$?
+
+#cargo test
+#test_succeeded=$?
+
+#git stash pop
+
+#if $grep_nocommit_failed
+#then
+#    echo 'Found an instance of "nocommit", stopping commit!'
+#    exit 1
+#fi
+
+#if [ $test_succeeded -eq 0 ]
+#then : # do nothing
+#else
+#    status=$?
+#    echo "Test suite had failures, stopping commit!"
+#    exit $status
+#fi
+
+#exit 0
