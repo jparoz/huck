@@ -146,7 +146,11 @@ impl<'file> ConstraintGenerator<'file> {
         &mut self,
         type_defn: &ast::TypeDefinition<'file>,
     ) -> TypeDefinition {
-        let ast::TypeDefinition(name, vars_s, constrs) = type_defn;
+        let ast::TypeDefinition {
+            name,
+            vars: vars_s,
+            constructors: constrs,
+        } = type_defn;
 
         // We'll build all these structures by iterating over the type arguments.
         let mut vars_map = BTreeMap::new();
@@ -249,14 +253,6 @@ impl<'file> ConstraintGenerator<'file> {
             .entry(name)
             .or_insert(Vec::with_capacity(1))
             .push(typ);
-    }
-
-    pub fn assumption_vars(&self) -> TypeVarSet {
-        self.assumptions
-            .values()
-            .flatten()
-            .flat_map(|t| t.free_vars().into_iter())
-            .collect()
     }
 
     pub fn constrain(&mut self, constraint: Constraint) {

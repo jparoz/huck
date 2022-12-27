@@ -1,37 +1,7 @@
+type MyBool = MyTrue | MyFalse;
+
+myNot : MyBool -> MyBool;
+myNot MyTrue = MyFalse;
+myNot MyFalse = MyTrue;
+
 (* type MyBool = MyTrue | MyFalse; *)
-
-(* myNot : MyBool -> MyBool; *)
-(* myNot MyTrue = MyFalse; *)
-(* myNot MyFalse = MyTrue; *)
-
-
-(* type Foo = Bar | Baz Int; *)
-
-(* usesFoo : Foo -> Int; *)
-(* usesFoo (Baz n) = n; *)
-(* usesFoo Bar = 123; *)
-
-
-type Maybe a = Just a | Nothing;
-
-(* fromMaybe : forall a. Maybe a -> a; *)
-fromMaybe (Just x) = x;
-
-(* isJust : Maybe Int; *)
-isJust = Just 123;
-
-(* myJust = Just; *)
-
-(* usesFromMaybeInt : Int; *)
-usesFromMaybeInt = fromMaybe (Just 123);
-
-(* usesFromMaybeFloat : Float; *)
-usesFromMaybeFloat = fromMaybe (Just 1.23);
-
-(* fromIsJust : Int; *)
-fromIsJust = fromMaybe isJust;
-
-
-(* foo : Maybe Int -> Int; *)
-(* foo (Just x) = x + 123; *)
-(* foo Nothing = 124; *)

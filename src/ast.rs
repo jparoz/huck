@@ -54,7 +54,7 @@ impl<'file> Definition<'file> {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Module<'file> {
     pub definitions: BTreeMap<Name, Definition<'file>>,
-    pub type_definitions: Vec<TypeDefinition<'file>>,
+    pub type_definitions: BTreeMap<Name, TypeDefinition<'file>>,
 }
 
 /// A Statement is a sum type for any of the top-level Huck constructs.
@@ -456,15 +456,13 @@ pub enum TypeTerm<'file> {
     Unit,
 }
 
-/// Name of the type,
-/// Vec of the introduced type variable names,
-/// Vec of the constructors and arguments.
+/// Parsed representation of a new type definition (e.g. `type Foo = Bar;`).
 #[derive(Debug, PartialEq, Eq)]
-pub struct TypeDefinition<'file>(
-    pub Name,
-    pub Vec<&'file str>,
-    pub Vec<ConstructorDefinition<'file>>,
-);
+pub struct TypeDefinition<'file> {
+    pub name: Name,
+    pub vars: Vec<&'file str>,
+    pub constructors: Vec<ConstructorDefinition<'file>>,
+}
 
 pub type ConstructorDefinition<'file> = (Name, Vec<TypeTerm<'file>>);
 

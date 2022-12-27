@@ -29,12 +29,13 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
         let typ = cg.generate_definition(&defn);
         log::trace!("Initial inferred type for {}: {}", name, typ);
 
-        // @Checkme: redefinitions? Should probably at least assert that it .is_none()
-        cg.types.insert(name, (typ, defn));
+        // @Note: guaranteed to be None,
+        // because we're iterating over a BTreeMap.
+        debug_assert!(cg.types.insert(name, (typ, defn)).is_none());
     }
 
     // Generate constraints for each type definition
-    for ast_type_defn in module.type_definitions {
+    for (_name, ast_type_defn) in module.type_definitions {
         let type_defn = cg.convert_ast_type_definition(&ast_type_defn);
 
         for (constr_name, constr_type) in type_defn.constructors.clone() {
@@ -42,43 +43,30 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
                 .insert(constr_name.clone(), constr_type.clone());
         }
 
-        // @Todo @Checkme: redefinitions? Should probably at least assert that it .is_none()
-        // Seems like this will need to be the place to prevent
-        // multiple type definitions with the same name,
-        // or at least it's the most obvious place to check it for now.
-        type_definitions.insert(type_defn.name.clone(), type_defn);
+        // @Note: guaranteed to be None,
+        // because we're iterating over a BTreeMap.
+        debug_assert!(type_definitions
+            .insert(type_defn.name.clone(), type_defn)
+            .is_none());
     }
 
     // Polymorphically bind all top-level variables.
     cg.bind_all_top_level();
+    debug_assert!(cg.assumptions.is_empty());
 
     // Solve the type constraints
     let soln = cg.solve()?;
 
-    // @Cleanup: This should all be done in a more proper way
-    // Apply the solution to the assumption set
-    for typ in cg.assumptions.values_mut().flatten() {
-        typ.apply(&soln);
-    }
-
-    log::trace!("After applying solution: {}", cg);
+    log::trace!("ConstraintGenerator after solving type constraints: {}", cg);
 
     let mut scope = Scope::default();
 
     // Insert definitions into the Scope.
-    let assumption_vars = cg.assumption_vars();
+    let empty = TypeVarSet::empty();
     for (name, (mut typ, definition)) in cg.types.into_iter() {
         typ.apply(&soln);
 
-        // @Checkme: commented the following in favour of the uncommented line below.
-        // Not 100% sure which is correct;
-        // but the uncommented line seems to have the right type.
-        // Question: is generalize doing the right thing????
-        // This needs more investigation,
-        // probably need to reread the paper
-        // to gain clarity on assumptions.
-        let type_scheme = typ.generalize(&assumption_vars);
-        // let type_scheme = typ.generalize(&TypeVarSet::empty());
+        let type_scheme = typ.generalize(&empty);
         log::info!("Inferred type for {} : {}", name, type_scheme);
         let defn = TypedDefinition {
             type_scheme,
@@ -92,10 +80,6 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
 
     // Insert constructors into the Scope.
     scope.constructors = cg.constructors.keys().cloned().collect();
-
-    // @Todo (maybe): properly check that there are no free type variables
-    // in a top-level definition
-    // debug_assert!(typ.free_vars().is_empty());
 
     Ok(scope)
 }

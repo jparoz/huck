@@ -27,7 +27,7 @@ pub fn parse(input: &str) -> Result<Module, Error> {
             }
 
             let mut definitions: BTreeMap<Name, Definition> = BTreeMap::new();
-            let mut type_definitions = Vec::new();
+            let mut type_definitions = BTreeMap::new();
             let mut precs = default_precs();
 
             // Collect all the statements together into Definitions
@@ -86,7 +86,13 @@ pub fn parse(input: &str) -> Result<Module, Error> {
                         }
                     }
 
-                    Statement::TypeDefinition(type_decl) => type_definitions.push(type_decl),
+                    Statement::TypeDefinition(type_defn) => {
+                        if let Some(first_defn) =
+                            type_definitions.insert(type_defn.name.clone(), type_defn)
+                        {
+                            return Err(Error::MultipleTypeDefinitions(first_defn.name));
+                        }
+                    }
                 }
             }
 
@@ -121,8 +127,12 @@ fn statement(input: &str) -> IResult<&str, Statement> {
                 separated_list1(ws(tag("|")), constructor_definition),
                 semi,
             )),
-            |(_, (name, vars), _, constr_defn, _)| {
-                Statement::TypeDefinition(TypeDefinition(name, vars, constr_defn))
+            |(_, (name, vars), _, constructors, _)| {
+                Statement::TypeDefinition(TypeDefinition {
+                    name,
+                    vars,
+                    constructors,
+                })
             },
         ),
         map(prec, |(name, prec)| Statement::Precedence(name, prec)),
@@ -528,4 +538,8 @@ pub enum Error {
     // @Todo: this shouldn't use Debug printing, but should print the source.
     #[error("Multiple explicit type annotations found for `{0}`:{1}")]
     MultipleTypes(Name, String),
+
+    // @Todo: this should print the source locations of the two definitions
+    #[error("Multiple type definitions with the same name ({0})")]
+    MultipleTypeDefinitions(Name),
 }
