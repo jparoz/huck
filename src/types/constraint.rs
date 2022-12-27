@@ -1,10 +1,11 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::fmt::{self, Display};
-use std::iter;
+use std::{iter, mem};
 
 use log::log_enabled;
 
 use crate::ast::{self, Definition, Expr, Lhs, Name, Numeral, Pattern, Term};
+use crate::codegen::lua::is_lua_binop;
 use crate::types::{
     self, ApplySub, Substitution, Type, TypeDefinition, TypeScheme, TypeVar, TypeVarSet,
 };
@@ -84,21 +85,31 @@ impl<'file> Display for Constraint {
 }
 
 #[derive(Debug)]
-pub struct ConstraintGenerator {
+pub struct ConstraintGenerator<'file> {
     constraints: Vec<Constraint>,
 
     // @Cleanup: shouldn't be pub
     pub assumptions: BTreeMap<Name, Vec<Type>>,
 
+    /// Record of types inferred.
+    // @Cleanup: manage this internally instead of in typecheck (??)
+    pub types: BTreeMap<Name, (Type, Definition<'file>)>,
+
+    /// Record of constructors defined.
+    // @Cleanup: manage this internally instead of in typecheck (??)
+    pub constructors: BTreeMap<Name, Type>,
+
     next_typevar_id: usize,
     m_stack: Vec<TypeVar>,
 }
 
-impl<'file> ConstraintGenerator {
+impl<'file> ConstraintGenerator<'file> {
     pub fn new() -> Self {
         ConstraintGenerator {
             constraints: Vec::new(),
             assumptions: BTreeMap::new(),
+            types: BTreeMap::new(),
+            constructors: BTreeMap::new(),
             next_typevar_id: 0,
             m_stack: Vec::new(),
         }
@@ -114,7 +125,7 @@ impl<'file> ConstraintGenerator {
         Type::Var(self.fresh_var())
     }
 
-    pub fn convert_ast_type_scheme(&mut self, input: &ast::TypeScheme<'file>) -> TypeScheme {
+    pub fn convert_ast_type_scheme(&mut self, input: &ast::TypeScheme) -> TypeScheme {
         let mut vars_map = BTreeMap::new();
         let vars: TypeVarSet = input
             .vars
@@ -181,7 +192,7 @@ impl<'file> ConstraintGenerator {
 
     pub fn convert_ast_type_expr(
         &mut self,
-        input: &ast::TypeExpr<'file>,
+        input: &ast::TypeExpr,
         vars_map: &BTreeMap<&str, TypeVar>,
     ) -> Type {
         match input {
@@ -199,7 +210,7 @@ impl<'file> ConstraintGenerator {
 
     pub fn convert_ast_type_term(
         &mut self,
-        input: &ast::TypeTerm<'file>,
+        input: &ast::TypeTerm,
         vars_map: &BTreeMap<&str, TypeVar>,
     ) -> Type {
         match input {
@@ -336,8 +347,7 @@ impl<'file> ConstraintGenerator {
         }
     }
 
-    // @XXX: not pub
-    pub fn bind_name_poly(&mut self, name: &Name, typ: &Type) {
+    fn bind_name_poly(&mut self, name: &Name, typ: &Type) {
         if let Some(assumptions) = self.assumptions.remove(name) {
             for assumed in assumptions {
                 self.constrain(Constraint::ImplicitInstance(
@@ -351,6 +361,45 @@ impl<'file> ConstraintGenerator {
                     typ,
                     self.m_stack.iter().cloned().collect::<TypeVarSet>()
                 );
+            }
+        }
+    }
+
+    pub fn bind_all_top_level(&mut self) {
+        log::trace!("Emitting constraints about assumptions:");
+
+        let mut assumptions = BTreeMap::new();
+        mem::swap(&mut assumptions, &mut self.assumptions);
+
+        // @Todo @Cleanup: this should possibly/probably work on Scope or some ProtoScope,
+        // rather than multiple if lets.
+        for (name, assumed_types) in assumptions {
+            if let Some((typ, _defn)) = self.types.get(&name) {
+                // self.bind_name_poly(&name, &t.0); // @Checkme: poly or mono?
+                for assumed_type in assumed_types {
+                    self.constraints.push(Constraint::ImplicitInstance(
+                        assumed_type,
+                        typ.clone(),
+                        self.m_stack.iter().cloned().collect(),
+                    ));
+                }
+            } else if let Some(typ) = self.constructors.get(&name) {
+                // self.bind_name_poly(&name, &t); // @Checkme: poly or mono?
+                for assumed_type in assumed_types {
+                    self.constraints.push(Constraint::ImplicitInstance(
+                        assumed_type,
+                        typ.clone(),
+                        self.m_stack.iter().cloned().collect(),
+                    ));
+                }
+            } else if is_lua_binop(name.as_str()) {
+                // Do nothing. @XXX @Cleanup: don't do this
+                // @Todo: Prelude
+            } else {
+                // If there is no inferred type for the name (i.e. it's not in scope),
+                // then it's a scope error.
+                // @Todo: Scope error
+                todo!("scope error: {name}");
             }
         }
     }
@@ -601,7 +650,7 @@ impl<'file> GenerateConstraints<'file> for Expr<'file> {
     }
 }
 
-impl<'file> Display for ConstraintGenerator {
+impl<'file> Display for ConstraintGenerator<'file> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Constraints:")?;
         for constraint in self.constraints.iter() {

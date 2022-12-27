@@ -3,7 +3,6 @@ use std::fmt::{self, Display};
 use std::mem;
 
 use crate::ast;
-use crate::codegen::lua::is_lua_binop;
 use crate::scope::{Scope, TypedDefinition};
 
 // @Cleanup: do these all need to be pub?
@@ -23,9 +22,7 @@ use substitution::{ApplySub, Substitution};
 pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
     let mut cg = ConstraintGenerator::new();
 
-    let mut types = BTreeMap::new();
     let mut type_definitions = BTreeMap::new();
-    let mut constructors = BTreeMap::new();
 
     // Generate constraints for each definition, while keeping track of inferred types
     for (name, defn) in module.definitions {
@@ -33,7 +30,7 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
         log::trace!("Initial inferred type for {}: {}", name, typ);
 
         // @Checkme: redefinitions? Should probably at least assert that it .is_none()
-        types.insert(name, (typ, defn));
+        cg.types.insert(name, (typ, defn));
     }
 
     // Generate constraints for each type definition
@@ -41,7 +38,8 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
         let type_defn = cg.convert_ast_type_definition(&ast_type_defn);
 
         for (constr_name, constr_type) in type_defn.constructors.clone() {
-            constructors.insert(constr_name.clone(), constr_type.clone());
+            cg.constructors
+                .insert(constr_name.clone(), constr_type.clone());
         }
 
         // @Todo @Checkme: redefinitions? Should probably at least assert that it .is_none()
@@ -51,34 +49,8 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
         type_definitions.insert(type_defn.name.clone(), type_defn);
     }
 
-    // Add constraints to unify each assumption about the same name
-    log::trace!("Emitting constraints about assumptions:");
-    let assumptions: Vec<(ast::Name, Vec<Type>)> = cg
-        .assumptions
-        .iter()
-        .map(|(n, t)| (n.clone(), t.clone()))
-        .collect();
-
     // Polymorphically bind all top-level variables.
-    //
-    // @Todo @Cleanup: this should possibly/probably work on Scope or some ProtoScope,
-    // rather than multiple if lets.
-    //
-    // @Todo @Cleanup: move this (and the `types` variable) into a method on ConstraintGenerator.
-    for (name, assumed_types) in assumptions.into_iter() {
-        // If there is no inferred type for the name (i.e. it's not in scope),
-        // then it's a scope error.
-        if let Some(t) = types.get(&name) {
-            cg.bind_name_poly(&name, &t.0); // @Checkme: poly or mono?
-        } else if let Some(t) = constructors.get(&name) {
-            cg.bind_name_poly(&name, &t); // @Checkme: poly or mono?
-        } else if is_lua_binop(name.as_str()) {
-            // Do nothing. @XXX @Cleanup: don't do this
-        } else {
-            // @Todo: Scope error
-            todo!("scope error: {name}");
-        }
-    }
+    cg.bind_all_top_level();
 
     // Solve the type constraints
     let soln = cg.solve()?;
@@ -95,7 +67,7 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
 
     // Insert definitions into the Scope.
     let assumption_vars = cg.assumption_vars();
-    for (name, (mut typ, definition)) in types.into_iter() {
+    for (name, (mut typ, definition)) in cg.types.into_iter() {
         typ.apply(&soln);
 
         // @Checkme: commented the following in favour of the uncommented line below.
@@ -119,7 +91,7 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
     scope.type_definitions = type_definitions;
 
     // Insert constructors into the Scope.
-    scope.constructors = constructors.keys().cloned().collect();
+    scope.constructors = cg.constructors.keys().cloned().collect();
 
     // @Todo (maybe): properly check that there are no free type variables
     // in a top-level definition
