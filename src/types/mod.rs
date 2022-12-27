@@ -14,7 +14,7 @@ pub use error::Error;
 #[cfg(test)]
 mod test;
 
-use constraint::{ConstraintGenerator, GenerateConstraints};
+use constraint::ConstraintGenerator;
 use error::Error as TypeError;
 use substitution::{ApplySub, Substitution};
 
@@ -26,7 +26,7 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
 
     // Generate constraints for each definition, while keeping track of inferred types
     for (name, defn) in module.definitions {
-        let typ = defn.generate(&mut cg);
+        let typ = cg.generate_definition(&defn);
         log::trace!("Initial inferred type for {}: {}", name, typ);
 
         // @Checkme: redefinitions? Should probably at least assert that it .is_none()

@@ -479,32 +479,32 @@ impl<'file> ConstraintGenerator<'file> {
 
         Ok(sub)
     }
-}
 
-pub trait GenerateConstraints<'file> {
-    fn generate(&self, cg: &mut ConstraintGenerator) -> Type;
-}
+    // Generation methods
 
-impl<'file> GenerateConstraints<'file> for Definition<'file> {
-    fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
+    pub fn generate_definition(&mut self, definition: &Definition<'file>) -> Type {
         // Typecheck each assignment in the definition.
-        let mut typs: Vec<Type> = self
+        let mut typs: Vec<Type> = definition
             .assignments
             .iter()
-            .map(|assign| assign.generate(cg))
+            .map(|assign| assign.generate(self))
             .collect();
 
         // If there's an explicit type, include that as well.
-        if let Some(ref explicit_type_scheme) = self.explicit_type {
-            let ts = cg.convert_ast_type_scheme(explicit_type_scheme);
-            typs.push(cg.instantiate(ts));
+        if let Some(ref explicit_type_scheme) = definition.explicit_type {
+            let ts = self.convert_ast_type_scheme(explicit_type_scheme);
+            typs.push(self.instantiate(ts));
         }
 
         // Constrain that each inferred assignment,
         // and the explicit type,
         // should all be equal.
-        cg.equate_all(typs)
+        self.equate_all(typs)
     }
+}
+
+pub trait GenerateConstraints<'file> {
+    fn generate(&self, cg: &mut ConstraintGenerator) -> Type;
 }
 
 impl<'file> GenerateConstraints<'file> for Vec<(Lhs<'file>, Expr<'file>)> {

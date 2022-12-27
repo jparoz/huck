@@ -2,19 +2,18 @@ use crate::scope::Scope;
 use crate::{ast::Name, parse::parse};
 
 use super::{
-    constraint::{ConstraintGenerator, GenerateConstraints},
-    substitution::ApplySub,
-    typecheck, Type, TypeScheme, TypeVar, TypeVarSet,
+    constraint::ConstraintGenerator, substitution::ApplySub, typecheck, Type, TypeScheme, TypeVar,
+    TypeVarSet,
 };
 
 fn typ(s: &str) -> Type {
     let parsed = parse(s).unwrap();
 
     assert!(parsed.definitions.len() == 1);
-    let (_name, defns) = parsed.definitions.into_iter().next().unwrap();
+    let (_name, defn) = parsed.definitions.into_iter().next().unwrap();
 
     let mut cg = ConstraintGenerator::new();
-    let mut typ = defns.generate(&mut cg);
+    let mut typ = cg.generate_definition(&defn);
 
     let soln = cg.solve().unwrap();
     typ.apply(&soln);
