@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 
 use crate::ast::{Definition, Expr, Lhs, Name, Pattern, Term};
 
-// @Note @Cleanup: These defaults should one day be replaced with source code.
 // @Prelude
 pub fn default_precs() -> BTreeMap<Name, Precedence> {
     BTreeMap::from([
