@@ -84,7 +84,7 @@ fn literal_list_int() {
 fn function_id() {
     assert_eq!(
         typ(r#"id a = a;"#),
-        Type::Func(
+        Type::Arrow(
             Box::new(Type::Var(TypeVar(1))),
             Box::new(Type::Var(TypeVar(1)))
         )
@@ -95,9 +95,9 @@ fn function_id() {
 fn function_const() {
     assert_eq!(
         typ(r#"const a b = a;"#),
-        Type::Func(
+        Type::Arrow(
             Box::new(Type::Var(TypeVar(2))),
-            Box::new(Type::Func(
+            Box::new(Type::Arrow(
                 Box::new(Type::Var(TypeVar(1))),
                 Box::new(Type::Var(TypeVar(2)))
             ))
@@ -111,7 +111,7 @@ fn function_const() {
 fn function_add() {
     assert_eq!(
         typ(r#"f x = x + 5;"#),
-        Type::Func(
+        Type::Arrow(
             Box::new(Type::Concrete("Int".to_string())),
             Box::new(Type::Concrete("Int".to_string()))
         )
@@ -158,7 +158,7 @@ fn constructor_unary_returned() {
         val.type_scheme,
         TypeScheme {
             vars: TypeVarSet::single(TypeVar(1)),
-            typ: Type::Func(
+            typ: Type::Arrow(
                 Box::new(Type::Var(TypeVar(1))),
                 Box::new(Type::Concrete("Foo".to_string())),
             ),
@@ -184,7 +184,7 @@ fn constructor_unary_argument() {
         val.type_scheme,
         TypeScheme {
             vars: TypeVarSet::empty(),
-            typ: Type::Func(
+            typ: Type::Arrow(
                 Box::new(Type::Concrete("Foo".to_string())),
                 Box::new(Type::Concrete("Int".to_string())),
             ),
@@ -285,7 +285,7 @@ fn constructor_newtype_generic_var() {
         val.type_scheme,
         TypeScheme {
             vars: TypeVarSet::single(var),
-            typ: Type::Func(
+            typ: Type::Arrow(
                 Box::new(Type::Var(var)),
                 Box::new(Type::App(
                     Box::new(Type::Concrete("Foo".to_string())),

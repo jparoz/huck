@@ -537,7 +537,7 @@ impl<'a> CodeGenerator<'a> {
         let mut lua = String::new();
 
         // Start the functions
-        while let Type::Func(_a, b) = constr_type {
+        while let Type::Arrow(_a, b) = constr_type {
             let id = self.unique();
             ids.push(id);
 

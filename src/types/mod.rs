@@ -86,13 +86,17 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
 
 #[derive(PartialEq, Eq, Clone, Hash, Debug)]
 pub enum Type {
-    Concrete(String),
     Var(TypeVar),
-    Func(Box<Type>, Box<Type>),
+    Concrete(String),
     List(Box<Type>),
     Tuple(Vec<Type>),
+
+    /// The function type
+    Arrow(Box<Type>, Box<Type>),
+
+    /// Type application (e.g. `Foo a`)
     App(Box<Type>, Box<Type>),
-    // @Todo: type binops (maybe as type constructors)
+    // @Todo: type binops (maybe as type application)
 }
 
 impl Type {
@@ -102,7 +106,7 @@ impl Type {
             Type::Concrete(_) => TypeVarSet::empty(),
 
             Type::Var(var) => TypeVarSet::single(*var),
-            Type::Func(a, b) | Type::App(a, b) => a.free_vars().union(&b.free_vars()),
+            Type::Arrow(a, b) | Type::App(a, b) => a.free_vars().union(&b.free_vars()),
             Type::List(t) => t.free_vars(),
             Type::Tuple(v) => v
                 .iter()
@@ -146,7 +150,7 @@ impl Type {
                         pairs.push((t1, t2));
                     }
                 }
-                (Type::Func(a1, b1), Type::Func(a2, b2))
+                (Type::Arrow(a1, b1), Type::Arrow(a2, b2))
                 | (Type::App(a1, b1), Type::App(a2, b2)) => {
                     pairs.push((*a1, *a2));
                     pairs.push((*b1, *b2));
@@ -167,7 +171,7 @@ impl ApplySub for Type {
                     *self = replacement.clone();
                 }
             }
-            Type::Func(a, b) | Type::App(a, b) => {
+            Type::Arrow(a, b) | Type::App(a, b) => {
                 a.apply(sub);
                 b.apply(sub);
             }
@@ -189,7 +193,7 @@ impl Display for Type {
             Type::Concrete(s) => write!(f, "{}", s),
 
             // @Todo: be smarter about when to include brackets
-            Type::Func(a, b) => write!(f, "({} -> {})", a, b),
+            Type::Arrow(a, b) => write!(f, "({} -> {})", a, b),
 
             Type::App(a, b) => write!(f, "{} {}", a, b),
 

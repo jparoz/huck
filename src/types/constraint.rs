@@ -177,7 +177,9 @@ impl<'file> ConstraintGenerator<'file> {
                 .into_iter()
                 .rev()
                 .map(|term| self.convert_ast_type_term(term, &vars_map))
-                .fold(typ.clone(), |res, a| Type::Func(Box::new(a), Box::new(res)));
+                .fold(typ.clone(), |res, a| {
+                    Type::Arrow(Box::new(a), Box::new(res))
+                });
 
             // @Checkme: poly or mono?
             self.bind_name_poly(constr_name, &constr_type);
@@ -205,7 +207,7 @@ impl<'file> ConstraintGenerator<'file> {
                 Box::new(self.convert_ast_type_expr(f, vars_map)),
                 Box::new(self.convert_ast_type_expr(x, vars_map)),
             ),
-            ast::TypeExpr::Arrow(a, b) => Type::Func(
+            ast::TypeExpr::Arrow(a, b) => Type::Arrow(
                 Box::new(self.convert_ast_type_expr(a, vars_map)),
                 Box::new(self.convert_ast_type_expr(b, vars_map)),
             ),
@@ -281,7 +283,7 @@ impl<'file> ConstraintGenerator<'file> {
                     let arg_type = self.bind(arg);
                     let partial_res_type = self.fresh();
                     let partial_cons_type =
-                        Type::Func(Box::new(arg_type), Box::new(partial_res_type.clone()));
+                        Type::Arrow(Box::new(arg_type), Box::new(partial_res_type.clone()));
 
                     self.constrain(Constraint::Equality(acc, partial_cons_type));
 
@@ -511,7 +513,7 @@ impl<'file> GenerateConstraints<'file> for Assignment<'file> {
             ($iter:expr) => {
                 $iter.fold(expr.generate(cg), |acc, arg| {
                     let beta = cg.bind(arg);
-                    Type::Func(Box::new(beta), Box::new(acc))
+                    Type::Arrow(Box::new(beta), Box::new(acc))
                 })
             };
         }
@@ -559,7 +561,7 @@ impl<'file> GenerateConstraints<'file> for Expr<'file> {
 
                 cg.constrain(Constraint::Equality(
                     t1,
-                    Type::Func(Box::new(t2), Box::new(beta.clone())),
+                    Type::Arrow(Box::new(t2), Box::new(beta.clone())),
                 ));
 
                 beta
@@ -574,11 +576,11 @@ impl<'file> GenerateConstraints<'file> for Expr<'file> {
 
                 cg.constrain(Constraint::Equality(
                     t1,
-                    Type::Func(Box::new(t2), Box::new(beta1.clone())),
+                    Type::Arrow(Box::new(t2), Box::new(beta1.clone())),
                 ));
                 cg.constrain(Constraint::Equality(
                     beta1,
-                    Type::Func(Box::new(t3), Box::new(beta2.clone())),
+                    Type::Arrow(Box::new(t3), Box::new(beta2.clone())),
                 ));
 
                 beta2
@@ -620,7 +622,7 @@ impl<'file> GenerateConstraints<'file> for Expr<'file> {
                 cg.m_stack.extend(typevars);
 
                 let res = types.iter().rev().fold(rhs.generate(cg), |acc, beta| {
-                    Type::Func(Box::new(beta.clone()), Box::new(acc))
+                    Type::Arrow(Box::new(beta.clone()), Box::new(acc))
                 });
 
                 let total_len = cg.m_stack.len();
