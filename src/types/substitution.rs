@@ -1,9 +1,8 @@
 use std::collections::BTreeMap;
-use std::fmt::{self, Display};
+use std::fmt::{self, Debug};
 
 use super::{Type, TypeVar};
 
-#[derive(Debug)]
 pub struct Substitution(BTreeMap<TypeVar, Type>);
 
 impl Substitution {
@@ -43,7 +42,7 @@ impl Substitution {
     }
 }
 
-impl Display for Substitution {
+impl Debug for Substitution {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Substitution:")?;
         for (fr, to) in self.iter() {

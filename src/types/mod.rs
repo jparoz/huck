@@ -57,7 +57,10 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
     // Solve the type constraints
     let soln = cg.solve()?;
 
-    log::trace!("ConstraintGenerator after solving type constraints: {}", cg);
+    log::trace!(
+        "ConstraintGenerator after solving type constraints: {:?}",
+        cg
+    );
 
     let mut scope = Scope::default();
 

@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, VecDeque};
-use std::fmt::{self, Display};
+use std::fmt::{self, Debug};
 use std::{iter, mem};
 
 use log::log_enabled;
@@ -14,7 +14,7 @@ pub trait ActiveVars {
     fn active_vars(&self) -> TypeVarSet;
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone)]
 pub enum Constraint {
     Equality(Type, Type),
     ImplicitInstance(Type, Type, TypeVarSet),
@@ -70,7 +70,7 @@ impl ActiveVars for (&[Constraint], &[Constraint]) {
     }
 }
 
-impl<'file> Display for Constraint {
+impl<'file> Debug for Constraint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Constraint::Equality(a, b) => write!(f, "{} ≡ {}", a, b),
@@ -84,7 +84,6 @@ impl<'file> Display for Constraint {
     }
 }
 
-#[derive(Debug)]
 pub struct ConstraintGenerator<'file> {
     constraints: Vec<Constraint>,
 
@@ -134,7 +133,7 @@ impl<'file> ConstraintGenerator<'file> {
     }
 
     pub fn constrain(&mut self, constraint: Constraint) {
-        log::trace!("Emitting constraint: {}", constraint);
+        log::trace!("Emitting constraint: {:?}", constraint);
         self.constraints.push(constraint);
     }
 
@@ -296,7 +295,7 @@ impl<'file> ConstraintGenerator<'file> {
 
         while let Some(c) = constraints.pop_front() {
             log::trace!("-");
-            log::trace!("Looking at: {}", c);
+            log::trace!("Looking at: {:?}", c);
             match c {
                 Constraint::Equality(t1, t2) => {
                     let s = t1.unify(t2)?;
@@ -310,7 +309,7 @@ impl<'file> ConstraintGenerator<'file> {
 
                 Constraint::ExplicitInstance(t, ts) => {
                     let cons = Constraint::Equality(t, self.instantiate(ts));
-                    log::trace!("Replacing with new constraint: {}", cons);
+                    log::trace!("Replacing with new constraint: {:?}", cons);
                     constraints.push_back(cons)
                 }
 
@@ -322,7 +321,7 @@ impl<'file> ConstraintGenerator<'file> {
                         .is_empty() =>
                 {
                     let cons = Constraint::ExplicitInstance(t1, t2.generalize(&m));
-                    log::trace!("Replacing with new constraint: {}", cons);
+                    log::trace!("Replacing with new constraint: {:?}", cons);
                     constraints.push_back(cons)
                 }
 
@@ -337,19 +336,19 @@ impl<'file> ConstraintGenerator<'file> {
             if log_enabled!(log::Level::Trace) {
                 log::trace!("Substitution:");
                 for (fr, to) in sub.iter() {
-                    log::trace!("    {} ↦ {}", fr, to);
+                    log::trace!("    {:?} ↦ {:?}", fr, to);
                 }
 
                 log::trace!("Constraints:");
                 for c in constraints.iter() {
-                    log::trace!("    {}", c);
+                    log::trace!("    {:?}", c);
                 }
             }
         }
 
         log::trace!("-");
         log::trace!("FINISH SOLVING");
-        log::trace!("{}", self);
+        log::trace!("{:?}", self);
 
         Ok(sub)
     }
@@ -638,11 +637,11 @@ impl<'file> ConstraintGenerator<'file> {
     }
 }
 
-impl<'file> Display for ConstraintGenerator<'file> {
+impl<'file> Debug for ConstraintGenerator<'file> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Constraints:")?;
         for constraint in self.constraints.iter() {
-            writeln!(f, "    {}", constraint)?;
+            writeln!(f, "    {:?}", constraint)?;
         }
 
         if self.assumptions.len() > 0 {
