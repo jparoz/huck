@@ -261,6 +261,7 @@ impl<'file> ConstraintGenerator<'file> {
     }
 
     /// Constrains all types in the given Vec to be equal, and returns that type.
+    // @Todo: take an impl Iterator
     pub fn equate_all(&mut self, typs: Vec<Type>) -> Type {
         if typs.len() == 1 {
             return typs[0].clone();
@@ -503,19 +504,6 @@ pub trait GenerateConstraints<'file> {
     fn generate(&self, cg: &mut ConstraintGenerator) -> Type;
 }
 
-impl<'file> GenerateConstraints<'file> for Vec<(Lhs<'file>, Expr<'file>)> {
-    fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
-        let beta = cg.fresh();
-
-        let typs: Vec<Type> = self.iter().map(|assign| assign.generate(cg)).collect();
-        for typ in typs {
-            cg.constrain(Constraint::Equality(beta.clone(), typ));
-        }
-
-        beta
-    }
-}
-
 impl<'file> GenerateConstraints<'file> for (Lhs<'file>, Expr<'file>) {
     fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
         let (lhs, expr) = self;
@@ -604,7 +592,11 @@ impl<'file> GenerateConstraints<'file> for Expr<'file> {
                 let beta = in_expr.generate(cg);
 
                 for (name, assignments) in definitions {
-                    let typ = assignments.generate(cg);
+                    let typs = assignments
+                        .iter()
+                        .map(|assign| assign.generate(cg))
+                        .collect();
+                    let typ = cg.equate_all(typs);
                     cg.bind_name_poly(&name, &typ);
                 }
 
