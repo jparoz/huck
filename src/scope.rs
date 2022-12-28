@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::ast::{Definition, Name};
 use crate::types::{TypeDefinition, TypeScheme};
 
-// @Todo @Cleanup: rename this, or sort out something better and less confusing
+// @Cleanup: rename this, or refactor this into something less confusing
 #[derive(Debug, Clone)]
 pub struct TypedDefinition<'file> {
     pub type_scheme: TypeScheme,

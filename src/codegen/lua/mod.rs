@@ -107,7 +107,7 @@ impl<'a> CodeGenerator<'a> {
                     .definition
                     .dependencies()
                     .iter()
-                    // @Todo @Fixme: this should check the scope as well,
+                    // @Fixme: this should check the scope as well,
                     // for e.g. imported functions,
                     // rather than just checking if it's a builtin Lua binop.
                     .all(|n| self.generated.contains(n) || is_lua_binop(n.as_str()));
@@ -137,7 +137,7 @@ impl<'a> CodeGenerator<'a> {
                     next_pass
                         .iter()
                         .map(|t| {
-                            // @Todo @Fixme: filter out entries which depend on the cycle,
+                            // @Fixme @Errors: filter out entries which depend on the cycle,
                             // but are not part of the cycle themselves.
                             t.0.clone()
                         })
@@ -403,8 +403,8 @@ impl<'a> CodeGenerator<'a> {
         }
 
         // Emit a runtime error in case no pattern matches
-        // @Todo @Warn: emit a compile time warning as well
-        // @Todo: do some exhaustiveness checking before emitting these warnings/errors
+        // @Warn: emit a compile time warning as well
+        // @Exhaustiveness: do some exhaustiveness checking before emitting these warnings/errors
         if has_any_conditions && !has_unconditional_branch {
             writeln!(
                 lua,
@@ -440,7 +440,8 @@ impl<'a> CodeGenerator<'a> {
             // @Note: the Lua logic is identical for Huck lists and tuples.
             // This is because they have the same representation in Lua: a heterogenous list!
             ast::Pattern::List(list) | ast::Pattern::Tuple(list) => {
-                // @Todo @Fixme: for tuples, this should give a runtime error saying something like
+                // @Fixme @Errors: for tuples,
+                // this should give a runtime error saying something like
                 // "tuple of incorrect length",
                 // instead of just failing to pattern match.
                 //
@@ -530,7 +531,7 @@ impl<'a> CodeGenerator<'a> {
 
     /// Generates code for a constructor.
     fn constructor(&mut self, name: &ast::Name, mut constr_type: &Type) -> Result<String> {
-        // @Todo: maybe we should do some runtime type checking in Lua?
+        // @Errors: maybe we should do some runtime type checking in Lua?
 
         let mut ids = Vec::new();
 
@@ -547,7 +548,7 @@ impl<'a> CodeGenerator<'a> {
             constr_type = &b;
         }
 
-        // @Todo: assert that we have the terminal type left?
+        // @Errors: assert that we have the terminal type left?
 
         let tupled_args = ids
             .iter()
@@ -590,8 +591,8 @@ impl<'a> CodeGenerator<'a> {
 
 // @Cleanup: not pub
 pub fn is_lua_binop(op: &str) -> bool {
-    // @Todo: maybe we want these ops to have different names in Huck to in Lua.
-    // For now, just pass them through.
+    // @Prelude: we will want these ops to have different names in Huck to in Lua,
+    // but for now, just pass them through.
     match op {
         "+" | "-" | "*" | "/" | "//" | "^" | "%" | "&" | "~" | "|" | ">>" | "<<" | ".." | "<"
         | "<=" | ">" | ">=" | "==" | "~=" | "and" | "or" => true,

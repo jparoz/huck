@@ -99,13 +99,12 @@ pub enum Type {
 
     /// Type application (e.g. `Foo a`)
     App(Box<Type>, Box<Type>),
-    // @Todo: type binops (maybe as type application)
+    // @Future @TypeBinops (maybe as type application)
 }
 
 impl Type {
     pub fn free_vars(&self) -> TypeVarSet {
         match self {
-            // @Checkme: type constructors
             Type::Concrete(_) => TypeVarSet::empty(),
 
             Type::Var(var) => TypeVarSet::single(*var),
@@ -183,7 +182,6 @@ impl ApplySub for Type {
                 t.apply(sub);
             }),
 
-            // @Checkme: type constructors
             Type::Concrete(_) => (),
         }
     }
@@ -195,7 +193,7 @@ impl Display for Type {
             Type::Var(var) => write!(f, "{}", var),
             Type::Concrete(s) => write!(f, "{}", s),
 
-            // @Todo: be smarter about when to include brackets
+            // @Future @CST: be smarter about when to include brackets
             Type::Arrow(a, b) => write!(f, "({} -> {})", a, b),
 
             Type::App(a, b) => write!(f, "{} {}", a, b),

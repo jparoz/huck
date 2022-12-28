@@ -25,7 +25,7 @@ where
 {
     match path.as_ref().extension() {
         Some(ex) if ex == "hk" => (),
-        Some(ex) => log::warn!("unknown filetype transpiled: {:?}", ex),
+        Some(_) => log::warn!("unknown filetype transpiled: {:?}", path.as_ref()),
         _ => log::warn!("file without extension transpiled: {:?}", path.as_ref()),
     }
 
@@ -47,7 +47,7 @@ pub fn transpile(huck: &str) -> Result<String, HuckError> {
     // Typecheck
     let scope = typecheck(parsed)?;
 
-    // @Todo: optimisations go here
+    // @Future: optimisations go here
 
     // Generate code
     let lua = codegen::lua::generate(&scope)?;
@@ -59,7 +59,7 @@ pub fn transpile(huck: &str) -> Result<String, HuckError> {
 
 /// Takes some Lua and normalizes it into a consistent format.
 pub fn normalize(lua: &str) -> String {
-    // @Todo: don't use an external process (?)
+    // @Cleanup: don't use an external process (?)
     use std::process::*;
     let mut child = Command::new("lua-format")
         .stdin(Stdio::piped())

@@ -101,8 +101,6 @@ pub fn parse(input: &str) -> Result<Module, Error> {
                 defn.apply(&precs);
             }
 
-            // @Todo: check other things here?
-
             Ok(Module {
                 definitions,
                 type_definitions,
@@ -225,7 +223,7 @@ fn type_scheme(input: &str) -> IResult<&str, TypeScheme> {
             type_expr,
         )),
         |(vars, typ)| {
-            // @Todo: check that all the vars are unique
+            // @Errors: check that all the vars are unique
 
             TypeScheme {
                 vars: vars.into_iter().flatten().collect(),
@@ -237,7 +235,7 @@ fn type_scheme(input: &str) -> IResult<&str, TypeScheme> {
 
 fn type_expr(input: &str) -> IResult<&str, TypeExpr> {
     alt((
-        // @Todo: type-level binops
+        // @Future @TypeBinops: type-level binops
         // Can possibly just modify the below line to use type_operator instead of reserved_op("->")
         map(
             nom_tuple((type_app, reserved_op("->"), type_expr)),
@@ -516,7 +514,6 @@ fn is_var_start_char(c: char) -> bool {
 
 // @Note: In the definition of upper_ident, we assume there are no reserved words beginning with
 // an uppercase letter.
-// @Todo @Checkme: make sure that this behaves well with custom/overloaded ops
 fn is_reserved(word: &str) -> bool {
     match word {
         "module" | "lazy" | "import" | "let" | "in" | "do" | "=" | ":" | "\\" | "->" | "<-"
@@ -533,15 +530,15 @@ pub enum Error {
     #[error("Leftover input: {0}")]
     Leftover(String),
 
-    // @Todo: this shouldn't use Debug printing, but should print the source.
+    // @Cleanup @Errors: this shouldn't use Debug printing, but should print the source.
     #[error("Multiple precedence declarations found for `{0}`:\n    {1:?}\n    {2:?}")]
     MultiplePrecs(Name, Precedence, Precedence),
 
-    // @Todo: this shouldn't use Debug printing, but should print the source.
+    // @Cleanup @Errors: this shouldn't use Debug printing, but should print the source.
     #[error("Multiple explicit type annotations found for `{0}`:{1}")]
     MultipleTypes(Name, String),
 
-    // @Todo: this should print the source locations of the two definitions
+    // @Cleanup @Errors: this should print the source locations of the two definitions
     #[error("Multiple type definitions with the same name ({0})")]
     MultipleTypeDefinitions(Name),
 }

@@ -105,7 +105,7 @@ fn function_const() {
     );
 }
 
-// @Todo: Prelude
+// @Prelude
 #[ignore]
 #[test]
 fn function_add() {

@@ -276,12 +276,12 @@ impl<'file> ConstraintGenerator<'file> {
                 }
             } else if is_lua_binop(name.as_str()) {
                 // Do nothing. @XXX @Cleanup: don't do this
-                // @Todo: Prelude
+                // @Prelude
             } else {
                 // If there is no inferred type for the name (i.e. it's not in scope),
                 // then it's a scope error.
-                // @Todo: Scope error
-                todo!("scope error: {name}");
+                // @Errors: Scope error
+                panic!("scope error: {name}");
             }
         }
     }
@@ -361,6 +361,7 @@ impl<'file> ConstraintGenerator<'file> {
             .iter()
             .map(|v| {
                 let fresh = self.fresh_var();
+                // @Todo: at least assert is_none()
                 vars_map.insert(*v, fresh);
                 fresh
             })
@@ -413,7 +414,7 @@ impl<'file> ConstraintGenerator<'file> {
             // @Checkme: poly or mono?
             self.bind_name_poly(constr_name, &constr_type);
 
-            // @Todo @Checkme: no name conflicts
+            // @Errors @Checkme: no name conflicts
             constructors.insert(constr_name.clone(), constr_type);
         }
 
@@ -449,7 +450,6 @@ impl<'file> ConstraintGenerator<'file> {
         vars_map: &BTreeMap<&str, TypeVar>,
     ) -> Type {
         match input {
-            // @Todo @Checkme: type constructors
             ast::TypeTerm::Concrete(s) => Type::Concrete(s.to_string()),
             ast::TypeTerm::Unit => Type::Concrete("()".to_string()),
 
@@ -462,8 +462,11 @@ impl<'file> ConstraintGenerator<'file> {
                     // For now, just error instead.
                     // self.fresh()
 
-                    // @Todo @Errors: ill-formed type expression (should be a syntax error)
-                    todo!()
+                    // @Errors: ill-formed type expression (should be a syntax or scope error)
+                    panic!(
+                        "ill-formed type expression, type variable not in scope: {}",
+                        v
+                    )
                 }
             }
 

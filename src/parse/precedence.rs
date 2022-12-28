@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use crate::ast::{Definition, Expr, Lhs, Name, Pattern, Term};
 
 // @Note @Cleanup: These defaults should one day be replaced with source code.
-// @Todo: Prelude
+// @Prelude
 pub fn default_precs() -> BTreeMap<Name, Precedence> {
     BTreeMap::from([
         (
@@ -136,7 +136,7 @@ impl<'a> ApplyPrecedence for Pattern<'a> {
                         && *l_assoc == Associativity::None
                         && *r_assoc == Associativity::None
                     {
-                        // @Todo @Errors: throw a proper parse error
+                        // @Errors: throw a proper parse error
                         panic!(
                             "Can't combine infix operators of same precedence and no associativity"
                         );
@@ -193,7 +193,7 @@ impl<'a> ApplyPrecedence for Expr<'a> {
                         && *l_assoc == Associativity::None
                         && *r_assoc == Associativity::None
                     {
-                        // @Todo @Errors: throw a proper parse error
+                        // @Errors: throw a proper parse error
                         panic!(
                             "Can't combine infix operators of same precedence and no associativity"
                         );

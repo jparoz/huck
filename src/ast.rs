@@ -3,21 +3,6 @@ use std::fmt::{self, Display};
 
 use crate::parse::precedence::Precedence;
 
-// @Todo: use these, or something similar
-//
-// #[derive(PartialEq, Debug)]
-// pub struct Spanned<T> {
-//     node: T,
-//     span: Span,
-// }
-//
-// #[derive(PartialEq, Debug)]
-// pub struct Span {
-//     // @Checkme: usize necessary? simple for now, but could probably be u32/u16 in some combination
-//     start: usize,
-//     len: usize,
-// }
-
 /// A definition is the correct AST for a given Huck definition,
 /// combined from any statements concerning the same Name.
 /// This includes any case definitions (Assignments),
@@ -437,7 +422,7 @@ pub enum TypeExpr<'file> {
     Term(TypeTerm<'file>),
     App(Box<TypeExpr<'file>>, Box<TypeExpr<'file>>),
     Arrow(Box<TypeExpr<'file>>, Box<TypeExpr<'file>>),
-    // @Todo: type-level binops
+    // @Future @TypeBinops: type-level binops
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
