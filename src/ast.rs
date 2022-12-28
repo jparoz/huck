@@ -66,6 +66,9 @@ pub enum Statement<'file> {
     TypeDefinition(TypeDefinition<'file>),
 }
 
+// @Todo: change this back to:
+//     type Assignment<'file> = (Lhs<'file>, Expr<'file>)
+// and inline this enum into Statement
 #[derive(Debug, PartialEq, Eq)]
 pub enum Assignment<'file> {
     WithType(TypeScheme<'file>, Lhs<'file>, Expr<'file>),

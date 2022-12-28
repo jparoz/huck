@@ -244,6 +244,11 @@ impl Display for TypeScheme {
 // @Note: or maybe not? Possibly ast::TypeTerm::Var covers the need,
 //        and we can just store a dictionary somewhere mapping from
 //        ast::TypeTerm::Var to types::TypeVar.
+// @Note: I think we do want to make this an enum.
+//        It will probably be helpful when displaying error messages,
+//        to ensure that we show the type variable that the user gave.
+//        Currently, the map we use gets dropped at the end of converting the parsed TypeScheme,
+//        so it's not around long enough to be helpful for errors anyway.
 #[derive(Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub struct TypeVar(pub usize);
 

@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use crate::ast::{Definition, Expr, Lhs, Name, Pattern, Term};
 
 // @Note @Cleanup: These defaults should one day be replaced with source code.
+// @Todo: Prelude
 pub fn default_precs() -> BTreeMap<Name, Precedence> {
     BTreeMap::from([
         (
@@ -71,6 +72,7 @@ pub enum Associativity {
     None,
 }
 
+// @Todo: replace this with methods on Precedence (? or maybe PrecTable?)
 pub trait ApplyPrecedence {
     fn apply(&mut self, precs: &BTreeMap<Name, Precedence>);
 }
