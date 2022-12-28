@@ -62,10 +62,9 @@ impl ActiveVars for &[Constraint] {
     }
 }
 
-// because of VecDeque::as_slices
-impl ActiveVars for (&[Constraint], &[Constraint]) {
+impl ActiveVars for VecDeque<Constraint> {
     fn active_vars(&self) -> TypeVarSet {
-        let (a, b) = self;
+        let (a, b) = self.as_slices();
         a.active_vars().union(&b.active_vars())
     }
 }
@@ -317,7 +316,7 @@ impl<'file> ConstraintGenerator<'file> {
                     if t2
                         .free_vars()
                         .difference(&m)
-                        .intersection(&constraints.as_slices().active_vars())
+                        .intersection(&constraints.active_vars())
                         .is_empty() =>
                 {
                     let cons = Constraint::ExplicitInstance(t1, t2.generalize(&m));
