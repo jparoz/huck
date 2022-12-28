@@ -4,7 +4,7 @@ use std::{iter, mem};
 
 use log::log_enabled;
 
-use crate::ast::{self, Definition, Expr, Lhs, Name, Numeral, Pattern, Term};
+use crate::ast::{self, Assignment, Definition, Expr, Lhs, Name, Numeral, Pattern, Term};
 use crate::codegen::lua::is_lua_binop;
 use crate::types::{
     self, ApplySub, Substitution, Type, TypeDefinition, TypeScheme, TypeVar, TypeVarSet,
@@ -261,7 +261,6 @@ impl<'file> ConstraintGenerator<'file> {
     }
 
     /// Constrains all types in the given Vec to be equal, and returns that type.
-    // @Todo: take an impl Iterator
     pub fn equate_all(&mut self, typs: Vec<Type>) -> Type {
         if typs.len() == 1 {
             return typs[0].clone();
@@ -504,7 +503,7 @@ pub trait GenerateConstraints<'file> {
     fn generate(&self, cg: &mut ConstraintGenerator) -> Type;
 }
 
-impl<'file> GenerateConstraints<'file> for (Lhs<'file>, Expr<'file>) {
+impl<'file> GenerateConstraints<'file> for Assignment<'file> {
     fn generate(&self, cg: &mut ConstraintGenerator) -> Type {
         let (lhs, expr) = self;
 

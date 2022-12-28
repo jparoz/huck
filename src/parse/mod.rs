@@ -34,7 +34,7 @@ pub fn parse(input: &str) -> Result<Module, Error> {
             // (and precs).
             for stat in statements {
                 match stat {
-                    Statement::Assignment(Assignment::WithoutType(lhs, expr)) => {
+                    Statement::AssignmentWithoutType((lhs, expr)) => {
                         definitions
                             .entry(lhs.name().clone())
                             .or_default()
@@ -42,7 +42,7 @@ pub fn parse(input: &str) -> Result<Module, Error> {
                             .push((lhs, expr));
                     }
 
-                    Statement::Assignment(Assignment::WithType(ts, lhs, expr)) => {
+                    Statement::AssignmentWithType(ts, (lhs, expr)) => {
                         let defn = definitions.entry(lhs.name().clone()).or_default();
 
                         // If there was already an explicit for this name, that's an error.
@@ -114,7 +114,10 @@ pub fn parse(input: &str) -> Result<Module, Error> {
 
 fn statement(input: &str) -> IResult<&str, Statement> {
     alt((
-        map(assign, Statement::Assignment),
+        map(assign_with_type, |(ts, assign)| {
+            Statement::AssignmentWithType(ts, assign)
+        }),
+        map(assign, Statement::AssignmentWithoutType),
         map(
             terminated(separated_pair(name, reserved_op(":"), type_scheme), semi),
             |(name, scheme)| Statement::TypeAnnotation(name, scheme),
@@ -139,19 +142,18 @@ fn statement(input: &str) -> IResult<&str, Statement> {
     ))(input)
 }
 
-fn assign(input: &str) -> IResult<&str, Assignment> {
+fn assign_with_type(input: &str) -> IResult<&str, (TypeScheme, Assignment)> {
     terminated(
-        alt((
-            map(
-                nom_tuple((lhs, reserved_op(":"), type_scheme, reserved_op("="), expr)),
-                |(lhs, _, ts, _, rhs)| Assignment::WithType(ts, lhs, rhs),
-            ),
-            map(separated_pair(lhs, reserved_op("="), expr), |(lhs, rhs)| {
-                Assignment::WithoutType(lhs, rhs)
-            }),
-        )),
+        map(
+            nom_tuple((lhs, reserved_op(":"), type_scheme, reserved_op("="), expr)),
+            |(lhs, _, ts, _, rhs)| (ts, (lhs, rhs)),
+        ),
         semi,
     )(input)
+}
+
+fn assign(input: &str) -> IResult<&str, Assignment> {
+    terminated(separated_pair(lhs, reserved_op("="), expr), semi)(input)
 }
 
 fn prec(input: &str) -> IResult<&str, (Name, Precedence)> {

@@ -25,7 +25,7 @@ use crate::parse::precedence::Precedence;
 /// or precedence declarations.
 #[derive(Debug, PartialEq, Eq, Clone, Default)]
 pub struct Definition<'file> {
-    pub assignments: Vec<(Lhs<'file>, Expr<'file>)>,
+    pub assignments: Vec<Assignment<'file>>,
     pub explicit_type: Option<TypeScheme<'file>>,
     pub precedence: Option<Precedence>,
 
@@ -60,20 +60,14 @@ pub struct Module<'file> {
 /// A Statement is a sum type for any of the top-level Huck constructs.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Statement<'file> {
-    Assignment(Assignment<'file>),
+    AssignmentWithType(TypeScheme<'file>, Assignment<'file>),
+    AssignmentWithoutType(Assignment<'file>),
     TypeAnnotation(Name, TypeScheme<'file>),
     Precedence(Name, Precedence),
     TypeDefinition(TypeDefinition<'file>),
 }
 
-// @Todo: change this back to:
-//     type Assignment<'file> = (Lhs<'file>, Expr<'file>)
-// and inline this enum into Statement
-#[derive(Debug, PartialEq, Eq)]
-pub enum Assignment<'file> {
-    WithType(TypeScheme<'file>, Lhs<'file>, Expr<'file>),
-    WithoutType(Lhs<'file>, Expr<'file>),
-}
+pub type Assignment<'file> = (Lhs<'file>, Expr<'file>);
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub enum Name {
@@ -261,8 +255,7 @@ pub enum Expr<'file> {
         rhs: Box<Expr<'file>>,
     },
     Let {
-        // @Todo @Checkme: should this be Assignment instead of the raw tuple?
-        definitions: BTreeMap<Name, Vec<(Lhs<'file>, Expr<'file>)>>,
+        definitions: BTreeMap<Name, Vec<Assignment<'file>>>,
         in_expr: Box<Expr<'file>>,
     },
     Lambda {

@@ -4,4 +4,6 @@ myNot : MyBool -> MyBool;
 myNot MyTrue = MyFalse;
 myNot MyFalse = MyTrue;
 
+foo: Int = 123;
+
 (* type MyBool = MyTrue | MyFalse; *)
