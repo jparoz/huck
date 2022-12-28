@@ -116,7 +116,7 @@ impl<'file> ConstraintGenerator<'file> {
     fn fresh_var(&mut self) -> TypeVar {
         let id = self.next_typevar_id;
         self.next_typevar_id += 1;
-        TypeVar(id)
+        TypeVar::Generated(id)
     }
 
     fn fresh(&mut self) -> Type {
@@ -151,6 +151,7 @@ impl<'file> ConstraintGenerator<'file> {
 
     /// Takes a TypeScheme and replaces all quantified variables with fresh variables;
     /// then returns the resulting Type.
+    // @Cleanup: this could be way simpler
     pub fn instantiate(&mut self, mut ts: TypeScheme) -> Type {
         let sub = ts.vars.into_iter().fold(Substitution::empty(), |sub, var| {
             sub.then(Substitution::single(var, self.fresh()))
@@ -355,19 +356,13 @@ impl<'file> ConstraintGenerator<'file> {
     // Conversion methods
 
     pub fn convert_ast_type_scheme(&mut self, input: &ast::TypeScheme) -> TypeScheme {
-        let mut vars_map = BTreeMap::new();
         let vars: TypeVarSet = input
             .vars
             .iter()
-            .map(|v| {
-                let fresh = self.fresh_var();
-                // @Todo: at least assert is_none()
-                vars_map.insert(*v, fresh);
-                fresh
-            })
+            .map(|v| TypeVar::Explicit(v.to_string()))
             .collect();
 
-        let typ = self.convert_ast_type_expr(&input.typ, &vars_map);
+        let typ = self.convert_ast_type_expr(&input.typ);
 
         TypeScheme { vars, typ }
     }
@@ -382,22 +377,16 @@ impl<'file> ConstraintGenerator<'file> {
             constructors: constrs,
         } = type_defn;
 
-        // We'll build all these structures by iterating over the type arguments.
-        let mut vars_map = BTreeMap::new();
+        // We'll build these structures by iterating over the type arguments.
         let mut vars = TypeVarSet::empty();
         let mut typ = Type::Concrete(name.to_string());
 
-        for v in vars_s.iter() {
-            // Make a new type variable to stand in for the &str literal type variable
-            let fresh = self.fresh_var();
-
-            // Store it in both the map and set versions
-            vars_map.insert(*v, fresh);
-            vars.insert(fresh);
-
+        for s in vars_s.iter() {
             // The final returned type of the constructor needs to reflect this type argument;
             // so we mark that here.
-            typ = Type::App(Box::new(typ), Box::new(Type::Var(fresh)));
+            let var = TypeVar::Explicit(s.to_string());
+            vars.insert(var.clone());
+            typ = Type::App(Box::new(typ), Box::new(Type::Var(var)));
         }
 
         let mut constructors = BTreeMap::new();
@@ -406,7 +395,7 @@ impl<'file> ConstraintGenerator<'file> {
             let constr_type = args
                 .into_iter()
                 .rev()
-                .map(|term| self.convert_ast_type_term(term, &vars_map))
+                .map(|term| self.convert_ast_type_term(term))
                 .fold(typ.clone(), |res, a| {
                     Type::Arrow(Box::new(a), Box::new(res))
                 });
@@ -426,56 +415,33 @@ impl<'file> ConstraintGenerator<'file> {
         }
     }
 
-    pub fn convert_ast_type_expr(
-        &mut self,
-        input: &ast::TypeExpr,
-        vars_map: &BTreeMap<&str, TypeVar>,
-    ) -> Type {
+    pub fn convert_ast_type_expr(&mut self, input: &ast::TypeExpr) -> Type {
         match input {
-            ast::TypeExpr::Term(term) => self.convert_ast_type_term(term, vars_map),
+            ast::TypeExpr::Term(term) => self.convert_ast_type_term(term),
             ast::TypeExpr::App(f, x) => Type::App(
-                Box::new(self.convert_ast_type_expr(f, vars_map)),
-                Box::new(self.convert_ast_type_expr(x, vars_map)),
+                Box::new(self.convert_ast_type_expr(f)),
+                Box::new(self.convert_ast_type_expr(x)),
             ),
             ast::TypeExpr::Arrow(a, b) => Type::Arrow(
-                Box::new(self.convert_ast_type_expr(a, vars_map)),
-                Box::new(self.convert_ast_type_expr(b, vars_map)),
+                Box::new(self.convert_ast_type_expr(a)),
+                Box::new(self.convert_ast_type_expr(b)),
             ),
         }
     }
 
-    pub fn convert_ast_type_term(
-        &mut self,
-        input: &ast::TypeTerm,
-        vars_map: &BTreeMap<&str, TypeVar>,
-    ) -> Type {
+    pub fn convert_ast_type_term(&mut self, input: &ast::TypeTerm) -> Type {
         match input {
             ast::TypeTerm::Concrete(s) => Type::Concrete(s.to_string()),
             ast::TypeTerm::Unit => Type::Concrete("()".to_string()),
 
-            ast::TypeTerm::Var(v) => {
-                if let Some(tv) = vars_map.get(v) {
-                    Type::Var(*tv)
-                } else {
-                    // @Note: returning self.fresh() seems to give behaviour something like
-                    // implcit forall. Further investigation is needed though if wanting to use.
-                    // For now, just error instead.
-                    // self.fresh()
+            ast::TypeTerm::Var(v) => Type::Var(TypeVar::Explicit(v.to_string())),
 
-                    // @Errors: ill-formed type expression (should be a syntax or scope error)
-                    panic!(
-                        "ill-formed type expression, type variable not in scope: {}",
-                        v
-                    )
-                }
-            }
-
-            ast::TypeTerm::Parens(e) => self.convert_ast_type_expr(e, vars_map),
-            ast::TypeTerm::List(e) => Type::List(Box::new(self.convert_ast_type_expr(e, vars_map))),
+            ast::TypeTerm::Parens(e) => self.convert_ast_type_expr(e),
+            ast::TypeTerm::List(e) => Type::List(Box::new(self.convert_ast_type_expr(e))),
             ast::TypeTerm::Tuple(exprs) => Type::Tuple(
                 exprs
                     .iter()
-                    .map(|e| self.convert_ast_type_expr(e, vars_map))
+                    .map(|e| self.convert_ast_type_expr(e))
                     .collect(),
             ),
         }
@@ -603,17 +569,8 @@ impl<'file> ConstraintGenerator<'file> {
 
             Expr::Lambda { lhs, rhs } => {
                 let args = lhs.args();
-                let types: Vec<Type> = args.iter().map(|_| self.fresh()).collect();
-                let typevars: Vec<TypeVar> = types
-                    .iter()
-                    .map(|t| {
-                        if let Type::Var(v) = t {
-                            *v
-                        } else {
-                            unreachable!()
-                        }
-                    })
-                    .collect();
+                let typevars: Vec<TypeVar> = args.iter().map(|_| self.fresh_var()).collect();
+                let types: Vec<Type> = typevars.iter().map(|v| Type::Var(v.clone())).collect();
                 let typevar_count = typevars.len();
 
                 self.m_stack.extend(typevars);

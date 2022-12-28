@@ -6,4 +6,7 @@ myNot MyFalse = MyTrue;
 
 foo: Int = 123;
 
-(* type MyBool = MyTrue | MyFalse; *)
+type Foo a = Bar a | Baz Int;
+
+usesFoo (Bar x) = 123;
+usesFoo (Baz y) = y;

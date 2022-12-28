@@ -107,7 +107,7 @@ impl Type {
         match self {
             Type::Concrete(_) => TypeVarSet::empty(),
 
-            Type::Var(var) => TypeVarSet::single(*var),
+            Type::Var(var) => TypeVarSet::single(var.clone()),
             Type::Arrow(a, b) | Type::App(a, b) => a.free_vars().union(&b.free_vars()),
             Type::List(t) => t.free_vars(),
             Type::Tuple(v) => v
@@ -245,21 +245,18 @@ impl Display for TypeScheme {
     }
 }
 
-// @Todo: make this an enum with TypeVar::Generated(usize) and TypeVar::Explicit(&str)
-// @Note: or maybe not? Possibly ast::TypeTerm::Var covers the need,
-//        and we can just store a dictionary somewhere mapping from
-//        ast::TypeTerm::Var to types::TypeVar.
-// @Note: I think we do want to make this an enum.
-//        It will probably be helpful when displaying error messages,
-//        to ensure that we show the type variable that the user gave.
-//        Currently, the map we use gets dropped at the end of converting the parsed TypeScheme,
-//        so it's not around long enough to be helpful for errors anyway.
-#[derive(Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
-pub struct TypeVar(pub usize);
+#[derive(Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
+pub enum TypeVar {
+    Generated(usize),
+    Explicit(String),
+}
 
 impl Display for TypeVar {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "t{}", self.0)
+        match self {
+            TypeVar::Generated(id) => write!(f, "t{}", id),
+            TypeVar::Explicit(s) => write!(f, "{}", s),
+        }
     }
 }
 
@@ -326,6 +323,7 @@ impl ApplySub for TypeVarSet {
                     *self = self.union(&to.free_vars());
                 } else {
                     self.insert(v);
+                    break;
                 }
             }
         }

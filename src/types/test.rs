@@ -76,8 +76,8 @@ fn literal_list_int() {
     );
 }
 
-// @Note @Cleanup: This would be better if we could use matches! to avoid `TypeVar(1)`
-// (could instead be `TypeVar(_)`),
+// @Note @Cleanup: This would be better if we could use matches! to avoid `TypeVar::Generated(1)`
+// (could instead be `TypeVar::Generated(_)`),
 // but the boxes prevent this.
 // Also true for lots of other tests.
 #[test]
@@ -85,8 +85,8 @@ fn function_id() {
     assert_eq!(
         typ(r#"id a = a;"#),
         Type::Arrow(
-            Box::new(Type::Var(TypeVar(1))),
-            Box::new(Type::Var(TypeVar(1)))
+            Box::new(Type::Var(TypeVar::Generated(1))),
+            Box::new(Type::Var(TypeVar::Generated(1)))
         )
     );
 }
@@ -96,10 +96,10 @@ fn function_const() {
     assert_eq!(
         typ(r#"const a b = a;"#),
         Type::Arrow(
-            Box::new(Type::Var(TypeVar(2))),
+            Box::new(Type::Var(TypeVar::Generated(2))),
             Box::new(Type::Arrow(
-                Box::new(Type::Var(TypeVar(1))),
-                Box::new(Type::Var(TypeVar(2)))
+                Box::new(Type::Var(TypeVar::Generated(1))),
+                Box::new(Type::Var(TypeVar::Generated(2)))
             ))
         )
     );
@@ -157,9 +157,9 @@ fn constructor_unary_returned() {
     assert_eq!(
         val.type_scheme,
         TypeScheme {
-            vars: TypeVarSet::single(TypeVar(1)),
+            vars: TypeVarSet::single(TypeVar::Generated(1)),
             typ: Type::Arrow(
-                Box::new(Type::Var(TypeVar(1))),
+                Box::new(Type::Var(TypeVar::Generated(1))),
                 Box::new(Type::Concrete("Foo".to_string())),
             ),
         }
@@ -280,13 +280,13 @@ fn constructor_newtype_generic_var() {
         .get(&Name::Ident("val".to_string()))
         .unwrap();
 
-    let var = TypeVar(5);
+    let var = TypeVar::Generated(4);
     assert_eq!(
         val.type_scheme,
         TypeScheme {
-            vars: TypeVarSet::single(var),
+            vars: TypeVarSet::single(var.clone()),
             typ: Type::Arrow(
-                Box::new(Type::Var(var)),
+                Box::new(Type::Var(var.clone())),
                 Box::new(Type::App(
                     Box::new(Type::Concrete("Foo".to_string())),
                     Box::new(Type::Var(var))
