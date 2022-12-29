@@ -243,6 +243,17 @@ pub enum Expr<'file> {
         definitions: BTreeMap<Name, Vec<Assignment<'file>>>,
         in_expr: Box<Expr<'file>>,
     },
+    // @Todo: test this
+    If {
+        cond: Box<Expr<'file>>,
+        then_expr: Box<Expr<'file>>,
+        else_expr: Box<Expr<'file>>,
+    },
+    // @Todo: test this
+    Case {
+        expr: Box<Expr<'file>>,
+        arms: Vec<(Pattern<'file>, Expr<'file>)>,
+    },
     Lambda {
         lhs: Lhs<'file>,
         rhs: Box<Expr<'file>>,
@@ -290,6 +301,33 @@ impl<'file> Expr<'file> {
                 }
 
                 deps.extend(sub_deps);
+            }
+
+            Expr::If {
+                cond,
+                then_expr,
+                else_expr,
+            } => {
+                cond.dependencies(deps);
+                then_expr.dependencies(deps);
+                else_expr.dependencies(deps);
+            }
+
+            Expr::Case { expr, arms } => {
+                // Always include the dependencies of the scrutinised expression.
+                expr.dependencies(deps);
+
+                for (arm_pat, arm_expr) in arms {
+                    let mut sub_deps = BTreeSet::new();
+                    arm_expr.dependencies(&mut sub_deps);
+
+                    // Remove variables bound in the arm pattern
+                    for name in arm_pat.names_bound() {
+                        sub_deps.remove(&name);
+                    }
+
+                    deps.extend(sub_deps);
+                }
             }
 
             Expr::Lambda { lhs, rhs } => {
@@ -349,6 +387,22 @@ impl<'file> Display for Expr<'file> {
                 }
                 write!(f, " in {}", in_expr)
             }
+
+            If {
+                cond,
+                then_expr,
+                else_expr,
+            } => {
+                write!(f, "if {} then {} else {}", cond, then_expr, else_expr)
+            }
+            Case { expr, arms } => {
+                write!(f, "case {} of {{", expr)?;
+                for (pat, e) in arms {
+                    write!(f, "{} -> {};", pat, e)?;
+                }
+                write!(f, "}}")
+            }
+
             Lambda { lhs, rhs } => {
                 write!(f, "\\")?;
                 for pat in lhs.args() {

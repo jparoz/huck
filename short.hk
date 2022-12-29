@@ -1,12 +1,8 @@
-type MyBool = MyTrue | MyFalse;
+type Foo = Bar Int | Baz;
 
-myNot : MyBool -> MyBool;
-myNot MyTrue = MyFalse;
-myNot MyFalse = MyTrue;
-
-foo: Int = 123;
-
-type Foo a = Bar a | Baz Int;
-
-usesFoo (Bar x) = 123;
-usesFoo (Baz y) = y;
+foo n = case n of {
+        (Bar 1) -> "one";
+        (Bar 2) -> "two";
+        (Bar 3) -> "three";
+        Baz -> "got a Baz";
+    };

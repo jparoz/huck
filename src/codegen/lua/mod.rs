@@ -91,6 +91,8 @@ impl<'a> CodeGenerator<'a> {
             }
 
             for (name, mut typed_defn) in current_pass.drain(..) {
+                // @Errors: this should throw an error saying that
+                // there was a type annotation without a corresponding definition.
                 assert!(typed_defn.definition.assignments.len() > 0);
 
                 // @Lazy @Laziness: lazy values can be generated in any order
@@ -245,6 +247,7 @@ impl<'a> CodeGenerator<'a> {
                     ))
                 }
             }
+
             ast::Expr::Let {
                 definitions,
                 in_expr,
@@ -272,6 +275,15 @@ impl<'a> CodeGenerator<'a> {
 
                 Ok(lua)
             }
+
+            ast::Expr::If {
+                cond,
+                then_expr,
+                else_expr,
+            } => Ok(format!("(({cond}) and ({then_expr}) or ({else_expr}))")),
+
+            ast::Expr::Case { expr, arms } => self.case(expr, arms),
+
             ast::Expr::Lambda { lhs, rhs } => {
                 assert!(lhs.arg_count() > 0);
                 self.curried_function(&vec![(lhs.clone(), *rhs.clone())]) // @Fixme: don't clone?
@@ -315,6 +327,81 @@ impl<'a> CodeGenerator<'a> {
         }
     }
 
+    fn case<'file>(
+        &mut self,
+        expr: &ast::Expr<'file>,
+        arms: &Vec<(ast::Pattern<'file>, ast::Expr<'file>)>,
+    ) -> Result<String> {
+        let mut lua = String::new();
+
+        let mut has_any_conditions = false;
+        let mut has_unconditional_branch = false;
+
+        let id = self.unique();
+
+        // Start a new scope.
+        writeln!(lua, "(function()")?;
+
+        // Store the value of expr in a local.
+        let expr_s = self.expr(expr)?;
+        writeln!(
+            lua,
+            "local {}_{} = {}",
+            self.generated_name_prefix, id, expr_s
+        )?;
+
+        for (pat, expr) in arms {
+            self.pattern_match(pat, &format!("{}_{}", self.generated_name_prefix, id))?;
+
+            has_any_conditions = has_any_conditions || !self.conditions.is_empty();
+
+            if self.conditions.is_empty() {
+                has_unconditional_branch = true;
+
+                // First bind the bindings
+                for b in self.bindings.drain(..) {
+                    lua.write_str(&b)?;
+                }
+                // Then return the return value
+                writeln!(lua, "return {}", self.expr(expr)?)?;
+            } else {
+                // Check the conditions
+                lua.write_str("if ")?;
+                let condition_count = self.conditions.len();
+                for (i, cond) in self.conditions.drain(..).enumerate() {
+                    write!(lua, "({})", cond)?;
+                    if i < condition_count - 1 {
+                        lua.write_str("\nand ")?;
+                    }
+                }
+                writeln!(lua, " then")?;
+
+                // If the conditions are met, then bind the bindings
+                for b in self.bindings.drain(..) {
+                    lua.write_str(&b)?;
+                }
+
+                // Return the return value
+                writeln!(lua, "return {}", self.expr(expr)?)?;
+
+                // End the if
+                writeln!(lua, "end")?;
+            }
+        }
+
+        // Emit a runtime error in case no pattern matches
+        // @Warn: emit a compile time warning as well
+        // @Exhaustiveness: do some exhaustiveness checking before emitting these warnings/errors
+        if has_any_conditions && !has_unconditional_branch {
+            writeln!(lua, r#"error("Unmatched pattern in case expression")"#,)?;
+        }
+
+        // End the scope (by calling the anonymous function)
+        writeln!(lua, "end)()")?;
+
+        Ok(lua)
+    }
+
     fn curried_function<'file>(
         &mut self,
         assignments: &Vec<(ast::Lhs<'file>, ast::Expr<'file>)>,
@@ -339,6 +426,7 @@ impl<'a> CodeGenerator<'a> {
         }
 
         // Return the expr
+        // @DRY: case
 
         let mut has_any_conditions = false;
         let mut has_unconditional_branch = false;
@@ -422,7 +510,7 @@ impl<'a> CodeGenerator<'a> {
     }
 
     /// Generates code for a pattern match.
-    /// Note: This _does not_ modify self.lua at all, only `self.conditions` and `self.bindings`.
+    /// Note: This only modified `self.conditions` and `self.bindings`.
     fn pattern_match<'file>(
         &mut self,
         pat: &ast::Pattern<'file>,

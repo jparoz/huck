@@ -223,17 +223,35 @@ impl<'a> ApplyPrecedence for Expr<'a> {
                 _ => (),
             },
             Expr::Let {
-                definitions: assignments,
+                definitions,
                 in_expr,
             } => {
-                for (_name, defns) in assignments {
-                    for (lhs, rhs) in defns.iter_mut() {
+                for (_name, defn) in definitions {
+                    for (lhs, rhs) in defn.iter_mut() {
                         lhs.apply(precs);
                         rhs.apply(precs);
                     }
                 }
                 in_expr.apply(precs);
             }
+
+            Expr::If {
+                cond,
+                then_expr,
+                else_expr,
+            } => {
+                cond.apply(precs);
+                then_expr.apply(precs);
+                else_expr.apply(precs);
+            }
+
+            Expr::Case { expr, arms } => {
+                expr.apply(precs);
+                for (_pat, arm_expr) in arms.iter_mut() {
+                    arm_expr.apply(precs);
+                }
+            }
+
             Expr::Lambda { lhs, rhs } => {
                 for mut pat in lhs.args() {
                     pat.apply(precs);

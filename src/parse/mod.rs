@@ -210,7 +210,7 @@ fn pattern_binop(input: &str) -> IResult<&str, Pattern> {
 }
 
 fn expr(input: &str) -> IResult<&str, Expr> {
-    alt((binop, app, let_in, lambda))(input)
+    alt((binop, app, let_in, if_then_else, case, lambda))(input)
 }
 
 fn type_scheme(input: &str) -> IResult<&str, TypeScheme> {
@@ -312,6 +312,47 @@ fn let_in(input: &str) -> IResult<&str, Expr> {
             }
         },
     )(input)
+}
+
+fn if_then_else(input: &str) -> IResult<&str, Expr> {
+    map(
+        nom_tuple((
+            reserved("if"),
+            expr,
+            reserved("then"),
+            expr,
+            reserved("else"),
+            expr,
+        )),
+        |(_, cond, _, then_expr, _, else_expr)| Expr::If {
+            cond: Box::new(cond),
+            then_expr: Box::new(then_expr),
+            else_expr: Box::new(else_expr),
+        },
+    )(input)
+}
+
+fn case(input: &str) -> IResult<&str, Expr> {
+    map(
+        nom_tuple((
+            reserved("case"),
+            expr,
+            reserved("of"),
+            delimited(
+                ws(tag("{")),
+                terminated(separated_list1(semi, case_arm), opt(semi)),
+                ws(tag("}")),
+            ),
+        )),
+        |(_, expr, _, arms)| Expr::Case {
+            expr: Box::new(expr),
+            arms,
+        },
+    )(input)
+}
+
+fn case_arm(input: &str) -> IResult<&str, (Pattern, Expr)> {
+    separated_pair(pattern, reserved_op("->"), expr)(input)
 }
 
 fn lambda(input: &str) -> IResult<&str, Expr> {
@@ -516,8 +557,9 @@ fn is_var_start_char(c: char) -> bool {
 // an uppercase letter.
 fn is_reserved(word: &str) -> bool {
     match word {
-        "module" | "lazy" | "import" | "let" | "in" | "do" | "=" | ":" | "\\" | "->" | "<-"
-        | "infix" | "infixl" | "infixr" | "forall" | "type" | "=>" | "," | "()" => true,
+        "module" | "lazy" | "import" | "export" | "let" | "in" | "if" | "then" | "else"
+        | "case" | "of" | "do" | "infix" | "infixl" | "infixr" | "forall" | "type" | "=>" | ","
+        | "()" | "=" | ":" | "\\" | "->" | "<-" => true,
         _ => false,
     }
 }

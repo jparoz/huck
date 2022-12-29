@@ -235,11 +235,10 @@ impl<'file> ConstraintGenerator<'file> {
         let mut assumptions = BTreeMap::new();
         mem::swap(&mut assumptions, &mut self.assumptions);
 
-        // @Todo @Cleanup: this should possibly/probably work on Scope or some ProtoScope,
+        // @CST @Cleanup: this should possibly/probably work on Scope or some ProtoScope,
         // rather than multiple if lets.
         for (name, assumed_types) in assumptions {
             if let Some((typ, _defn)) = self.types.get(&name) {
-                // self.bind_name_poly(&name, &t.0); // @Checkme: poly or mono?
                 for assumed_type in assumed_types {
                     self.constraints.push(Constraint::ImplicitInstance(
                         assumed_type,
@@ -248,7 +247,6 @@ impl<'file> ConstraintGenerator<'file> {
                     ));
                 }
             } else if let Some(typ) = self.constructors.get(&name) {
-                // self.bind_name_poly(&name, &t); // @Checkme: poly or mono?
                 for assumed_type in assumed_types {
                     self.constraints.push(Constraint::ImplicitInstance(
                         assumed_type,
@@ -546,6 +544,51 @@ impl<'file> ConstraintGenerator<'file> {
                 }
 
                 beta
+            }
+
+            Expr::If {
+                cond,
+                then_expr,
+                else_expr,
+            } => {
+                let cond_type = self.generate_expr(cond);
+                let then_type = self.generate_expr(then_expr);
+                let else_type = self.generate_expr(else_expr);
+
+                // @Note: This constraint elevates the type Bool to being a part of the compiler.
+                // This may or may not be what we want;
+                // possibly we should remain agnostic about the concrete type,
+                // by simply converting `if`s to `case`s by syntactic sugar;
+                // then (in theory) the Bool type can be redefined as appropriate.
+                // All that said, what is the possibly utility this can provide?
+                // It's not as though we can remain morally superior
+                // by avoiding elevating any types to compiler status
+                // (see Int, Float);
+                // so perhaps it's fine to just add Bool to that list.
+                self.constrain(Constraint::Equality(
+                    cond_type,
+                    Type::Concrete("Bool".to_string()),
+                ));
+                self.constrain(Constraint::Equality(then_type.clone(), else_type));
+
+                then_type
+            }
+
+            Expr::Case { expr, arms } => {
+                let (mut pat_types, arm_types): (Vec<Type>, Vec<Type>) = arms
+                    .iter()
+                    .map(|(pat, e)| {
+                        // @Todo @Checkme: do we have to do stuff with m_stack like in Expr::Lambda?
+                        let arm_type = self.generate_expr(e);
+                        let pat_type = self.bind(pat);
+                        (pat_type, arm_type)
+                    })
+                    .unzip();
+
+                pat_types.push(self.generate_expr(expr));
+
+                self.equate_all(pat_types);
+                self.equate_all(arm_types)
             }
 
             Expr::Lambda { lhs, rhs } => {
