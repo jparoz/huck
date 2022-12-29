@@ -270,8 +270,28 @@ impl TypeVarSet {
         self.0.iter()
     }
 
-    pub fn into_iter(self) -> impl Iterator<Item = TypeVar> {
+    pub fn remove(&mut self, k: &TypeVar) -> bool {
+        self.0.remove(k)
+    }
+}
+
+impl IntoIterator for TypeVarSet {
+    type Item = TypeVar;
+    type IntoIter = <BTreeSet<TypeVar> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
+    }
+}
+
+impl Extend<TypeVar> for TypeVarSet {
+    fn extend<T>(&mut self, iter: T)
+    where
+        T: IntoIterator<Item = TypeVar>,
+    {
+        for tv in iter {
+            self.insert(tv);
+        }
     }
 }
 

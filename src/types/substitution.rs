@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 use std::fmt::{self, Debug};
-use std::mem;
 
 use super::TypeVarSet;
 use super::{constraint::Constraint, Type, TypeScheme, TypeVar};
@@ -37,10 +36,6 @@ impl Substitution {
 
     pub fn get(&self, k: &TypeVar) -> Option<&Type> {
         self.0.get(k)
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
     }
 }
 
@@ -118,24 +113,11 @@ impl ApplySub for TypeScheme {
 
 impl ApplySub for TypeVarSet {
     fn apply(&mut self, sub: &Substitution) {
-        // If it's the empty substitution, return early because there's nothing to do.
-        // This was added to prevent a bug where applying the empty substitution
-        // would cause all the forall quantifiers to fall off, which is bad.
-        if sub.is_empty() {
-            return;
-        }
-
-        let old_set = mem::replace(self, TypeVarSet::empty());
-        for v in old_set.0.into_iter() {
-            for (fr, to) in sub.iter() {
-                if *fr == v {
-                    // Type::free_vars just collects all the variables
-                    // (i.e. all variables in a Type are free in that type)
-                    *self = self.union(&to.free_vars());
-                } else {
-                    self.insert(v);
-                    break;
-                }
+        let start_set = self.clone();
+        for var in start_set {
+            if let Some(typ) = sub.get(&var) {
+                self.remove(&var);
+                self.extend(typ.free_vars().into_iter())
             }
         }
     }
