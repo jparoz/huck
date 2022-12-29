@@ -21,26 +21,6 @@ pub enum Constraint {
     ExplicitInstance(Type, TypeScheme),
 }
 
-impl ApplySub for Constraint {
-    fn apply(&mut self, sub: &Substitution) {
-        match self {
-            Constraint::Equality(t1, t2) => {
-                t1.apply(sub);
-                t2.apply(sub);
-            }
-            Constraint::ImplicitInstance(t1, t2, m) => {
-                t1.apply(sub);
-                t2.apply(sub);
-                m.apply(sub);
-            }
-            Constraint::ExplicitInstance(t, sigma) => {
-                t.apply(sub);
-                sigma.apply(sub);
-            }
-        }
-    }
-}
-
 impl ActiveVars for Constraint {
     fn active_vars(&self) -> TypeVarSet {
         match self {
