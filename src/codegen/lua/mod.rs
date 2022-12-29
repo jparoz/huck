@@ -91,7 +91,7 @@ impl<'a> CodeGenerator<'a> {
             }
 
             for (name, mut typed_defn) in current_pass.drain(..) {
-                debug_assert!(typed_defn.definition.assignments.len() > 0);
+                assert!(typed_defn.definition.assignments.len() > 0);
 
                 // @Lazy @Laziness: lazy values can be generated in any order
 
@@ -273,7 +273,7 @@ impl<'a> CodeGenerator<'a> {
                 Ok(lua)
             }
             ast::Expr::Lambda { lhs, rhs } => {
-                debug_assert!(lhs.arg_count() > 0);
+                assert!(lhs.arg_count() > 0);
                 self.curried_function(&vec![(lhs.clone(), *rhs.clone())]) // @Fixme: don't clone?
             }
         }
@@ -319,7 +319,7 @@ impl<'a> CodeGenerator<'a> {
         &mut self,
         assignments: &Vec<(ast::Lhs<'file>, ast::Expr<'file>)>,
     ) -> Result<String> {
-        debug_assert!(assignments.len() > 0);
+        assert!(assignments.len() > 0);
 
         let arg_count = assignments[0].0.arg_count();
         let mut ids = Vec::with_capacity(arg_count);
@@ -493,7 +493,7 @@ impl<'a> CodeGenerator<'a> {
             }
 
             ast::Pattern::UnaryConstructor(name) => {
-                debug_assert!(matches!(name, ast::Name::Ident(_)));
+                assert!(matches!(name, ast::Name::Ident(_)));
                 // Check that it's the right variant
                 self.conditions.push(format!(
                     r#"getmetatable({}).__variant == "{}""#,

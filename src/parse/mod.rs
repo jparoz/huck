@@ -488,12 +488,12 @@ where
 }
 
 fn reserved<'a>(s: &'static str) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> {
-    debug_assert!(is_reserved(s));
+    assert!(is_reserved(s));
     ws(terminated(tag(s), peek(not(satisfy(is_name_char)))))
 }
 
 fn reserved_op<'a>(s: &'static str) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> {
-    debug_assert!(is_reserved(s));
+    assert!(is_reserved(s));
     ws(terminated(tag(s), peek(not(operator_char))))
 }
 

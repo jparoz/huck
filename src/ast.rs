@@ -293,7 +293,7 @@ impl<'file> Expr<'file> {
             }
 
             Expr::Lambda { lhs, rhs } => {
-                debug_assert!(matches!(lhs, Lhs::Lambda { .. }));
+                assert!(matches!(lhs, Lhs::Lambda { .. }));
 
                 let args = match lhs {
                     Lhs::Lambda { args } => args,

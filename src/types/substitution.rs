@@ -24,7 +24,7 @@ impl Substitution {
             }
 
             // Assert because there should never be a swap already in the sub with the same var!
-            debug_assert!(next.0.insert(fr, new_to).is_none());
+            assert!(next.0.insert(fr, new_to).is_none());
         }
         next
     }
@@ -52,6 +52,7 @@ impl Debug for Substitution {
     }
 }
 
+// @Todo: see note on ApplyPrecedence, and do the same here
 pub trait ApplySub {
     fn apply(&mut self, sub: &Substitution);
 }

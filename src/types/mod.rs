@@ -31,7 +31,7 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
 
         // @Note: guaranteed to be None,
         // because we're iterating over a BTreeMap.
-        debug_assert!(cg.types.insert(name, (typ, defn)).is_none());
+        assert!(cg.types.insert(name, (typ, defn)).is_none());
     }
 
     // Generate constraints for each type definition
@@ -45,14 +45,14 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
 
         // @Note: guaranteed to be None,
         // because we're iterating over a BTreeMap.
-        debug_assert!(type_definitions
+        assert!(type_definitions
             .insert(type_defn.name.clone(), type_defn)
             .is_none());
     }
 
     // Polymorphically bind all top-level variables.
     cg.bind_all_top_level();
-    debug_assert!(cg.assumptions.is_empty());
+    assert!(cg.assumptions.is_empty());
 
     // Solve the type constraints
     let soln = cg.solve()?;

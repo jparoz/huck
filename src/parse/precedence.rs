@@ -72,6 +72,7 @@ pub enum Associativity {
 }
 
 // @Todo: replace this with methods on Precedence (? or maybe PrecTable?)
+// @Note: or maybe don't? see ApplySub; maybe just doing it there is better.
 pub trait ApplyPrecedence {
     fn apply(&mut self, precs: &BTreeMap<Name, Precedence>);
 }
