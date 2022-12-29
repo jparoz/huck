@@ -142,11 +142,11 @@ impl<'file> ConstraintGenerator<'file> {
     }
 
     /// Returns the type of the whole pattern item, as well as emitting constraints for sub-items.
-    fn bind(&mut self, pat: &Pattern) -> Type {
+    fn bind_pattern(&mut self, pat: &Pattern) -> Type {
         macro_rules! bind_function_args {
             ($cons_type:expr, $iter:expr) => {
                 $iter.fold($cons_type, |acc, arg| {
-                    let arg_type = self.bind(arg);
+                    let arg_type = self.bind_pattern(arg);
                     let partial_res_type = self.fresh();
                     let partial_cons_type =
                         Type::Arrow(Box::new(arg_type), Box::new(partial_res_type.clone()));
@@ -161,7 +161,7 @@ impl<'file> ConstraintGenerator<'file> {
         match pat {
             Pattern::Bind(s) => {
                 let beta = self.fresh();
-                self.bind_name_mono(&Name::Ident(s.to_string()), &beta);
+                self.bind_assumptions_mono(&Name::Ident(s.to_string()), &beta);
                 beta
             }
 
@@ -169,14 +169,16 @@ impl<'file> ConstraintGenerator<'file> {
                 let beta = self.fresh();
 
                 for pat in pats {
-                    let typ = self.bind(pat);
+                    let typ = self.bind_pattern(pat);
                     self.constraints
                         .push(Constraint::Equality(beta.clone(), typ));
                 }
 
                 Type::List(Box::new(beta))
             }
-            Pattern::Tuple(pats) => Type::Tuple(pats.iter().map(|pat| self.bind(pat)).collect()),
+            Pattern::Tuple(pats) => {
+                Type::Tuple(pats.iter().map(|pat| self.bind_pattern(pat)).collect())
+            }
 
             Pattern::Numeral(Numeral::Int(_)) => Type::Concrete("Int".to_string()),
             Pattern::Numeral(Numeral::Float(_)) => Type::Concrete("Float".to_string()),
@@ -202,7 +204,8 @@ impl<'file> ConstraintGenerator<'file> {
         }
     }
 
-    fn bind_name_mono(&mut self, name: &Name, typ: &Type) {
+    /// Binds (monomorphically) any assumptions about the given name to the given type.
+    fn bind_assumptions_mono(&mut self, name: &Name, typ: &Type) {
         if let Some(assumptions) = self.assumptions.remove(name) {
             for assumed in assumptions {
                 self.constrain(Constraint::Equality(assumed, typ.clone()));
@@ -211,7 +214,8 @@ impl<'file> ConstraintGenerator<'file> {
         }
     }
 
-    fn bind_name_poly(&mut self, name: &Name, typ: &Type) {
+    /// Binds (polymorphically) any assumptions about the given name to the given type.
+    fn bind_assumptions_poly(&mut self, name: &Name, typ: &Type) {
         if let Some(assumptions) = self.assumptions.remove(name) {
             for assumed in assumptions {
                 self.constrain(Constraint::ImplicitInstance(
@@ -229,7 +233,7 @@ impl<'file> ConstraintGenerator<'file> {
         }
     }
 
-    pub fn bind_all_top_level(&mut self) {
+    pub fn bind_all_top_level_assumptions(&mut self) {
         log::trace!("Emitting constraints about assumptions:");
 
         let mut assumptions = BTreeMap::new();
@@ -315,7 +319,7 @@ impl<'file> ConstraintGenerator<'file> {
             if log_enabled!(log::Level::Trace) {
                 log::trace!("Substitution:");
                 for (fr, to) in sub.iter() {
-                    log::trace!("    {:?} ↦ {:?}", fr, to);
+                    log::trace!("    {} ↦ {}", fr, to);
                 }
 
                 log::trace!("Constraints:");
@@ -380,7 +384,7 @@ impl<'file> ConstraintGenerator<'file> {
                 });
 
             // @Checkme: poly or mono?
-            self.bind_name_poly(constr_name, &constr_type);
+            self.bind_assumptions_poly(constr_name, &constr_type);
 
             // @Errors @Checkme: no name conflicts
             constructors.insert(constr_name.clone(), constr_type);
@@ -451,21 +455,24 @@ impl<'file> ConstraintGenerator<'file> {
     pub fn generate_assignment(&mut self, assign: &Assignment<'file>) -> Type {
         let (lhs, expr) = assign;
 
-        macro_rules! bind {
-            ($iter:expr) => {
-                $iter.fold(self.generate_expr(expr), |acc, arg| {
-                    let beta = self.bind(arg);
-                    Type::Arrow(Box::new(beta), Box::new(acc))
-                })
-            };
-        }
-
         match lhs {
             Lhs::Func { args, .. } | Lhs::Lambda { args } => {
-                bind!(args.iter().rev())
+                args.iter()
+                    .rev()
+                    .fold(self.generate_expr(expr), |acc, arg| {
+                        let beta = self.bind_pattern(arg);
+                        Type::Arrow(Box::new(beta), Box::new(acc))
+                    })
             }
-            Lhs::Binop { a, b, op: _op } => {
-                bind!(iter::once(b).chain(iter::once(a)))
+            Lhs::Binop { a, b, .. } => {
+                let res = self.generate_expr(expr);
+                let beta_a = self.bind_pattern(a);
+                let beta_b = self.bind_pattern(b);
+
+                Type::Arrow(
+                    Box::new(beta_a),
+                    Box::new(Type::Arrow(Box::new(beta_b), Box::new(res))),
+                )
             }
         }
     }
@@ -540,7 +547,7 @@ impl<'file> ConstraintGenerator<'file> {
                         .map(|assign| self.generate_assignment(assign))
                         .collect();
                     let typ = self.equate_all(typs);
-                    self.bind_name_poly(&name, &typ);
+                    self.bind_assumptions_poly(&name, &typ);
                 }
 
                 beta
@@ -575,19 +582,30 @@ impl<'file> ConstraintGenerator<'file> {
             }
 
             Expr::Case { expr, arms } => {
-                let (mut pat_types, arm_types): (Vec<Type>, Vec<Type>) = arms
-                    .iter()
-                    .map(|(pat, e)| {
-                        // @Todo @Checkme: do we have to do stuff with m_stack like in Expr::Lambda?
-                        let arm_type = self.generate_expr(e);
-                        let pat_type = self.bind(pat);
-                        (pat_type, arm_type)
-                    })
-                    .unzip();
+                let mut pat_types = Vec::new();
+                let mut arm_types = Vec::new();
+                for (pat, e) in arms {
+                    // Use a fresh type variable to represent the newly bound pattern.
+                    let typevar = self.fresh_var();
 
+                    // Push the typevar onto the stack while generating the expression.
+                    self.m_stack.push(typevar);
+                    arm_types.push(self.generate_expr(e));
+                    let typevar = self.m_stack.pop().unwrap();
+
+                    // Equate the fresh variable to the rest of the pattern types.
+                    pat_types.push(Type::Var(typevar));
+                    // Equate the actual type found while binding.
+                    pat_types.push(self.bind_pattern(pat));
+                }
+
+                // Equate the type of the scrutinised expression to the pattern types.
                 pat_types.push(self.generate_expr(expr));
 
+                // Actually equate all the pattern types
                 self.equate_all(pat_types);
+
+                // Finally, equate all the arm RHS return types, and return that as the expr type.
                 self.equate_all(arm_types)
             }
 
@@ -610,7 +628,7 @@ impl<'file> ConstraintGenerator<'file> {
                 self.m_stack.truncate(total_len - typevar_count);
 
                 for (arg, lambda_type) in args.iter().zip(types.into_iter()) {
-                    let actual_type = self.bind(arg);
+                    let actual_type = self.bind_pattern(arg);
                     self.constrain(Constraint::Equality(actual_type, lambda_type))
                 }
 

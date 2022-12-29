@@ -50,7 +50,7 @@ pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
     }
 
     // Polymorphically bind all top-level variables.
-    cg.bind_all_top_level();
+    cg.bind_all_top_level_assumptions();
     assert!(cg.assumptions.is_empty());
 
     // Solve the type constraints
