@@ -42,6 +42,15 @@ impl Substitution {
     }
 }
 
+impl FromIterator<(TypeVar, Type)> for Substitution {
+    fn from_iter<T>(iter: T) -> Self
+    where
+        T: IntoIterator<Item = (TypeVar, Type)>,
+    {
+        Substitution(BTreeMap::from_iter(iter))
+    }
+}
+
 impl Debug for Substitution {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Substitution:")?;

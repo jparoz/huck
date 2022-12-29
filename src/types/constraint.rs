@@ -151,13 +151,14 @@ impl<'file> ConstraintGenerator<'file> {
 
     /// Takes a TypeScheme and replaces all quantified variables with fresh variables;
     /// then returns the resulting Type.
-    // @Cleanup: this could be way simpler
-    pub fn instantiate(&mut self, mut ts: TypeScheme) -> Type {
-        let sub = ts.vars.into_iter().fold(Substitution::empty(), |sub, var| {
-            sub.then(Substitution::single(var, self.fresh()))
-        });
-        ts.typ.apply(&sub);
-        ts.typ
+    pub fn instantiate(&mut self, ts: TypeScheme) -> Type {
+        let TypeScheme { vars, mut typ } = ts;
+        let sub = vars
+            .into_iter()
+            .zip(iter::repeat_with(|| self.fresh()))
+            .collect();
+        typ.apply(&sub);
+        typ
     }
 
     /// Returns the type of the whole pattern item, as well as emitting constraints for sub-items.
