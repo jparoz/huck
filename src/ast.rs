@@ -65,7 +65,7 @@ impl Name {
     pub fn as_str(&self) -> &str {
         match self {
             Name::Ident(s) | Name::Binop(s) => &s,
-            Name::Lambda => unreachable!(),
+            Name::Lambda => "<lambda>",
         }
     }
 }
