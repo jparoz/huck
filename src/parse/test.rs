@@ -61,3 +61,58 @@ fn apply_to_unit() {
         }
     })
 }
+
+#[test]
+fn case() {
+    assert_eq!(
+        parse(
+            r#"
+                foo x = case x of {
+                    1 -> "one";
+                    2 -> "two";
+                    3 -> "three";
+                };
+            "#
+        )
+        .unwrap(),
+        {
+            let mut definitions: BTreeMap<ast::Name, ast::Definition> = BTreeMap::new();
+
+            let name = ast::Name::Ident("foo".to_string());
+            definitions
+                .entry(name.clone())
+                .or_default()
+                .assignments
+                .push((
+                    ast::Lhs::Func {
+                        name: name.clone(),
+                        args: vec![ast::Pattern::Bind("x")],
+                    },
+                    ast::Expr::Case {
+                        expr: Box::new(ast::Expr::Term(ast::Term::Name(ast::Name::Ident(
+                            "x".to_string(),
+                        )))),
+                        arms: vec![
+                            (
+                                ast::Pattern::Numeral(ast::Numeral::Int("1")),
+                                ast::Expr::Term(ast::Term::String(r#""one""#)),
+                            ),
+                            (
+                                ast::Pattern::Numeral(ast::Numeral::Int("2")),
+                                ast::Expr::Term(ast::Term::String(r#""two""#)),
+                            ),
+                            (
+                                ast::Pattern::Numeral(ast::Numeral::Int("3")),
+                                ast::Expr::Term(ast::Term::String(r#""three""#)),
+                            ),
+                        ],
+                    },
+                ));
+
+            ast::Module {
+                definitions,
+                type_definitions: BTreeMap::new(),
+            }
+        }
+    )
+}
