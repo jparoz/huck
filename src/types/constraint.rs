@@ -180,7 +180,7 @@ impl<'file> ConstraintGenerator<'file> {
 
             Pattern::Numeral(Numeral::Int(_)) => Type::Concrete("Int".to_string()),
             Pattern::Numeral(Numeral::Float(_)) => Type::Concrete("Float".to_string()),
-            Pattern::String(_) => Type::Concrete("Float".to_string()),
+            Pattern::String(_) => Type::Concrete("String".to_string()),
             Pattern::Unit => Type::Concrete("()".to_string()),
 
             Pattern::Binop { operator, lhs, rhs } => {
