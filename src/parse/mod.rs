@@ -67,7 +67,7 @@ pub fn parse(input: &str) -> Result<Module, Error> {
                         {
                             return Err(Error::MultipleTypes(
                                 name,
-                                // @Cleanup: don't have this dodgy whitespace
+                                // @Cleanup @Errors: don't have this dodgy whitespace
                                 format!("\n    {:?}\n    {:?}", ts, previous_ts),
                             ));
                         }

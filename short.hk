@@ -1,18 +1,5 @@
-not True = False;
-not False = True;
+foo = 123;
+foo' = foo + 1;
+foo'' = foo' + 1;
 
-pred 1 = True;
-pred _ = False;
-
-isEven 0 = True;
-isEven 1 = False;
-isEven n = isOdd (n-1);
-
-isOdd 0 = False;
-isOdd 1 = True;
-isOdd n = isEven (n-1);
-
-boolToInt True = 123;
-boolToInt False = 456;
-
-conditional b x = if b then x*2 else x;
+bar x' = x'+2;

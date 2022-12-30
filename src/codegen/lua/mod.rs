@@ -158,42 +158,34 @@ impl<'a> CodeGenerator<'a> {
     /// Returns a Lua-safe version of a Huck identifier.
     ///
     /// Guaranteed to return the same string each time it's called with the same argument.
-    fn lua_safe(&self, name: &ast::Name) -> String {
-        match name {
-            ast::Name::Ident(s) if is_lua_keyword(s) => {
-                format!("{}_{}", self.generated_name_prefix, s)
-            }
-            ast::Name::Ident(s) => s.to_string(),
-            ast::Name::Lambda => unreachable!(),
-            ast::Name::Binop(s) => {
-                let mut output = self.generated_name_prefix.to_string();
+    fn lua_safe(&self, s: &str) -> String {
+        let mut output = String::new();
 
-                for c in s.chars() {
-                    match c {
-                        '=' => output.push_str("_EQUALS"),
-                        '+' => output.push_str("_PLUS"),
-                        '-' => output.push_str("_MINUS"),
-                        '|' => output.push_str("_BAR"),
-                        '!' => output.push_str("_BANG"),
-                        '@' => output.push_str("_AT"),
-                        '#' => output.push_str("_HASH"),
-                        '$' => output.push_str("_DOLLAR"),
-                        '%' => output.push_str("_PERCENT"),
-                        '^' => output.push_str("_CARAT"),
-                        '&' => output.push_str("_AMPERS"),
-                        '*' => output.push_str("_STAR"),
-                        ':' => output.push_str("_COLON"),
-                        '.' => output.push_str("_DOT"),
-                        ',' => output.push_str("_COMMA"),
-                        '/' => output.push_str("_SLASH"),
-                        '~' => output.push_str("_TILDE"),
-                        _ => unreachable!(),
-                    }
-                }
-
-                output
+        for c in s.chars() {
+            match c {
+                '=' => output.push_str("_EQUALS"),
+                '+' => output.push_str("_PLUS"),
+                '-' => output.push_str("_MINUS"),
+                '|' => output.push_str("_BAR"),
+                '!' => output.push_str("_BANG"),
+                '@' => output.push_str("_AT"),
+                '#' => output.push_str("_HASH"),
+                '$' => output.push_str("_DOLLAR"),
+                '%' => output.push_str("_PERCENT"),
+                '^' => output.push_str("_CARET"),
+                '&' => output.push_str("_AMPERS"),
+                '*' => output.push_str("_STAR"),
+                ':' => output.push_str("_COLON"),
+                '.' => output.push_str("_DOT"),
+                ',' => output.push_str("_COMMA"),
+                '/' => output.push_str("_SLASH"),
+                '~' => output.push_str("_TILDE"),
+                '\'' => output.push_str("_TICK"),
+                c => output.push(c),
             }
         }
+
+        output
     }
 
     /// Generates a Lua expression representing a Huck definition,
@@ -527,7 +519,7 @@ impl<'a> CodeGenerator<'a> {
         match pat {
             ast::Pattern::Bind(s) => {
                 self.bindings
-                    .push(format!("local {} = {}\n", s, lua_arg_name));
+                    .push(format!("local {} = {}\n", self.lua_safe(s), lua_arg_name));
             }
 
             // @Note: the Lua logic is identical for Huck lists and tuples.
@@ -686,7 +678,7 @@ impl<'a> CodeGenerator<'a> {
         } else {
             // It's a locally-bound definition,
             // so we should emit e.g. var
-            Ok(format!(r#"{}"#, self.lua_safe(name)))
+            Ok(format!(r#"{}"#, self.lua_safe(name.as_str())))
         }
     }
 
