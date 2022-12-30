@@ -1,9 +1,18 @@
-type Wrap a = Wrap a;
+not True = False;
+not False = True;
 
-(* unwrap : Wrap (Int -> Int) -> (Int, Int); *)
-unwrap w = case w of {
-    (Wrap i) -> let id = i in (id 123, id 456);
-};
+pred 1 = True;
+pred _ = False;
 
-(* unwrap2 : Wrap (Int -> Int) -> (Int, Int); *)
-unwrap2 = \(Wrap i) -> let id = i in (id 123, id 456);
+isEven 0 = True;
+isEven 1 = False;
+isEven n = isOdd (n-1);
+
+isOdd 0 = False;
+isOdd 1 = True;
+isOdd n = isEven (n-1);
+
+boolToInt True = 123;
+boolToInt False = 456;
+
+conditional b x = if b then x*2 else x;

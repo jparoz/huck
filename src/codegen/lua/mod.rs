@@ -280,7 +280,12 @@ impl<'a> CodeGenerator<'a> {
                 cond,
                 then_expr,
                 else_expr,
-            } => Ok(format!("(({cond}) and ({then_expr}) or ({else_expr}))")),
+            } => Ok(format!(
+                "(({}) and ({}) or ({}))",
+                self.expr(cond)?,
+                self.expr(then_expr)?,
+                self.expr(else_expr)?,
+            )),
 
             ast::Expr::Case { expr, arms } => self.case(expr, arms),
 
@@ -580,6 +585,16 @@ impl<'a> CodeGenerator<'a> {
                 self.pattern_match(&rhs, &format!("{}[{}]", lua_arg_name, 2))?;
             }
 
+            // @Hardcode @Hack-ish @Prelude
+            ast::Pattern::UnaryConstructor(name)
+                if name.as_str() == "True" || name.as_str() == "False" =>
+            {
+                let mut name_string = name.as_str().to_string();
+                name_string.make_ascii_lowercase();
+                self.conditions
+                    .push(format!(r#"{} == {}"#, lua_arg_name, name_string));
+            }
+
             ast::Pattern::UnaryConstructor(name) => {
                 assert!(matches!(name, ast::Name::Ident(_)));
                 // Check that it's the right variant
@@ -663,6 +678,11 @@ impl<'a> CodeGenerator<'a> {
             // It's a top-level definition,
             // so we should emit e.g. _HUCK["var"]
             Ok(format!(r#"{}["{}"]"#, self.generated_name_prefix, name))
+        } else if name.as_str() == "True" || name.as_str() == "False" {
+            // @Hardcode @Hack-ish @Prelude
+            let mut name_string = name.as_str().to_string();
+            name_string.make_ascii_lowercase();
+            Ok(name_string)
         } else {
             // It's a locally-bound definition,
             // so we should emit e.g. var

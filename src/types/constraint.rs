@@ -192,9 +192,17 @@ impl<'file> ConstraintGenerator<'file> {
             }
 
             Pattern::UnaryConstructor(name) => {
-                let beta = self.fresh();
-                self.assume(name.clone(), beta.clone());
-                beta
+                // @Prelude @Hack-ish: These probably shouldn't be hard-coded like this.
+                let s = name.as_str();
+                if s == "True" || s == "False" {
+                    let typ = Type::Concrete("Bool".to_string());
+                    self.assume(name.clone(), typ.clone());
+                    typ
+                } else {
+                    let beta = self.fresh();
+                    self.assume(name.clone(), beta.clone());
+                    beta
+                }
             }
             Pattern::Destructure { constructor, args } => {
                 let beta = self.fresh();
@@ -261,6 +269,13 @@ impl<'file> ConstraintGenerator<'file> {
             } else if is_lua_binop(name.as_str()) {
                 // Do nothing. @XXX @Cleanup: don't do this
                 // @Prelude
+            } else if name.as_str() == "True" || name.as_str() == "False" {
+                // @Prelude
+                let bool_type = Type::Concrete("Bool".to_string());
+                for assumed_type in assumed_types {
+                    self.constraints
+                        .push(Constraint::Equality(assumed_type, bool_type.clone()));
+                }
             } else {
                 // If there is no inferred type for the name (i.e. it's not in scope),
                 // then it's a scope error.
