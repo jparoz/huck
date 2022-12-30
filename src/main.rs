@@ -8,19 +8,33 @@ mod types;
 #[allow(dead_code)]
 mod utils;
 
+use std::io::{self, Read};
+
 fn main() {
     env_logger::init();
 
-    let filename = std::env::args().nth(1).unwrap();
-    let contents = std::fs::read_to_string(&filename).unwrap();
+    let mut args = std::env::args();
 
-    let lua = utils::transpile(&contents).unwrap_or_else(|e| {
-        eprintln!("Compile error: {}", e);
-        std::process::exit(1);
-    });
+    // Ignore executable name
+    args.next();
 
-    println!("{}", lua);
+    for filename in args {
+        if filename == "-" {
+            // stdin
+            let mut contents = String::new();
+            io::stdin().read_to_string(&mut contents).unwrap();
 
-    eprintln!("\nExecuting...\n");
-    eprintln!("{}", utils::execute_lua(&lua));
+            let lua = utils::transpile(&contents).unwrap_or_else(|e| {
+                eprintln!("Compile error: {}", e);
+                std::process::exit(1);
+            });
+
+            println!("{}", lua);
+        } else {
+            utils::transpile_file(filename).unwrap_or_else(|e| {
+                eprintln!("Compile error: {}", e);
+                std::process::exit(1);
+            });
+        }
+    }
 }

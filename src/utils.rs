@@ -19,6 +19,7 @@ pub fn execute_lua(lua: &str) -> String {
     String::from_utf8(output.stdout).unwrap()
 }
 
+/// Takes a Huck filename file.hk, transpiles it into Lua, and writes it to file.lua
 pub fn transpile_file<P>(path: P) -> Result<(), HuckError>
 where
     P: AsRef<Path>,
