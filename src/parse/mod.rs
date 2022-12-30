@@ -410,6 +410,7 @@ fn upper_name(input: &str) -> IResult<&str, Name> {
 ///     type Foo = Bar | Baz Int;
 /// `constructor_definition` would parse either "Bar" or "Baz Int".
 fn constructor_definition(input: &str) -> IResult<&str, ConstructorDefinition> {
+    // @Future: type constructor binops
     nom_tuple((upper_name, many0(type_term)))(input)
 }
 
@@ -495,7 +496,7 @@ fn operator(input: &str) -> IResult<&str, Name> {
 }
 
 fn operator_char(input: &str) -> IResult<&str, char> {
-    one_of("=+-|!@#$%^&*:.,/~")(input)
+    one_of("=+-|!@#$%^&*:.,/~<>")(input)
 }
 
 fn semi(input: &str) -> IResult<&str, &str> {
