@@ -1,0 +1,5 @@
+module Bar;
+
+bar x = x + 3;
+
+baz = 123;

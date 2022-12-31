@@ -1,5 +1,0 @@
-module Short;
-
-import Short.Impl (foo_impl);
-
-foo = foo_impl;

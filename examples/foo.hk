@@ -1,0 +1,5 @@
+module Foo;
+
+import Bar (bar, baz);
+
+foo = bar baz;
