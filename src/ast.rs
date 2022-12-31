@@ -38,9 +38,21 @@ impl<'file> Definition<'file> {
 /// into a single Definition struct for each function name.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Module<'file> {
+    pub module_path: Option<ModulePath<'file>>,
     pub definitions: BTreeMap<Name, Definition<'file>>,
     pub type_definitions: BTreeMap<Name, TypeDefinition<'file>>,
+    pub imports: BTreeMap<ModulePath<'file>, Vec<Name>>,
 }
+
+/// A ModulePath is a path to a Huck module, as defined within that module.
+/// It is made up of a Vec of segments of the path, e.g. Parent.ChildMod becomes:
+/// `ModulePath(vec![ModulePathSegment("Parent"), ModulePathSegment("ChildMod")])`
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ModulePath<'file>(pub Vec<ModulePathSegment<'file>>);
+
+/// A ModulePathSegment makes up a part of a Huck module path. See [ModulePath].
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ModulePathSegment<'file>(pub &'file str);
 
 /// A Statement is a sum type for any of the top-level Huck constructs.
 #[derive(Debug, PartialEq, Eq)]
@@ -48,8 +60,9 @@ pub enum Statement<'file> {
     AssignmentWithType(TypeScheme<'file>, Assignment<'file>),
     AssignmentWithoutType(Assignment<'file>),
     TypeAnnotation(Name, TypeScheme<'file>),
-    Precedence(Name, Precedence),
     TypeDefinition(TypeDefinition<'file>),
+    Precedence(Name, Precedence),
+    Import(ModulePath<'file>, Vec<Name>),
 }
 
 pub type Assignment<'file> = (Lhs<'file>, Expr<'file>);

@@ -1,5 +1,5 @@
-foo = 123;
-foo' = foo + 1;
-foo'' = foo' + 1;
+module Short;
 
-bar x' = x'+2;
+import Short.Impl (foo_impl);
+
+foo = foo_impl;

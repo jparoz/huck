@@ -20,8 +20,12 @@ use precedence::{default_precs, ApplyPrecedence, Associativity, Precedence};
 mod test;
 
 pub fn parse(input: &str) -> Result<Module, Error> {
-    match preceded(ws(success(())), ws(many0(statement)))(input) {
-        Ok((leftover, statements)) => {
+    match preceded(
+        ws(success(())),
+        nom_tuple((opt(module_declaration), many0(statement))),
+    )(input)
+    {
+        Ok((leftover, (module_path, statements))) => {
             if !leftover.is_empty() {
                 return Err(Error::Leftover(leftover.to_string()));
             }
@@ -29,6 +33,7 @@ pub fn parse(input: &str) -> Result<Module, Error> {
             let mut definitions: BTreeMap<Name, Definition> = BTreeMap::new();
             let mut type_definitions = BTreeMap::new();
             let mut precs = default_precs();
+            let mut imports: BTreeMap<ModulePath, Vec<Name>> = BTreeMap::new();
 
             // Collect all the statements together into Definitions
             // (and precs).
@@ -93,6 +98,10 @@ pub fn parse(input: &str) -> Result<Module, Error> {
                             return Err(Error::MultipleTypeDefinitions(first_defn.name));
                         }
                     }
+
+                    Statement::Import(path, names) => {
+                        imports.entry(path).or_default().extend(names)
+                    }
                 }
             }
 
@@ -102,12 +111,25 @@ pub fn parse(input: &str) -> Result<Module, Error> {
             }
 
             Ok(Module {
+                module_path,
                 definitions,
                 type_definitions,
+                imports,
             })
         }
         Err(nom) => Err(Error::Nom(nom.to_string())),
     }
+}
+
+fn module_declaration(input: &str) -> IResult<&str, ModulePath> {
+    delimited(reserved("module"), module_path, semi)(input)
+}
+
+fn module_path(input: &str) -> IResult<&str, ModulePath> {
+    map(
+        ws(separated_list1(tag("."), module_path_segment)),
+        ModulePath,
+    )(input)
 }
 
 fn statement(input: &str) -> IResult<&str, Statement> {
@@ -137,6 +159,14 @@ fn statement(input: &str) -> IResult<&str, Statement> {
             },
         ),
         map(prec, |(name, prec)| Statement::Precedence(name, prec)),
+        map(
+            delimited(
+                reserved("import"),
+                nom_tuple((module_path, tuple(name))),
+                semi,
+            ),
+            |(path, names)| Statement::Import(path, names),
+        ),
     ))(input)
 }
 
@@ -392,6 +422,16 @@ fn upper_ident(input: &str) -> IResult<&str, &str> {
         satisfy(char::is_uppercase),
         many0(satisfy(is_name_char)),
     )))(input)
+}
+
+fn module_path_segment(input: &str) -> IResult<&str, ModulePathSegment> {
+    map(
+        recognize(nom_tuple((
+            satisfy(char::is_uppercase),
+            many0(satisfy(char::is_alphabetic)),
+        ))),
+        ModulePathSegment,
+    )(input)
 }
 
 fn name(input: &str) -> IResult<&str, Name> {

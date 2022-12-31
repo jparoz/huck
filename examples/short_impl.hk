@@ -1,0 +1,3 @@
+module Short.Impl;
+
+foo_impl = 123;
