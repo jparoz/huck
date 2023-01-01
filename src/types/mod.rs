@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{self, Display};
 
 use crate::ast;
+use crate::context::Context;
 use crate::scope::{Scope, TypedDefinition};
 
 // @Cleanup: do these all need to be pub?
@@ -17,36 +18,37 @@ use constraint::ConstraintGenerator;
 use error::Error as TypeError;
 use substitution::{ApplySub, Substitution};
 
-/// Typechecks the given Huck module.
-pub fn typecheck(module: ast::Module) -> Result<Scope, TypeError> {
+/// Typechecks the given Huck context.
+pub fn typecheck(context: Context) -> Result<Scope, TypeError> {
     let mut cg = ConstraintGenerator::new();
-
     let mut type_definitions = BTreeMap::new();
 
-    // Generate constraints for each definition, while keeping track of inferred types
-    for (name, defn) in module.definitions {
-        let typ = cg.generate_definition(&defn);
-        log::trace!("Initial inferred type for {}: {}", name, typ);
+    for (module_path, module) in context.modules {
+        // Generate constraints for each definition, while keeping track of inferred types
+        for (name, defn) in module.definitions {
+            let typ = cg.generate_definition(&defn);
+            log::trace!("Initial inferred type for {}: {}", name, typ);
 
-        // @Note: guaranteed to be None,
-        // because we're iterating over a BTreeMap.
-        assert!(cg.types.insert(name, (typ, defn)).is_none());
-    }
-
-    // Generate constraints for each type definition
-    for (_name, ast_type_defn) in module.type_definitions {
-        let type_defn = cg.convert_ast_type_definition(&ast_type_defn);
-
-        for (constr_name, constr_type) in type_defn.constructors.clone() {
-            cg.constructors
-                .insert(constr_name.clone(), constr_type.clone());
+            // @Note: guaranteed to be None,
+            // because we're iterating over a BTreeMap.
+            assert!(cg.types.insert(name, (typ, defn)).is_none());
         }
 
-        // @Note: guaranteed to be None,
-        // because we're iterating over a BTreeMap.
-        assert!(type_definitions
-            .insert(type_defn.name.clone(), type_defn)
-            .is_none());
+        // Generate constraints for each type definition
+        for (_name, ast_type_defn) in module.type_definitions {
+            let type_defn = cg.convert_ast_type_definition(&ast_type_defn);
+
+            for (constr_name, constr_type) in type_defn.constructors.clone() {
+                cg.constructors
+                    .insert(constr_name.clone(), constr_type.clone());
+            }
+
+            // @Note: guaranteed to be None,
+            // because we're iterating over a BTreeMap.
+            assert!(type_definitions
+                .insert(type_defn.name.clone(), type_defn)
+                .is_none());
+        }
     }
 
     // Polymorphically bind all top-level variables.

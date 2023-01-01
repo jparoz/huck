@@ -108,7 +108,7 @@ fn unit() {
             ));
 
         ast::Module {
-            module_path: None,
+            path: None,
             definitions,
             type_definitions: BTreeMap::new(),
             imports: BTreeMap::new(),
@@ -140,7 +140,7 @@ fn apply_to_unit() {
             ));
 
         ast::Module {
-            module_path: None,
+            path: None,
             definitions,
             type_definitions: BTreeMap::new(),
             imports: BTreeMap::new(),
@@ -196,7 +196,7 @@ fn case() {
                 ));
 
             ast::Module {
-                module_path: None,
+                path: None,
                 definitions,
                 type_definitions: BTreeMap::new(),
                 imports: BTreeMap::new(),

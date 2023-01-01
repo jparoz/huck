@@ -1,5 +1,6 @@
 mod ast;
 mod codegen;
+mod context;
 mod error;
 mod parse;
 mod scope;
@@ -24,7 +25,7 @@ fn main() {
             let mut contents = String::new();
             io::stdin().read_to_string(&mut contents).unwrap();
 
-            let lua = utils::transpile(&contents).unwrap_or_else(|e| {
+            let lua = utils::transpile(contents).unwrap_or_else(|e| {
                 eprintln!("Compile error: {}", e);
                 std::process::exit(1);
             });

@@ -2,8 +2,8 @@ use std::io::Write;
 use std::path::Path;
 
 use crate::codegen;
+use crate::context::Context;
 use crate::error::Error as HuckError;
-use crate::parse::parse;
 use crate::types::typecheck;
 
 /// Takes Lua code as input, executes it using a Lua interpreter found in PATH,
@@ -19,34 +19,55 @@ pub fn execute_lua(lua: &str) -> String {
     String::from_utf8(output.stdout).unwrap()
 }
 
+// @DRY
 /// Takes a Huck filename file.hk, transpiles it into Lua, and writes it to file.lua
 pub fn transpile_file<P>(path: P) -> Result<(), HuckError>
 where
     P: AsRef<Path>,
 {
-    match path.as_ref().extension() {
-        Some(ex) if ex == "hk" => (),
-        Some(_) => log::warn!("unknown filetype transpiled: {:?}", path.as_ref()),
-        _ => log::warn!("file without extension transpiled: {:?}", path.as_ref()),
-    }
+    // Make a context with one file
+    let mut context = Context::default();
 
-    let huck = std::fs::read_to_string(&path)?;
+    context.include_file(&path)?;
 
-    let lua = transpile(&huck)?;
+    log::trace!(
+        "Parsed module: {:?}",
+        context.modules.iter().next().unwrap()
+    );
+
+    // Typecheck
+    let scope = typecheck(context)?;
+
+    // @Future: optimisations go here
+
+    // Generate code
+    let lua = codegen::lua::generate(&scope)?;
+
+    log::trace!("Generated Lua code:\n{}", lua);
+
+    let lua = normalize(&lua);
 
     std::fs::write(path.as_ref().with_extension("lua"), lua)?;
 
     Ok(())
 }
 
+// @DRY
 /// Takes some Huck and turns it into Lua, doing every step in between.
-pub fn transpile(huck: &str) -> Result<String, HuckError> {
+pub fn transpile(huck: String) -> Result<String, HuckError> {
+    // Make a context with one file
+    let mut context = Context::default();
+
     // Parse
-    let parsed = parse(huck)?;
-    log::trace!("Parsed module: {:?}", parsed);
+    context.include_string(huck)?;
+
+    log::trace!(
+        "Parsed module: {:?}",
+        context.modules.iter().next().unwrap()
+    );
 
     // Typecheck
-    let scope = typecheck(parsed)?;
+    let scope = typecheck(context)?;
 
     // @Future: optimisations go here
 

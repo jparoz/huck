@@ -3,6 +3,35 @@ use std::fmt::{self, Display};
 
 use crate::parse::precedence::Precedence;
 
+/// A Module is a dictionary of Huck function definitions.
+/// This is produced from a Vec<Statement>,
+/// by using the parsed precedence rules to reshape the AST,
+/// and collecting statements referring to the same function
+/// into a single Definition struct for each function name.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Module<'file> {
+    pub path: Option<ModulePath<'file>>,
+    pub definitions: BTreeMap<Name, Definition<'file>>,
+    pub type_definitions: BTreeMap<Name, TypeDefinition<'file>>,
+    pub imports: BTreeMap<ModulePath<'file>, Vec<Name>>,
+}
+
+/// A ModulePath is a path to a Huck module, as defined within that module.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ModulePath<'file>(pub &'file str);
+
+impl<'file> Default for ModulePath<'file> {
+    fn default() -> Self {
+        ModulePath("Main")
+    }
+}
+
+impl<'file> Display for ModulePath<'file> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// A definition is the correct AST for a given Huck definition,
 /// combined from any statements concerning the same Name.
 /// This includes any case definitions (Assignments),
@@ -30,29 +59,6 @@ impl<'file> Definition<'file> {
         })
     }
 }
-
-/// A Module is a dictionary of Huck function definitions.
-/// This is produced from a Vec<Statement>,
-/// by using the parsed precedence rules to reshape the AST,
-/// and collecting statements referring to the same function
-/// into a single Definition struct for each function name.
-#[derive(Debug, PartialEq, Eq)]
-pub struct Module<'file> {
-    pub module_path: Option<ModulePath<'file>>,
-    pub definitions: BTreeMap<Name, Definition<'file>>,
-    pub type_definitions: BTreeMap<Name, TypeDefinition<'file>>,
-    pub imports: BTreeMap<ModulePath<'file>, Vec<Name>>,
-}
-
-/// A ModulePath is a path to a Huck module, as defined within that module.
-/// It is made up of a Vec of segments of the path, e.g. Parent.ChildMod becomes:
-/// `ModulePath(vec![ModulePathSegment("Parent"), ModulePathSegment("ChildMod")])`
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ModulePath<'file>(pub Vec<ModulePathSegment<'file>>);
-
-/// A ModulePathSegment makes up a part of a Huck module path. See [ModulePath].
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ModulePathSegment<'file>(pub &'file str);
 
 /// A Statement is a sum type for any of the top-level Huck constructs.
 #[derive(Debug, PartialEq, Eq)]

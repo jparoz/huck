@@ -1,3 +1,4 @@
+use crate::context::Context;
 use crate::scope::Scope;
 use crate::{ast::Name, parse::parse};
 
@@ -22,8 +23,9 @@ fn typ(s: &str) -> Type {
 }
 
 fn typ_module(s: &str) -> Scope {
-    let parsed = parse(s).unwrap();
-    typecheck(parsed).unwrap()
+    let mut ctx = Context::default();
+    ctx.include_string(s.to_string()).unwrap();
+    typecheck(ctx).unwrap()
 }
 
 #[test]

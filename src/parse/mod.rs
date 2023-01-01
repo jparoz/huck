@@ -25,7 +25,7 @@ pub fn parse(input: &str) -> Result<Module, Error> {
         nom_tuple((opt(module_declaration), many0(statement))),
     )(input)
     {
-        Ok((leftover, (module_path, statements))) => {
+        Ok((leftover, (path, statements))) => {
             if !leftover.is_empty() {
                 return Err(Error::Leftover(leftover.to_string()));
             }
@@ -111,7 +111,7 @@ pub fn parse(input: &str) -> Result<Module, Error> {
             }
 
             Ok(Module {
-                module_path,
+                path,
                 definitions,
                 type_definitions,
                 imports,
@@ -127,7 +127,7 @@ fn module_declaration(input: &str) -> IResult<&str, ModulePath> {
 
 fn module_path(input: &str) -> IResult<&str, ModulePath> {
     map(
-        ws(separated_list1(tag("."), module_path_segment)),
+        ws(recognize(separated_list1(tag("."), module_path_segment))),
         ModulePath,
     )(input)
 }
@@ -424,14 +424,11 @@ fn upper_ident(input: &str) -> IResult<&str, &str> {
     )))(input)
 }
 
-fn module_path_segment(input: &str) -> IResult<&str, ModulePathSegment> {
-    map(
-        recognize(nom_tuple((
-            satisfy(char::is_uppercase),
-            many0(satisfy(char::is_alphabetic)),
-        ))),
-        ModulePathSegment,
-    )(input)
+fn module_path_segment(input: &str) -> IResult<&str, &str> {
+    recognize(nom_tuple((
+        satisfy(char::is_uppercase),
+        many0(satisfy(char::is_alphabetic)),
+    )))(input)
 }
 
 fn name(input: &str) -> IResult<&str, Name> {
