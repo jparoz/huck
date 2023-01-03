@@ -3,17 +3,18 @@ use std::fmt::{self, Display};
 
 use crate::ast;
 
-// @Cleanup: do these all need to be pub?
-pub mod constraint;
-pub mod error;
-pub mod substitution;
-pub use error::Error;
+mod constraint;
+mod error;
+mod substitution;
 
 #[cfg(test)]
 mod test;
 
+pub use constraint::ConstraintGenerator;
+pub use error::Error;
+pub use substitution::{ApplySub, Substitution};
+
 use error::Error as TypeError;
-use substitution::{ApplySub, Substitution};
 
 #[derive(PartialEq, Eq, Clone, Hash, Debug)]
 pub enum Type {

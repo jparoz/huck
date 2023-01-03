@@ -76,7 +76,7 @@ fn literal_list_int() {
     );
 }
 
-// @Note @Cleanup: This would be better if we could use matches! to avoid `TypeVar::Generated(1)`
+// @Note: This would be better if we could use matches! to avoid `TypeVar::Generated(1)`
 // (could instead be `TypeVar::Generated(_)`),
 // but the boxes prevent this.
 // Also true for lots of other tests.

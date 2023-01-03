@@ -5,9 +5,7 @@ use crate::ast::{Module, ModulePath};
 use crate::error::Error as HuckError;
 use crate::parse::parse;
 use crate::scope::Scope;
-use crate::types::constraint::ConstraintGenerator;
-use crate::types::error::Error as TypeError;
-use crate::types::substitution::ApplySub;
+use crate::types::{ApplySub, ConstraintGenerator, Error as TypeError};
 
 /// Context is the structure which manages module imports.
 /// It contains some modules, manages references between modules, and prepares for typechecking.
@@ -98,7 +96,6 @@ impl<'file> Context<'file> {
 
             // Polymorphically bind all top-level variables.
             cg.bind_all_top_level_assumptions(&scope);
-            assert!(cg.assumptions.is_empty());
 
             // Add the scope to the context.
             assert!(self.scopes.insert(*module_path, scope).is_none());

@@ -60,7 +60,6 @@ pub fn default_precs() -> BTreeMap<Name, Precedence> {
     ])
 }
 
-// @Cleanup: move to AST (probably)
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub struct Precedence(pub Associativity, pub u8);
 

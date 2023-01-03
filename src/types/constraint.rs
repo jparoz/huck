@@ -68,8 +68,7 @@ impl<'file> Debug for Constraint {
 pub struct ConstraintGenerator {
     constraints: Vec<Constraint>,
 
-    // @Cleanup: shouldn't be pub
-    pub assumptions: BTreeMap<Name, Vec<Type>>,
+    assumptions: BTreeMap<Name, Vec<Type>>,
 
     next_typevar_id: usize,
     m_stack: Vec<TypeVar>,
