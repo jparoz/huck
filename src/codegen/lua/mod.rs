@@ -91,9 +91,11 @@ impl<'a> CodeGenerator<'a> {
             }
 
             for (name, mut typed_defn) in current_pass.drain(..) {
+                let defn = &mut typed_defn.1;
+
                 // @Errors: this should throw an error saying that
                 // there was a type annotation without a corresponding definition.
-                assert!(typed_defn.definition.assignments.len() > 0);
+                assert!(defn.assignments.len() > 0);
 
                 // @Lazy @Laziness: lazy values can be generated in any order
 
@@ -101,12 +103,11 @@ impl<'a> CodeGenerator<'a> {
                 // this means we can generate it in any order.
                 // Note that if it has missing dependencies, it will error at runtime;
                 // so we should have already caught this in a compile error.
-                let has_any_args = typed_defn.definition.assignments[0].0.arg_count() > 0;
+                let has_any_args = defn.assignments[0].0.arg_count() > 0;
 
                 // If the definition has no un-generated dependencies,
                 // then we're ready generate it.
-                let has_all_deps = typed_defn
-                    .definition
+                let has_all_deps = defn
                     .dependencies()
                     .iter()
                     // @Fixme: this should check the scope as well,
@@ -117,7 +118,7 @@ impl<'a> CodeGenerator<'a> {
                 if has_any_args || has_all_deps {
                     // Because there are arguments, it's going to be a Lua function.
                     // Thus, we can generate in any order.
-                    write!(lua, "{}", self.definition(&name, &typed_defn.definition)?)?;
+                    write!(lua, "{}", self.definition(&name, &defn)?)?;
 
                     // Mark that we have generated something in this pass.
                     generated_anything = true;

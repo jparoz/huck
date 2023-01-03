@@ -107,30 +107,30 @@ example1 =
 (* valA = valB + 1; *)
 (* valB = valA + 1; *)
 
-(* mutualA 0 = 0; *)
-(* mutualA x = mutualB x - 1; *)
+mutualA 0 = 0;
+mutualA x = mutualB x - 1;
 
-(* mutualB 0 = 0; *)
-(* mutualB x = mutualA x - 1; *)
+mutualB 0 = 0;
+mutualB x = mutualA x - 1;
 
-id : forall a. a -> a;
+(* id : forall a. a -> a; *)
 id a = a;
 (* id = \a -> a; *)
 
 (* const : forall a b. a -> b -> a; *)
-(* const a b = a; *)
+const a b = a;
 
 bar any 0 = 0;
 bar x y = x / y;
 
 (* usesUnit : () -> String *)
-(* usesUnit () = "foo"; *)
+usesUnit () = "foo";
 
 (* returnsUnit : ∀a. a -> () *)
-(* returnsUnit x = (); *)
+returnsUnit x = ();
 
 (* unitArgument : ∀a. a -> String *)
-(* unitArgument x = usesUnit (); *)
+unitArgument x = usesUnit ();
 
 (* compileError : COMPILE ERROR *)
 (* compileError x = usesUnit 123; *)
@@ -138,25 +138,28 @@ bar x y = x / y;
 (* baz "hello" = "goodbye"; *)
 (* baz s = s ++ "."; *)
 
-(* quux (Just 1) = 1; *)
-(* quux (Just x) = x + 2; *)
-(* quux Nothing = 123; *)
+type Maybe a = Just a | Nothing;
 
-(* addIfOne [1, x] = 1 + x; *)
-(* addIfOne [_, x] = x; *)
+quux (Just 1) = 1;
+quux (Just x) = x + 2;
+quux Nothing = 123;
 
-(* tuple = (1, "hi"); *)
+addIfOne [1, x] = 1 + x;
+addIfOne [_, x] = x;
 
-(* usesTuple (n, s) = (n*2, s .. s); *)
+tuple = (1, "hi");
 
-(* callsTheTupleFunctionA = usesTuple (123, "cat"); *)
-(* callsTheTupleFunctionB = usesTuple tuple; *)
+usesTuple : (Int, String) -> (Int, String);
+usesTuple (n, s) = (n*2, s .. s);
 
-(* shouldBeLast = shouldBeNext + 123; *)
+callsTheTupleFunctionA = usesTuple (123, "cat");
+callsTheTupleFunctionB = usesTuple tuple;
 
-(* mustComeFirst = 456; *)
+shouldBeLast = shouldBeNext + 123;
 
-(* shouldBeNext = mustComeFirst + 2; *)
+mustComeFirst = 456;
+
+shouldBeNext = mustComeFirst + 2;
 
 (* usesCyclic = cyclicA; *)
 (* cyclicA = cyclicB; *)

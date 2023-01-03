@@ -2,10 +2,7 @@ use crate::context::Context;
 use crate::scope::Scope;
 use crate::{ast::Name, parse::parse};
 
-use super::{
-    constraint::ConstraintGenerator, substitution::ApplySub, typecheck, Type, TypeScheme, TypeVar,
-    TypeVarSet,
-};
+use super::{constraint::ConstraintGenerator, substitution::ApplySub, typecheck, Type, TypeVar};
 
 fn typ(s: &str) -> Type {
     let parsed = parse(s).unwrap();
@@ -13,7 +10,7 @@ fn typ(s: &str) -> Type {
     assert!(parsed.definitions.len() == 1);
     let (_name, defn) = parsed.definitions.into_iter().next().unwrap();
 
-    let mut cg = ConstraintGenerator::new();
+    let mut cg = ConstraintGenerator::default();
     let mut typ = cg.generate_definition(&defn);
 
     let soln = cg.solve().unwrap();
@@ -134,13 +131,7 @@ fn constructor_unary() {
         .get(&Name::Ident("val".to_string()))
         .unwrap();
 
-    assert_eq!(
-        val.type_scheme,
-        TypeScheme {
-            vars: TypeVarSet::empty(),
-            typ: Type::Concrete("Foo".to_string()),
-        }
-    )
+    assert_eq!(val.0, Type::Concrete("Foo".to_string()),)
 }
 
 #[test]
@@ -157,14 +148,11 @@ fn constructor_unary_returned() {
         .get(&Name::Ident("val".to_string()))
         .unwrap();
     assert_eq!(
-        val.type_scheme,
-        TypeScheme {
-            vars: TypeVarSet::single(TypeVar::Generated(1)),
-            typ: Type::Arrow(
-                Box::new(Type::Var(TypeVar::Generated(1))),
-                Box::new(Type::Concrete("Foo".to_string())),
-            ),
-        }
+        val.0,
+        Type::Arrow(
+            Box::new(Type::Var(TypeVar::Generated(1))),
+            Box::new(Type::Concrete("Foo".to_string())),
+        ),
     )
 }
 
@@ -183,14 +171,11 @@ fn constructor_unary_argument() {
         .unwrap();
 
     assert_eq!(
-        val.type_scheme,
-        TypeScheme {
-            vars: TypeVarSet::empty(),
-            typ: Type::Arrow(
-                Box::new(Type::Concrete("Foo".to_string())),
-                Box::new(Type::Concrete("Int".to_string())),
-            ),
-        }
+        val.0,
+        Type::Arrow(
+            Box::new(Type::Concrete("Foo".to_string())),
+            Box::new(Type::Concrete("Int".to_string())),
+        ),
     )
 }
 
@@ -208,13 +193,7 @@ fn constructor_newtype_int() {
         .get(&Name::Ident("val".to_string()))
         .unwrap();
 
-    assert_eq!(
-        val.type_scheme,
-        TypeScheme {
-            vars: TypeVarSet::empty(),
-            typ: Type::Concrete("Foo".to_string()),
-        }
-    )
+    assert_eq!(val.0, Type::Concrete("Foo".to_string()),)
 }
 
 #[test]
@@ -233,13 +212,7 @@ fn constructor_newtype_unwrap_int() {
         .get(&Name::Ident("val".to_string()))
         .unwrap();
 
-    assert_eq!(
-        val.type_scheme,
-        TypeScheme {
-            vars: TypeVarSet::empty(),
-            typ: Type::Concrete("Int".to_string())
-        }
-    )
+    assert_eq!(val.0, Type::Concrete("Int".to_string()))
 }
 
 #[test]
@@ -257,14 +230,11 @@ fn constructor_newtype_generic_int() {
         .unwrap();
 
     assert_eq!(
-        val.type_scheme,
-        TypeScheme {
-            vars: TypeVarSet::empty(),
-            typ: Type::App(
-                Box::new(Type::Concrete("Foo".to_string())),
-                Box::new(Type::Concrete("Int".to_string()))
-            ),
-        }
+        val.0,
+        Type::App(
+            Box::new(Type::Concrete("Foo".to_string())),
+            Box::new(Type::Concrete("Int".to_string()))
+        ),
     )
 }
 
@@ -284,17 +254,14 @@ fn constructor_newtype_generic_var() {
 
     let var = TypeVar::Generated(4);
     assert_eq!(
-        val.type_scheme,
-        TypeScheme {
-            vars: TypeVarSet::single(var.clone()),
-            typ: Type::Arrow(
-                Box::new(Type::Var(var.clone())),
-                Box::new(Type::App(
-                    Box::new(Type::Concrete("Foo".to_string())),
-                    Box::new(Type::Var(var))
-                ))
-            ),
-        }
+        val.0,
+        Type::Arrow(
+            Box::new(Type::Var(var.clone())),
+            Box::new(Type::App(
+                Box::new(Type::Concrete("Foo".to_string())),
+                Box::new(Type::Var(var))
+            ))
+        ),
     )
 }
 
@@ -314,13 +281,7 @@ fn constructor_newtype_generic_unwrap_int() {
         .get(&Name::Ident("val".to_string()))
         .unwrap();
 
-    assert_eq!(
-        val.type_scheme,
-        TypeScheme {
-            vars: TypeVarSet::empty(),
-            typ: Type::Concrete("Int".to_string())
-        }
-    )
+    assert_eq!(val.0, Type::Concrete("Int".to_string()))
 }
 
 #[test]
@@ -337,13 +298,7 @@ fn function_apply_to_literal() {
         .get(&Name::Ident("val".to_string()))
         .unwrap();
 
-    assert_eq!(
-        val.type_scheme,
-        TypeScheme {
-            vars: TypeVarSet::empty(),
-            typ: Type::Concrete("Int".to_string())
-        }
-    )
+    assert_eq!(val.0, Type::Concrete("Int".to_string()))
 }
 
 #[test]
@@ -361,13 +316,7 @@ fn function_apply_to_variable() {
         .get(&Name::Ident("val".to_string()))
         .unwrap();
 
-    assert_eq!(
-        val.type_scheme,
-        TypeScheme {
-            vars: TypeVarSet::empty(),
-            typ: Type::Concrete("Int".to_string())
-        }
-    )
+    assert_eq!(val.0, Type::Concrete("Int".to_string()))
 }
 
 #[test]
@@ -386,11 +335,5 @@ fn function_apply_to_variable_indirect() {
         .get(&Name::Ident("val".to_string()))
         .unwrap();
 
-    assert_eq!(
-        val.type_scheme,
-        TypeScheme {
-            vars: TypeVarSet::empty(),
-            typ: Type::Concrete("Int".to_string())
-        }
-    )
+    assert_eq!(val.0, Type::Concrete("Int".to_string()))
 }

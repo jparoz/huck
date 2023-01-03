@@ -6,6 +6,7 @@ use log::log_enabled;
 
 use crate::ast::{self, Assignment, Definition, Expr, Lhs, Name, Numeral, Pattern, Term};
 use crate::codegen::lua::is_lua_binop;
+use crate::scope::Scope;
 use crate::types::{
     self, ApplySub, Substitution, Type, TypeDefinition, TypeScheme, TypeVar, TypeVarSet,
 };
@@ -63,36 +64,18 @@ impl<'file> Debug for Constraint {
     }
 }
 
-pub struct ConstraintGenerator<'file> {
+#[derive(Default)]
+pub struct ConstraintGenerator {
     constraints: Vec<Constraint>,
 
     // @Cleanup: shouldn't be pub
     pub assumptions: BTreeMap<Name, Vec<Type>>,
 
-    /// Record of types inferred.
-    // @Cleanup: manage this internally instead of in typecheck (??)
-    pub types: BTreeMap<Name, (Type, Definition<'file>)>,
-
-    /// Record of constructors defined.
-    // @Cleanup: manage this internally instead of in typecheck (??)
-    pub constructors: BTreeMap<Name, Type>,
-
     next_typevar_id: usize,
     m_stack: Vec<TypeVar>,
 }
 
-impl<'file> ConstraintGenerator<'file> {
-    pub fn new() -> Self {
-        ConstraintGenerator {
-            constraints: Vec::new(),
-            assumptions: BTreeMap::new(),
-            types: BTreeMap::new(),
-            constructors: BTreeMap::new(),
-            next_typevar_id: 0,
-            m_stack: Vec::new(),
-        }
-    }
-
+impl ConstraintGenerator {
     fn fresh_var(&mut self) -> TypeVar {
         let id = self.next_typevar_id;
         self.next_typevar_id += 1;
@@ -241,24 +224,14 @@ impl<'file> ConstraintGenerator<'file> {
         }
     }
 
-    pub fn bind_all_top_level_assumptions(&mut self) {
+    pub fn bind_all_top_level_assumptions(&mut self, scope: &Scope) {
         log::trace!("Emitting constraints about assumptions:");
 
         let mut assumptions = BTreeMap::new();
         mem::swap(&mut assumptions, &mut self.assumptions);
 
-        // @CST @Cleanup: this should possibly/probably work on Scope or some ProtoScope,
-        // rather than multiple if lets.
         for (name, assumed_types) in assumptions {
-            if let Some((typ, _defn)) = self.types.get(&name) {
-                for assumed_type in assumed_types {
-                    self.constraints.push(Constraint::ImplicitInstance(
-                        assumed_type,
-                        typ.clone(),
-                        self.m_stack.iter().cloned().collect(),
-                    ));
-                }
-            } else if let Some(typ) = self.constructors.get(&name) {
+            if let Some(typ) = scope.get_type(&name) {
                 for assumed_type in assumed_types {
                     self.constraints.push(Constraint::ImplicitInstance(
                         assumed_type,
@@ -286,6 +259,7 @@ impl<'file> ConstraintGenerator<'file> {
     }
 
     pub fn solve(&mut self) -> Result<Substitution, types::Error> {
+        log::trace!("-----");
         log::trace!("START SOLVING");
         let mut sub = Substitution::empty();
 
@@ -344,110 +318,15 @@ impl<'file> ConstraintGenerator<'file> {
             }
         }
 
-        log::trace!("-");
         log::trace!("FINISH SOLVING");
-        log::trace!("{:?}", self);
+        log::trace!("-----");
 
         Ok(sub)
     }
 
-    // Conversion methods
-
-    pub fn convert_ast_type_scheme(&mut self, input: &ast::TypeScheme) -> TypeScheme {
-        let vars: TypeVarSet = input
-            .vars
-            .iter()
-            .map(|v| TypeVar::Explicit(v.to_string()))
-            .collect();
-
-        let typ = self.convert_ast_type_expr(&input.typ);
-
-        TypeScheme { vars, typ }
-    }
-
-    pub fn convert_ast_type_definition(
-        &mut self,
-        type_defn: &ast::TypeDefinition<'file>,
-    ) -> TypeDefinition {
-        let ast::TypeDefinition {
-            name,
-            vars: vars_s,
-            constructors: constrs,
-        } = type_defn;
-
-        // We'll build these structures by iterating over the type arguments.
-        let mut vars = TypeVarSet::empty();
-        let mut typ = Type::Concrete(name.to_string());
-
-        for s in vars_s.iter() {
-            // The final returned type of the constructor needs to reflect this type argument;
-            // so we mark that here.
-            let var = TypeVar::Explicit(s.to_string());
-            vars.insert(var.clone());
-            typ = Type::App(Box::new(typ), Box::new(Type::Var(var)));
-        }
-
-        let mut constructors = BTreeMap::new();
-
-        for (constr_name, args) in constrs {
-            let constr_type = args
-                .into_iter()
-                .rev()
-                .map(|term| self.convert_ast_type_term(term))
-                .fold(typ.clone(), |res, a| {
-                    Type::Arrow(Box::new(a), Box::new(res))
-                });
-
-            // @Checkme: poly or mono?
-            self.bind_assumptions_poly(constr_name, &constr_type);
-
-            // @Errors @Checkme: no name conflicts
-            constructors.insert(constr_name.clone(), constr_type);
-        }
-
-        TypeDefinition {
-            name: name.clone(),
-            vars,
-            typ,
-            constructors,
-        }
-    }
-
-    pub fn convert_ast_type_expr(&mut self, input: &ast::TypeExpr) -> Type {
-        match input {
-            ast::TypeExpr::Term(term) => self.convert_ast_type_term(term),
-            ast::TypeExpr::App(f, x) => Type::App(
-                Box::new(self.convert_ast_type_expr(f)),
-                Box::new(self.convert_ast_type_expr(x)),
-            ),
-            ast::TypeExpr::Arrow(a, b) => Type::Arrow(
-                Box::new(self.convert_ast_type_expr(a)),
-                Box::new(self.convert_ast_type_expr(b)),
-            ),
-        }
-    }
-
-    pub fn convert_ast_type_term(&mut self, input: &ast::TypeTerm) -> Type {
-        match input {
-            ast::TypeTerm::Concrete(s) => Type::Concrete(s.to_string()),
-            ast::TypeTerm::Unit => Type::Concrete("()".to_string()),
-
-            ast::TypeTerm::Var(v) => Type::Var(TypeVar::Explicit(v.to_string())),
-
-            ast::TypeTerm::Parens(e) => self.convert_ast_type_expr(e),
-            ast::TypeTerm::List(e) => Type::List(Box::new(self.convert_ast_type_expr(e))),
-            ast::TypeTerm::Tuple(exprs) => Type::Tuple(
-                exprs
-                    .iter()
-                    .map(|e| self.convert_ast_type_expr(e))
-                    .collect(),
-            ),
-        }
-    }
-
     // Generation methods
 
-    pub fn generate_definition(&mut self, definition: &Definition<'file>) -> Type {
+    pub fn generate_definition(&mut self, definition: &Definition) -> Type {
         // Typecheck each assignment in the definition.
         let mut typs: Vec<Type> = definition
             .assignments
@@ -457,7 +336,7 @@ impl<'file> ConstraintGenerator<'file> {
 
         // If there's an explicit type, include that as well.
         if let Some(ref explicit_type_scheme) = definition.explicit_type {
-            let ts = self.convert_ast_type_scheme(explicit_type_scheme);
+            let ts = self.generate_type_scheme(explicit_type_scheme);
             typs.push(self.instantiate(ts));
         }
 
@@ -467,7 +346,7 @@ impl<'file> ConstraintGenerator<'file> {
         self.equate_all(typs)
     }
 
-    pub fn generate_assignment(&mut self, assign: &Assignment<'file>) -> Type {
+    pub fn generate_assignment(&mut self, assign: &Assignment) -> Type {
         let (lhs, expr) = assign;
 
         match lhs {
@@ -492,7 +371,7 @@ impl<'file> ConstraintGenerator<'file> {
         }
     }
 
-    pub fn generate_expr(&mut self, expr: &Expr<'file>) -> Type {
+    pub fn generate_expr(&mut self, expr: &Expr) -> Type {
         match expr {
             Expr::Term(Term::Numeral(Numeral::Int(_))) => Type::Concrete("Int".to_string()),
             Expr::Term(Term::Numeral(Numeral::Float(_))) => Type::Concrete("Float".to_string()),
@@ -651,9 +530,97 @@ impl<'file> ConstraintGenerator<'file> {
             }
         }
     }
+
+    // Type-level generation methods
+
+    pub fn generate_type_scheme(&mut self, input: &ast::TypeScheme) -> TypeScheme {
+        let vars: TypeVarSet = input
+            .vars
+            .iter()
+            .map(|v| TypeVar::Explicit(v.to_string()))
+            .collect();
+
+        let typ = self.generate_type_expr(&input.typ);
+
+        TypeScheme { vars, typ }
+    }
+
+    pub fn generate_type_definition(&mut self, type_defn: &ast::TypeDefinition) -> TypeDefinition {
+        let ast::TypeDefinition {
+            name,
+            vars: vars_s,
+            constructors: constrs,
+        } = type_defn;
+
+        // We'll build these structures by iterating over the type arguments.
+        let mut vars = TypeVarSet::empty();
+        let mut typ = Type::Concrete(name.to_string());
+
+        for s in vars_s.iter() {
+            // The final returned type of the constructor needs to reflect this type argument;
+            // so we mark that here.
+            let var = TypeVar::Explicit(s.to_string());
+            vars.insert(var.clone());
+            typ = Type::App(Box::new(typ), Box::new(Type::Var(var)));
+        }
+
+        let mut constructors = BTreeMap::new();
+
+        for (constr_name, args) in constrs {
+            let constr_type = args
+                .into_iter()
+                .rev()
+                .map(|term| self.generate_type_term(term))
+                .fold(typ.clone(), |res, a| {
+                    Type::Arrow(Box::new(a), Box::new(res))
+                });
+
+            // @Checkme: poly or mono?
+            self.bind_assumptions_poly(constr_name, &constr_type);
+
+            // @Errors @Checkme: no name conflicts
+            constructors.insert(constr_name.clone(), constr_type);
+        }
+
+        TypeDefinition {
+            name: name.clone(),
+            vars,
+            typ,
+            constructors,
+        }
+    }
+
+    pub fn generate_type_expr(&mut self, input: &ast::TypeExpr) -> Type {
+        match input {
+            ast::TypeExpr::Term(term) => self.generate_type_term(term),
+            ast::TypeExpr::App(f, x) => Type::App(
+                Box::new(self.generate_type_expr(f)),
+                Box::new(self.generate_type_expr(x)),
+            ),
+            ast::TypeExpr::Arrow(a, b) => Type::Arrow(
+                Box::new(self.generate_type_expr(a)),
+                Box::new(self.generate_type_expr(b)),
+            ),
+        }
+    }
+
+    pub fn generate_type_term(&mut self, input: &ast::TypeTerm) -> Type {
+        match input {
+            ast::TypeTerm::Concrete(s) => Type::Concrete(s.to_string()),
+            ast::TypeTerm::Unit => Type::Concrete("()".to_string()),
+
+            ast::TypeTerm::Var(v) => Type::Var(TypeVar::Explicit(v.to_string())),
+
+            ast::TypeTerm::Parens(e) => self.generate_type_expr(e),
+            ast::TypeTerm::List(e) => Type::List(Box::new(self.generate_type_expr(e))),
+            ast::TypeTerm::Tuple(exprs) => {
+                Type::Tuple(exprs.iter().map(|e| self.generate_type_expr(e)).collect())
+            }
+        }
+    }
 }
 
-impl<'file> Debug for ConstraintGenerator<'file> {
+impl Debug for ConstraintGenerator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Constraints:")?;
         for constraint in self.constraints.iter() {

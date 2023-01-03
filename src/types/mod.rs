@@ -3,7 +3,7 @@ use std::fmt::{self, Display};
 
 use crate::ast;
 use crate::context::Context;
-use crate::scope::{Scope, TypedDefinition};
+use crate::scope::Scope;
 
 // @Cleanup: do these all need to be pub?
 pub mod constraint;
@@ -20,8 +20,8 @@ use substitution::{ApplySub, Substitution};
 
 /// Typechecks the given Huck context.
 pub fn typecheck(context: Context) -> Result<Scope, TypeError> {
-    let mut cg = ConstraintGenerator::new();
-    let mut type_definitions = BTreeMap::new();
+    let mut cg = ConstraintGenerator::default();
+    let mut scope = Scope::default();
 
     for (module_path, module) in context.modules {
         // Generate constraints for each definition, while keeping track of inferred types
@@ -31,59 +31,43 @@ pub fn typecheck(context: Context) -> Result<Scope, TypeError> {
 
             // @Note: guaranteed to be None,
             // because we're iterating over a BTreeMap.
-            assert!(cg.types.insert(name, (typ, defn)).is_none());
+            assert!(scope.definitions.insert(name, (typ, defn)).is_none());
         }
 
         // Generate constraints for each type definition
         for (_name, ast_type_defn) in module.type_definitions {
-            let type_defn = cg.convert_ast_type_definition(&ast_type_defn);
+            let type_defn = cg.generate_type_definition(&ast_type_defn);
 
-            for (constr_name, constr_type) in type_defn.constructors.clone() {
-                cg.constructors
+            for (constr_name, constr_type) in type_defn.constructors.iter() {
+                scope
+                    .constructors
                     .insert(constr_name.clone(), constr_type.clone());
             }
 
             // @Note: guaranteed to be None,
             // because we're iterating over a BTreeMap.
-            assert!(type_definitions
+            assert!(scope
+                .type_definitions
                 .insert(type_defn.name.clone(), type_defn)
                 .is_none());
         }
+
+        // @Todo: generate constraints (assumptions?) for imports
     }
 
     // Polymorphically bind all top-level variables.
-    cg.bind_all_top_level_assumptions();
+    cg.bind_all_top_level_assumptions(&scope);
     assert!(cg.assumptions.is_empty());
 
     // Solve the type constraints
     let soln = cg.solve()?;
 
-    log::trace!(
-        "ConstraintGenerator after solving type constraints: {:?}",
-        cg
-    );
-
-    let mut scope = Scope::default();
-
-    // Insert definitions into the Scope.
-    let empty = TypeVarSet::empty();
-    for (name, (mut typ, definition)) in cg.types.into_iter() {
+    // @Todo: apply soln to the Scope directly, after impl ApplySub for Scope
+    // Apply the solution to the Scope.
+    for (name, (ref mut typ, _definition)) in scope.definitions.iter_mut() {
         typ.apply(&soln);
-
-        let type_scheme = typ.generalize(&empty);
-        log::info!("Inferred type for {} : {}", name, type_scheme);
-        let defn = TypedDefinition {
-            type_scheme,
-            definition,
-        };
-        scope.definitions.insert(name, defn);
+        log::info!("Inferred type for {} : {}", name, typ);
     }
-
-    // Insert type definitions into the Scope.
-    scope.type_definitions = type_definitions;
-
-    // Insert constructors into the Scope.
-    scope.constructors = cg.constructors.keys().cloned().collect();
 
     Ok(scope)
 }
