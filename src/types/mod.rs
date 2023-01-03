@@ -2,8 +2,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{self, Display};
 
 use crate::ast;
-use crate::context::Context;
-use crate::scope::Scope;
 
 // @Cleanup: do these all need to be pub?
 pub mod constraint;
@@ -14,63 +12,8 @@ pub use error::Error;
 #[cfg(test)]
 mod test;
 
-use constraint::ConstraintGenerator;
 use error::Error as TypeError;
 use substitution::{ApplySub, Substitution};
-
-/// Typechecks the given Huck context.
-pub fn typecheck(context: Context) -> Result<Scope, TypeError> {
-    let mut cg = ConstraintGenerator::default();
-    let mut scope = Scope::default();
-
-    for (module_path, module) in context.modules {
-        // Generate constraints for each definition, while keeping track of inferred types
-        for (name, defn) in module.definitions {
-            let typ = cg.generate_definition(&defn);
-            log::trace!("Initial inferred type for {}: {}", name, typ);
-
-            // @Note: guaranteed to be None,
-            // because we're iterating over a BTreeMap.
-            assert!(scope.definitions.insert(name, (typ, defn)).is_none());
-        }
-
-        // Generate constraints for each type definition
-        for (_name, ast_type_defn) in module.type_definitions {
-            let type_defn = cg.generate_type_definition(&ast_type_defn);
-
-            for (constr_name, constr_type) in type_defn.constructors.iter() {
-                scope
-                    .constructors
-                    .insert(constr_name.clone(), constr_type.clone());
-            }
-
-            // @Note: guaranteed to be None,
-            // because we're iterating over a BTreeMap.
-            assert!(scope
-                .type_definitions
-                .insert(type_defn.name.clone(), type_defn)
-                .is_none());
-        }
-
-        // @Todo: generate constraints (assumptions?) for imports
-    }
-
-    // Polymorphically bind all top-level variables.
-    cg.bind_all_top_level_assumptions(&scope);
-    assert!(cg.assumptions.is_empty());
-
-    // Solve the type constraints
-    let soln = cg.solve()?;
-
-    // @Todo: apply soln to the Scope directly, after impl ApplySub for Scope
-    // Apply the solution to the Scope.
-    for (name, (ref mut typ, _definition)) in scope.definitions.iter_mut() {
-        typ.apply(&soln);
-        log::info!("Inferred type for {} : {}", name, typ);
-    }
-
-    Ok(scope)
-}
 
 #[derive(PartialEq, Eq, Clone, Hash, Debug)]
 pub enum Type {

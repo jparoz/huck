@@ -2,7 +2,7 @@ use crate::context::Context;
 use crate::scope::Scope;
 use crate::{ast::Name, parse::parse};
 
-use super::{constraint::ConstraintGenerator, substitution::ApplySub, typecheck, Type, TypeVar};
+use super::{constraint::ConstraintGenerator, substitution::ApplySub, Type, TypeVar};
 
 fn typ(s: &str) -> Type {
     let parsed = parse(s).unwrap();
@@ -22,7 +22,8 @@ fn typ(s: &str) -> Type {
 fn typ_module(s: &str) -> Scope {
     let mut ctx = Context::default();
     ctx.include_string(s.to_string()).unwrap();
-    typecheck(ctx).unwrap()
+    ctx.typecheck().unwrap();
+    ctx.scopes.into_values().next().unwrap()
 }
 
 #[test]

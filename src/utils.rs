@@ -4,7 +4,6 @@ use std::path::Path;
 use crate::codegen;
 use crate::context::Context;
 use crate::error::Error as HuckError;
-use crate::types::typecheck;
 
 /// Takes Lua code as input, executes it using a Lua interpreter found in PATH,
 /// and returns the contents of stdout in a String.
@@ -36,18 +35,20 @@ where
     );
 
     // Typecheck
-    let scope = typecheck(context)?;
+    context.typecheck()?;
 
     // @Future: optimisations go here
 
     // Generate code
-    let lua = codegen::lua::generate(&scope)?;
+    for scope in context.scopes.values() {
+        let lua = codegen::lua::generate(scope)?;
 
-    log::trace!("Generated Lua code:\n{}", lua);
+        log::trace!("Generated Lua code:\n{}", lua);
 
-    let lua = normalize(&lua);
+        let lua = normalize(&lua);
 
-    std::fs::write(path.as_ref().with_extension("lua"), lua)?;
+        std::fs::write(path.as_ref().with_extension("lua"), lua)?;
+    }
 
     Ok(())
 }
@@ -67,12 +68,14 @@ pub fn transpile(huck: String) -> Result<String, HuckError> {
     );
 
     // Typecheck
-    let scope = typecheck(context)?;
+    context.typecheck()?;
 
     // @Future: optimisations go here
 
     // Generate code
-    let lua = codegen::lua::generate(&scope)?;
+    let scope = context.scopes.values().next().unwrap();
+
+    let lua = codegen::lua::generate(scope)?;
 
     log::trace!("Generated Lua code:\n{}", lua);
 
