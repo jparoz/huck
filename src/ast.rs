@@ -8,7 +8,7 @@ use crate::parse::precedence::Precedence;
 /// by using the parsed precedence rules to reshape the AST,
 /// and collecting statements referring to the same function
 /// into a single Definition struct for each function name.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Module<'file> {
     pub path: Option<ModulePath<'file>>,
     pub definitions: BTreeMap<Name, Definition<'file>>,
@@ -509,7 +509,7 @@ pub enum TypeTerm<'file> {
 }
 
 /// Parsed representation of a new type definition (e.g. `type Foo = Bar;`).
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct TypeDefinition<'file> {
     pub name: Name,
     pub vars: Vec<&'file str>,

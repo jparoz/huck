@@ -1,12 +1,10 @@
 use std::collections::{BTreeMap, VecDeque};
 use std::fmt::{self, Debug};
-use std::{iter, mem};
+use std::iter;
 
 use log::log_enabled;
 
 use crate::ast::{self, Assignment, Definition, Expr, Lhs, Name, Numeral, Pattern, Term};
-use crate::codegen::lua::is_lua_binop;
-use crate::scope::Scope;
 use crate::types::{
     self, ApplySub, Substitution, Type, TypeDefinition, TypeScheme, TypeVar, TypeVarSet,
 };
@@ -68,8 +66,10 @@ impl<'file> Debug for Constraint {
 pub struct ConstraintGenerator {
     constraints: Vec<Constraint>,
 
-    // All the currently assumed types of name uses.
-    assumptions: BTreeMap<Name, Vec<Type>>,
+    // @Cleanup: does this really need to be pub? Only used in mod context.
+    // Maybe we should move context to types::context?
+    /// All the currently assumed types of name uses.
+    pub assumptions: BTreeMap<Name, Vec<Type>>,
 
     // @Todo @Cleanup: change this to do the same atomic thingy as in codegen
     next_typevar_id: usize,
@@ -95,9 +95,21 @@ impl ConstraintGenerator {
             .push(typ);
     }
 
-    pub fn constrain(&mut self, constraint: Constraint) {
+    fn constrain(&mut self, constraint: Constraint) {
         log::trace!("Emitting constraint: {:?}", constraint);
         self.constraints.push(constraint);
+    }
+
+    pub fn equate(&mut self, a: Type, b: Type) {
+        self.constrain(Constraint::Equality(a, b))
+    }
+
+    pub fn implicit_instance(&mut self, a: Type, b: Type) {
+        self.constrain(Constraint::ImplicitInstance(
+            a,
+            b,
+            self.m_stack.iter().cloned().collect(),
+        ));
     }
 
     /// Constrains all types in the given Vec to be equal, and returns that type.
@@ -221,55 +233,6 @@ impl ConstraintGenerator {
                     typ,
                     self.m_stack.iter().cloned().collect::<TypeVarSet>()
                 );
-            }
-        }
-    }
-
-    // @Todo @Cleanup: should this be a method on Context? probably.
-    /// Binds all top level assumptions to the types found in their definition.
-    ///
-    /// If the name isn't defined in this module, check if it's imported;
-    /// if it is, then this assumption is promoted to Context level
-    /// by inserting it into the Context.
-    pub fn bind_all_module_level_assumptions<'file>(
-        &mut self,
-        scope: &Scope<'file>,
-        context_assumptions: &mut BTreeMap<(ast::ModulePath<'file>, Name), Vec<Type>>,
-    ) {
-        log::trace!("Emitting constraints about assumptions:");
-
-        let mut assumptions = BTreeMap::new();
-        mem::swap(&mut assumptions, &mut self.assumptions);
-
-        for (name, assumed_types) in assumptions {
-            if let Some(typ) = scope.get_type(&name) {
-                for assumed_type in assumed_types {
-                    self.constraints.push(Constraint::ImplicitInstance(
-                        assumed_type,
-                        typ.clone(),
-                        self.m_stack.iter().cloned().collect(),
-                    ));
-                }
-            } else if let Some(path) = scope.imports.get(&name) {
-                context_assumptions
-                    .entry((*path, name))
-                    .or_default()
-                    .extend(assumed_types);
-            } else if is_lua_binop(name.as_str()) {
-                // Do nothing. @XXX @Cleanup: don't do this
-                // @Prelude
-            } else if name.as_str() == "True" || name.as_str() == "False" {
-                // @Prelude
-                let bool_type = Type::Concrete("Bool".to_string());
-                for assumed_type in assumed_types {
-                    self.constraints
-                        .push(Constraint::Equality(assumed_type, bool_type.clone()));
-                }
-            } else {
-                // If there is no inferred type for the name (i.e. it's not in scope),
-                // then it's a scope error.
-                // @Errors: Scope error
-                panic!("scope error: {name}");
             }
         }
     }
