@@ -1,3 +1,5 @@
+module Test;
+
 (* foo f g = g (f 1); *)
 
 (* destructure : Structure -> X; *)

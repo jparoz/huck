@@ -68,8 +68,10 @@ impl<'file> Debug for Constraint {
 pub struct ConstraintGenerator {
     constraints: Vec<Constraint>,
 
+    // All the currently assumed types of name uses.
     assumptions: BTreeMap<Name, Vec<Type>>,
 
+    // @Todo @Cleanup: change this to do the same atomic thingy as in codegen
     next_typevar_id: usize,
     m_stack: Vec<TypeVar>,
 }
@@ -223,7 +225,17 @@ impl ConstraintGenerator {
         }
     }
 
-    pub fn bind_all_top_level_assumptions(&mut self, scope: &Scope) {
+    // @Todo @Cleanup: should this be a method on Context? probably.
+    /// Binds all top level assumptions to the types found in their definition.
+    ///
+    /// If the name isn't defined in this module, check if it's imported;
+    /// if it is, then this assumption is promoted to Context level
+    /// by inserting it into the Context.
+    pub fn bind_all_module_level_assumptions<'file>(
+        &mut self,
+        scope: &Scope<'file>,
+        context_assumptions: &mut BTreeMap<(ast::ModulePath<'file>, Name), Vec<Type>>,
+    ) {
         log::trace!("Emitting constraints about assumptions:");
 
         let mut assumptions = BTreeMap::new();
@@ -238,6 +250,11 @@ impl ConstraintGenerator {
                         self.m_stack.iter().cloned().collect(),
                     ));
                 }
+            } else if let Some(path) = scope.imports.get(&name) {
+                context_assumptions
+                    .entry((*path, name))
+                    .or_default()
+                    .extend(assumed_types);
             } else if is_lua_binop(name.as_str()) {
                 // Do nothing. @XXX @Cleanup: don't do this
                 // @Prelude

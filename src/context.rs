@@ -1,11 +1,12 @@
 use std::collections::BTreeMap;
+use std::mem;
 use std::path::Path;
 
-use crate::ast::{Module, ModulePath};
+use crate::ast::{Module, ModulePath, Name};
 use crate::error::Error as HuckError;
 use crate::parse::parse;
 use crate::scope::Scope;
-use crate::types::{ApplySub, ConstraintGenerator, Error as TypeError};
+use crate::types::{ApplySub, ConstraintGenerator, Error as TypeError, Type};
 
 /// Context is the structure which manages module imports.
 /// It contains some modules, manages references between modules, and prepares for typechecking.
@@ -14,8 +15,16 @@ use crate::types::{ApplySub, ConstraintGenerator, Error as TypeError};
 /// transpiled as part of the same Context.
 #[derive(Debug, Default)]
 pub struct Context<'file> {
+    /// Each Module in the context.
     pub modules: BTreeMap<ModulePath<'file>, Module<'file>>,
+
+    /// Each Scope in the context.
+    /// These must always have a corresponding entry in modules.
     pub scopes: BTreeMap<ModulePath<'file>, Scope<'file>>,
+
+    /// These are assumptions made about imported names,
+    /// so need to be handled at Context level rather than Scope level.
+    pub assumptions: BTreeMap<(ModulePath<'file>, Name), Vec<Type>>,
 }
 
 impl<'file> Context<'file> {
@@ -58,7 +67,9 @@ impl<'file> Context<'file> {
         let mut cg = ConstraintGenerator::default();
 
         for (module_path, module) in self.modules.iter() {
-            let mut scope = Scope::default();
+            log::trace!("Typechecking: module {module_path};");
+            // Set the scope's module path.
+            let mut scope = Scope::new(*module_path);
 
             // Generate constraints for each definition, while keeping track of inferred types
             for (name, defn) in module.definitions.iter() {
@@ -92,14 +103,26 @@ impl<'file> Context<'file> {
                     .is_none());
             }
 
-            // @Todo: generate constraints (assumptions?) for imports
+            // Insert all imported names into the scope.
+            for (path, names) in module.imports.iter() {
+                for name in names {
+                    log::trace!("Inserting into scope of {module_path}: import {path} ({name})");
+                    // @Todo @Checkme: name clashes?
+                    assert!(scope.imports.insert(name.clone(), path.clone()).is_none());
+                }
+            }
 
-            // Polymorphically bind all top-level variables.
-            cg.bind_all_top_level_assumptions(&scope);
+            // Polymorphically bind all top-level names.
+            // If any assumptions were found to be imported,
+            // their assumptions are promoted to Context level by this method.
+            cg.bind_all_module_level_assumptions(&scope, &mut self.assumptions);
 
             // Add the scope to the context.
             assert!(self.scopes.insert(*module_path, scope).is_none());
         }
+
+        // Constrain any names which were promoted to the Context level (i.e. imported names).
+        self.bind_all_context_level_assumptions(&mut cg);
 
         // Solve the type constraints
         let soln = cg.solve()?;
@@ -107,13 +130,44 @@ impl<'file> Context<'file> {
         // @Todo: apply soln to the Scope directly, after impl ApplySub for Scope
         // Apply the solution to each Scope.
         for scope in self.scopes.values_mut() {
+            log::info!("module {}:", scope.module_path);
             for (name, (ref mut typ, _definition)) in scope.definitions.iter_mut() {
                 typ.apply(&soln);
-                log::info!("Inferred type for {} : {}", name, typ);
+                log::info!("  Inferred type for {} : {}", name, typ);
             }
         }
 
         Ok(())
+    }
+
+    /// Binds all context-level assumptions (i.e. from imported names).
+    fn bind_all_context_level_assumptions(&mut self, cg: &mut ConstraintGenerator) {
+        log::trace!("Emitting constraints about context-level assumptions:",);
+
+        let mut assumptions = BTreeMap::new();
+        mem::swap(&mut assumptions, &mut self.assumptions);
+
+        for ((path, name), mut assumed_types) in assumptions {
+            let scope = self.scopes.get(&path).unwrap_or_else(|| {
+                // @Todo @Cleanup: should we catch this earlier?
+                // If we didn't find the scope,
+                // then the module doesn't exist.
+                // @Errors: Scope error (import from nonexistent module)
+                panic!("scope error (import from nonexistent module): {path}");
+            });
+
+            let typ = scope.get_type(&name).unwrap_or_else(|| {
+                // If we didn't find the name in the module found above,
+                // then the module doesn't contain the name which was attempted to be imported.
+                // @Errors: Scope error (import)
+                panic!("scope error (import doesn't exist): {path}.{name}");
+            });
+
+            // @Checkme: is this the right constraint?
+            // Constrain that the assumed types are equal to the inferred type.
+            assumed_types.push(typ);
+            cg.equate_all(assumed_types);
+        }
     }
 }
 
