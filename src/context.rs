@@ -15,20 +15,20 @@ use crate::types::{ApplySub, ConstraintGenerator, Error as TypeError, Type};
 /// If multiple modules depend on one another (with or without cycles), they must be typechecked and
 /// transpiled as part of the same Context.
 #[derive(Debug, Default)]
-pub struct Context<'file> {
+pub struct Context {
     /// Each Module in the context.
-    pub modules: BTreeMap<ModulePath<'file>, Module<'file>>,
+    pub modules: BTreeMap<ModulePath, Module>,
 
     /// Each Scope in the context.
     /// These must always have a corresponding entry in modules.
-    pub scopes: BTreeMap<ModulePath<'file>, Scope<'file>>,
+    pub scopes: BTreeMap<ModulePath, Scope>,
 
     /// These are assumptions made about imported names,
     /// so need to be handled at Context level rather than Scope level.
-    pub assumptions: BTreeMap<(ModulePath<'file>, Name), Vec<Type>>,
+    pub assumptions: BTreeMap<(ModulePath, Name), Vec<Type>>,
 }
 
-impl<'file> Context<'file> {
+impl Context {
     /// Typechecks the given Huck context.
     pub fn typecheck(&mut self) -> Result<(), TypeError> {
         let mut cg = ConstraintGenerator::default();
@@ -119,7 +119,7 @@ impl<'file> Context<'file> {
     /// by inserting it into the Context.
     pub fn bind_all_module_level_assumptions(
         &mut self,
-        scope: &Scope<'file>,
+        scope: &Scope,
         cg: &mut ConstraintGenerator,
     ) {
         log::trace!("Emitting constraints about assumptions:");

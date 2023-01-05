@@ -9,24 +9,24 @@ use crate::parse::precedence::Precedence;
 /// and collecting statements referring to the same function
 /// into a single Definition struct for each function name.
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Module<'file> {
-    pub path: Option<ModulePath<'file>>,
-    pub definitions: BTreeMap<Name, Definition<'file>>,
-    pub type_definitions: BTreeMap<Name, TypeDefinition<'file>>,
-    pub imports: BTreeMap<ModulePath<'file>, Vec<Name>>,
+pub struct Module {
+    pub path: Option<ModulePath>,
+    pub definitions: BTreeMap<Name, Definition>,
+    pub type_definitions: BTreeMap<Name, TypeDefinition>,
+    pub imports: BTreeMap<ModulePath, Vec<Name>>,
 }
 
 /// A ModulePath is a path to a Huck module, as defined within that module.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ModulePath<'file>(pub &'file str);
+pub struct ModulePath(pub &'static str);
 
-impl<'file> Default for ModulePath<'file> {
+impl Default for ModulePath {
     fn default() -> Self {
         ModulePath("Main")
     }
 }
 
-impl<'file> Display for ModulePath<'file> {
+impl Display for ModulePath {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }
@@ -38,15 +38,15 @@ impl<'file> Display for ModulePath<'file> {
 /// explicit type declarations,
 /// or precedence declarations.
 #[derive(Debug, PartialEq, Eq, Clone, Default)]
-pub struct Definition<'file> {
-    pub assignments: Vec<Assignment<'file>>,
-    pub explicit_type: Option<TypeScheme<'file>>,
+pub struct Definition {
+    pub assignments: Vec<Assignment>,
+    pub explicit_type: Option<TypeScheme>,
     pub precedence: Option<Precedence>,
 
     dependencies: Option<BTreeSet<Name>>,
 }
 
-impl<'file> Definition<'file> {
+impl Definition {
     pub fn dependencies(&mut self) -> &BTreeSet<Name> {
         self.dependencies.get_or_insert_with(|| {
             let mut deps = BTreeSet::new();
@@ -62,16 +62,16 @@ impl<'file> Definition<'file> {
 
 /// A Statement is a sum type for any of the top-level Huck constructs.
 #[derive(Debug, PartialEq, Eq)]
-pub enum Statement<'file> {
-    AssignmentWithType(TypeScheme<'file>, Assignment<'file>),
-    AssignmentWithoutType(Assignment<'file>),
-    TypeAnnotation(Name, TypeScheme<'file>),
-    TypeDefinition(TypeDefinition<'file>),
+pub enum Statement {
+    AssignmentWithType(TypeScheme, Assignment),
+    AssignmentWithoutType(Assignment),
+    TypeAnnotation(Name, TypeScheme),
+    TypeDefinition(TypeDefinition),
     Precedence(Name, Precedence),
-    Import(ModulePath<'file>, Vec<Name>),
+    Import(ModulePath, Vec<Name>),
 }
 
-pub type Assignment<'file> = (Lhs<'file>, Expr<'file>);
+pub type Assignment = (Lhs, Expr);
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub enum Name {
@@ -96,22 +96,13 @@ impl Display for Name {
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
-pub enum Lhs<'file> {
-    Func {
-        name: Name,
-        args: Vec<Pattern<'file>>,
-    },
-    Binop {
-        a: Pattern<'file>,
-        op: Name,
-        b: Pattern<'file>,
-    },
-    Lambda {
-        args: Vec<Pattern<'file>>,
-    },
+pub enum Lhs {
+    Func { name: Name, args: Vec<Pattern> },
+    Binop { a: Pattern, op: Name, b: Pattern },
+    Lambda { args: Vec<Pattern> },
 }
 
-impl<'file> Lhs<'file> {
+impl Lhs {
     pub fn name(&self) -> &Name {
         match self {
             Lhs::Func { name, .. } => name,
@@ -127,7 +118,7 @@ impl<'file> Lhs<'file> {
         }
     }
 
-    pub fn args(&self) -> Vec<Pattern<'file>> {
+    pub fn args(&self) -> Vec<Pattern> {
         match self {
             Lhs::Func { args, .. } | Lhs::Lambda { args } => args.clone(),
             Lhs::Binop { a, b, .. } => vec![a.clone(), b.clone()],
@@ -135,7 +126,7 @@ impl<'file> Lhs<'file> {
     }
 }
 
-impl<'file> Display for Lhs<'file> {
+impl Display for Lhs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Lhs::Func { name, args } => {
@@ -163,26 +154,26 @@ impl<'file> Display for Lhs<'file> {
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
-pub enum Pattern<'file> {
-    Bind(&'file str),
-    List(Vec<Pattern<'file>>),
-    Tuple(Vec<Pattern<'file>>),
-    Numeral(Numeral<'file>),
-    String(&'file str),
+pub enum Pattern {
+    Bind(&'static str),
+    List(Vec<Pattern>),
+    Tuple(Vec<Pattern>),
+    Numeral(Numeral),
+    String(&'static str),
     Binop {
         operator: Name,
-        lhs: Box<Pattern<'file>>,
-        rhs: Box<Pattern<'file>>,
+        lhs: Box<Pattern>,
+        rhs: Box<Pattern>,
     },
     UnaryConstructor(Name),
     Unit,
     Destructure {
         constructor: Name,
-        args: Vec<Pattern<'file>>,
+        args: Vec<Pattern>,
     },
 }
 
-impl<'file> Pattern<'file> {
+impl Pattern {
     /// Returns all the names which are bound by the pattern.
     fn names_bound(&self) -> Vec<Name> {
         match self {
@@ -206,7 +197,7 @@ impl<'file> Pattern<'file> {
     }
 }
 
-impl<'file> Display for Pattern<'file> {
+impl Display for Pattern {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use Pattern::*;
         match self {
@@ -247,39 +238,39 @@ impl<'file> Display for Pattern<'file> {
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub enum Expr<'file> {
-    Term(Term<'file>),
+pub enum Expr {
+    Term(Term),
     App {
-        func: Box<Expr<'file>>,
-        argument: Box<Expr<'file>>,
+        func: Box<Expr>,
+        argument: Box<Expr>,
     },
     Binop {
         operator: Name,
-        lhs: Box<Expr<'file>>,
-        rhs: Box<Expr<'file>>,
+        lhs: Box<Expr>,
+        rhs: Box<Expr>,
     },
     Let {
-        definitions: BTreeMap<Name, Vec<Assignment<'file>>>,
-        in_expr: Box<Expr<'file>>,
+        definitions: BTreeMap<Name, Vec<Assignment>>,
+        in_expr: Box<Expr>,
     },
     // @Todo: test this
     If {
-        cond: Box<Expr<'file>>,
-        then_expr: Box<Expr<'file>>,
-        else_expr: Box<Expr<'file>>,
+        cond: Box<Expr>,
+        then_expr: Box<Expr>,
+        else_expr: Box<Expr>,
     },
     // @Todo: test this
     Case {
-        expr: Box<Expr<'file>>,
-        arms: Vec<(Pattern<'file>, Expr<'file>)>,
+        expr: Box<Expr>,
+        arms: Vec<(Pattern, Expr)>,
     },
     Lambda {
-        lhs: Lhs<'file>,
-        rhs: Box<Expr<'file>>,
+        lhs: Lhs,
+        rhs: Box<Expr>,
     },
 }
 
-impl<'file> Expr<'file> {
+impl Expr {
     pub fn dependencies(&self, deps: &mut BTreeSet<Name>) {
         match self {
             Expr::Term(Term::List(es)) | Expr::Term(Term::Tuple(es)) => {
@@ -378,7 +369,7 @@ impl<'file> Expr<'file> {
     }
 }
 
-impl<'file> Display for Expr<'file> {
+impl Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use Expr::*;
         match self {
@@ -438,17 +429,17 @@ impl<'file> Display for Expr<'file> {
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub enum Term<'file> {
-    Numeral(Numeral<'file>),
-    String(&'file str),
-    List(Vec<Expr<'file>>),
+pub enum Term {
+    Numeral(Numeral),
+    String(&'static str),
+    List(Vec<Expr>),
     Name(Name),
-    Parens(Box<Expr<'file>>),
-    Tuple(Vec<Expr<'file>>),
+    Parens(Box<Expr>),
+    Tuple(Vec<Expr>),
     Unit,
 }
 
-impl<'file> Display for Term<'file> {
+impl Display for Term {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use Term::*;
         match self {
@@ -485,46 +476,46 @@ impl<'file> Display for Term<'file> {
 /// This represents an explicitly-written type scheme, i.e. the RHS of a `:`.
 /// e.g. in `id : forall a. a;` the TypeScheme represents `forall a. a`.
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
-pub struct TypeScheme<'file> {
-    pub vars: Vec<&'file str>, // @Checkme: &str, or maybe Name?
-    pub typ: TypeExpr<'file>,
+pub struct TypeScheme {
+    pub vars: Vec<&'static str>, // @Checkme: &str, or maybe Name?
+    pub typ: TypeExpr,
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
-pub enum TypeExpr<'file> {
-    Term(TypeTerm<'file>),
-    App(Box<TypeExpr<'file>>, Box<TypeExpr<'file>>),
-    Arrow(Box<TypeExpr<'file>>, Box<TypeExpr<'file>>),
+pub enum TypeExpr {
+    Term(TypeTerm),
+    App(Box<TypeExpr>, Box<TypeExpr>),
+    Arrow(Box<TypeExpr>, Box<TypeExpr>),
     // @Future @TypeBinops: type-level binops
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
-pub enum TypeTerm<'file> {
-    Concrete(&'file str),
-    Var(&'file str),
-    Parens(Box<TypeExpr<'file>>),
-    List(Box<TypeExpr<'file>>),
-    Tuple(Vec<TypeExpr<'file>>),
+pub enum TypeTerm {
+    Concrete(&'static str),
+    Var(&'static str),
+    Parens(Box<TypeExpr>),
+    List(Box<TypeExpr>),
+    Tuple(Vec<TypeExpr>),
     Unit,
 }
 
 /// Parsed representation of a new type definition (e.g. `type Foo = Bar;`).
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct TypeDefinition<'file> {
+pub struct TypeDefinition {
     pub name: Name,
-    pub vars: Vec<&'file str>,
-    pub constructors: Vec<ConstructorDefinition<'file>>,
+    pub vars: Vec<&'static str>,
+    pub constructors: Vec<ConstructorDefinition>,
 }
 
-pub type ConstructorDefinition<'file> = (Name, Vec<TypeTerm<'file>>);
+pub type ConstructorDefinition = (Name, Vec<TypeTerm>);
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
-pub enum Numeral<'file> {
-    Int(&'file str),
-    Float(&'file str),
+pub enum Numeral {
+    Int(&'static str),
+    Float(&'static str),
 }
 
-impl<'file> Display for Numeral<'file> {
+impl Display for Numeral {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use Numeral::*;
         match self {

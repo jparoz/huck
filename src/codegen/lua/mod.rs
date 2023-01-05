@@ -10,9 +10,11 @@ use std::fmt::Write;
 
 use super::Error as CodegenError;
 
+const PREFIX: &str = "_HUCK";
+
 /// Generates Lua for the given Huck Scope.
-pub fn generate<'file>(scope: &Scope<'file>) -> Result<String> {
-    CodeGenerator::new(scope, "_HUCK").generate()
+pub fn generate(scope: &Scope) -> Result<String> {
+    CodeGenerator::new(scope).generate()
 }
 
 type Result<T> = std::result::Result<T, CodegenError>;
@@ -32,15 +34,13 @@ struct CodeGenerator<'a> {
     // This is the set of definitions which have already been generated.
     generated: BTreeSet<ast::Name>,
 
-    scope: &'a Scope<'a>,
-
-    generated_name_prefix: &'a str,
+    scope: &'a Scope,
 
     id_counter: u64,
 }
 
 impl<'a> CodeGenerator<'a> {
-    fn new(scope: &'a Scope, generated_name_prefix: &'a str) -> Self {
+    fn new(scope: &'a Scope) -> Self {
         CodeGenerator {
             conditions: Vec::new(),
             bindings: Vec::new(),
@@ -51,8 +51,6 @@ impl<'a> CodeGenerator<'a> {
 
             scope,
 
-            generated_name_prefix,
-
             id_counter: 0,
         }
     }
@@ -60,10 +58,10 @@ impl<'a> CodeGenerator<'a> {
     /// Generate Lua code for the Scope used in CodeGenerator::new.
     /// This will generate a Lua chunk which returns a table
     /// containing the definitions given in the Huck scope.
-    fn generate<'file>(mut self) -> Result<String> {
+    fn generate(mut self) -> Result<String> {
         let mut lua = String::new();
 
-        writeln!(lua, "local {} = {{}}", self.generated_name_prefix)?;
+        writeln!(lua, "local {} = {{}}", PREFIX)?;
 
         // First, generate code for all the type definitions (i.e. for their constructors).
         // This can be done first
@@ -161,21 +159,17 @@ impl<'a> CodeGenerator<'a> {
     /// This has to be generated from the Vec<Assignment>,
     /// because in the case of multiple definitions,
     /// we have to generate a Lua 'switch' statement.
-    fn definition<'file>(
-        &mut self,
-        name: &ast::Name,
-        defn: &ast::Definition<'file>,
-    ) -> Result<String> {
+    fn definition(&mut self, name: &ast::Name, defn: &ast::Definition) -> Result<String> {
         let mut lua = String::new();
 
         // Write the definition to the `lua` string.
-        write!(lua, r#"{}["{}"] = "#, self.generated_name_prefix, name)?;
+        write!(lua, r#"{}["{}"] = "#, PREFIX, name)?;
         writeln!(lua, "{}", self.curried_function(&defn.assignments)?)?;
         writeln!(
             self.return_entries,
             r#"["{name}"] = {prefix}["{name}"],"#,
             name = name,
-            prefix = self.generated_name_prefix,
+            prefix = PREFIX,
         )?;
 
         // Mark this definition as generated.
@@ -184,7 +178,7 @@ impl<'a> CodeGenerator<'a> {
         Ok(lua)
     }
 
-    fn expr<'file>(&mut self, expr: &ast::Expr<'file>) -> Result<String> {
+    fn expr(&mut self, expr: &ast::Expr) -> Result<String> {
         match expr {
             ast::Expr::Term(term) => self.term(term),
             ast::Expr::App { func, argument } => {
@@ -256,7 +250,7 @@ impl<'a> CodeGenerator<'a> {
         }
     }
 
-    fn term<'file>(&mut self, term: &ast::Term<'file>) -> Result<String> {
+    fn term(&mut self, term: &ast::Term) -> Result<String> {
         match term {
             ast::Term::Numeral(num) => match num {
                 ast::Numeral::Int(s) | ast::Numeral::Float(s) => Ok(s.to_string()),
@@ -292,11 +286,7 @@ impl<'a> CodeGenerator<'a> {
         }
     }
 
-    fn case<'file>(
-        &mut self,
-        expr: &ast::Expr<'file>,
-        arms: &Vec<(ast::Pattern<'file>, ast::Expr<'file>)>,
-    ) -> Result<String> {
+    fn case(&mut self, expr: &ast::Expr, arms: &Vec<(ast::Pattern, ast::Expr)>) -> Result<String> {
         let mut lua = String::new();
 
         let mut has_any_conditions = false;
@@ -309,14 +299,10 @@ impl<'a> CodeGenerator<'a> {
 
         // Store the value of expr in a local.
         let expr_s = self.expr(expr)?;
-        writeln!(
-            lua,
-            "local {}_{} = {}",
-            self.generated_name_prefix, id, expr_s
-        )?;
+        writeln!(lua, "local {}_{} = {}", PREFIX, id, expr_s)?;
 
         for (pat, expr) in arms {
-            self.pattern_match(pat, &format!("{}_{}", self.generated_name_prefix, id))?;
+            self.pattern_match(pat, &format!("{}_{}", PREFIX, id))?;
 
             has_any_conditions = has_any_conditions || !self.conditions.is_empty();
 
@@ -367,10 +353,7 @@ impl<'a> CodeGenerator<'a> {
         Ok(lua)
     }
 
-    fn curried_function<'file>(
-        &mut self,
-        assignments: &Vec<(ast::Lhs<'file>, ast::Expr<'file>)>,
-    ) -> Result<String> {
+    fn curried_function(&mut self, assignments: &Vec<(ast::Lhs, ast::Expr)>) -> Result<String> {
         assert!(assignments.len() > 0);
 
         let arg_count = assignments[0].0.arg_count();
@@ -383,7 +366,7 @@ impl<'a> CodeGenerator<'a> {
             let id = self.unique();
             ids.push(id);
 
-            writeln!(lua, "function({}_{})", self.generated_name_prefix, ids[i])?;
+            writeln!(lua, "function({}_{})", PREFIX, ids[i])?;
 
             if i < arg_count - 1 {
                 write!(lua, "return ")?;
@@ -406,10 +389,7 @@ impl<'a> CodeGenerator<'a> {
             }
 
             for i in 0..arg_count {
-                self.pattern_match(
-                    &args[i],
-                    &format!("{}_{}", self.generated_name_prefix, ids[i]),
-                )?;
+                self.pattern_match(&args[i], &format!("{}_{}", PREFIX, ids[i]))?;
             }
 
             has_any_conditions = has_any_conditions || !self.conditions.is_empty();
@@ -476,11 +456,7 @@ impl<'a> CodeGenerator<'a> {
 
     /// Generates code for a pattern match.
     /// Note: This only modified `self.conditions` and `self.bindings`.
-    fn pattern_match<'file>(
-        &mut self,
-        pat: &ast::Pattern<'file>,
-        lua_arg_name: &str,
-    ) -> Result<()> {
+    fn pattern_match(&mut self, pat: &ast::Pattern, lua_arg_name: &str) -> Result<()> {
         // This function takes a Lua argument name,
         // e.g. _HUCK_0, _HUCK_12[3], _HUCK_3[13][334] or whatever.
         // This is to allow nested pattern matches.
@@ -576,13 +552,13 @@ impl<'a> CodeGenerator<'a> {
 
         // Write each constructor to the `lua` string.
         for (name, typ) in type_defn.constructors.iter() {
-            write!(lua, r#"{}["{}"] = "#, self.generated_name_prefix, name)?;
+            write!(lua, r#"{}["{}"] = "#, PREFIX, name)?;
             writeln!(lua, "{}", self.constructor(name, typ)?)?;
             writeln!(
                 self.return_entries,
                 r#"["{name}"] = {prefix}["{name}"],"#,
                 name = name,
-                prefix = self.generated_name_prefix,
+                prefix = PREFIX,
             )?;
 
             // Mark this constructor as generated.
@@ -605,7 +581,7 @@ impl<'a> CodeGenerator<'a> {
             let id = self.unique();
             ids.push(id);
 
-            writeln!(lua, "function({}_{})", self.generated_name_prefix, id)?;
+            writeln!(lua, "function({}_{})", PREFIX, id)?;
             write!(lua, "return ")?;
 
             constr_type = &b;
@@ -615,7 +591,7 @@ impl<'a> CodeGenerator<'a> {
 
         let tupled_args = ids
             .iter()
-            .map(|id| format!("{}_{}", self.generated_name_prefix, id))
+            .map(|id| format!("{}_{}", PREFIX, id))
             .collect::<Vec<_>>()
             .join(", ");
 
@@ -633,11 +609,11 @@ impl<'a> CodeGenerator<'a> {
         Ok(lua)
     }
 
-    fn reference<'file>(&mut self, name: &ast::Name) -> Result<String> {
+    fn reference(&mut self, name: &ast::Name) -> Result<String> {
         if self.scope.contains(name) {
             // It's a top-level definition,
             // so we should emit e.g. _HUCK["var"]
-            Ok(format!(r#"{}["{}"]"#, self.generated_name_prefix, name))
+            Ok(format!(r#"{}["{}"]"#, PREFIX, name))
         } else if name.as_str() == "True" || name.as_str() == "False" {
             // @Hardcode @Hack-ish @Prelude
             let mut name_string = name.as_str().to_string();

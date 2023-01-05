@@ -4,16 +4,16 @@ use crate::ast::{Definition, ModulePath, Name};
 use crate::types::{Type, TypeDefinition};
 
 #[derive(Debug, Default)]
-pub struct Scope<'file> {
-    pub module_path: ModulePath<'file>,
-    pub definitions: BTreeMap<Name, (Type, Definition<'file>)>,
+pub struct Scope {
+    pub module_path: ModulePath,
+    pub definitions: BTreeMap<Name, (Type, Definition)>,
     pub type_definitions: BTreeMap<Name, TypeDefinition>,
     pub constructors: BTreeMap<Name, Type>,
-    pub imports: BTreeMap<Name, ModulePath<'file>>,
+    pub imports: BTreeMap<Name, ModulePath>,
 }
 
-impl<'file> Scope<'file> {
-    pub fn new(module_path: ModulePath<'file>) -> Scope<'file> {
+impl Scope {
+    pub fn new(module_path: ModulePath) -> Scope {
         Scope {
             module_path,
             ..Scope::default()

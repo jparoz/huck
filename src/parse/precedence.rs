@@ -74,7 +74,7 @@ pub trait ApplyPrecedence {
     fn apply(&mut self, precs: &BTreeMap<Name, Precedence>);
 }
 
-impl<'a> ApplyPrecedence for Definition<'a> {
+impl ApplyPrecedence for Definition {
     fn apply(&mut self, precs: &BTreeMap<Name, Precedence>) {
         for (lhs, rhs) in self.assignments.iter_mut() {
             lhs.apply(precs);
@@ -83,7 +83,7 @@ impl<'a> ApplyPrecedence for Definition<'a> {
     }
 }
 
-impl<'a> ApplyPrecedence for Lhs<'a> {
+impl ApplyPrecedence for Lhs {
     fn apply(&mut self, precs: &BTreeMap<Name, Precedence>) {
         match self {
             Lhs::Func { args, .. } | Lhs::Lambda { args } => {
@@ -99,7 +99,7 @@ impl<'a> ApplyPrecedence for Lhs<'a> {
     }
 }
 
-impl<'a> ApplyPrecedence for Pattern<'a> {
+impl ApplyPrecedence for Pattern {
     fn apply(&mut self, precs: &BTreeMap<Name, Precedence>) {
         match self {
             Pattern::List(args) => {
@@ -160,7 +160,7 @@ impl<'a> ApplyPrecedence for Pattern<'a> {
     }
 }
 
-impl<'a> ApplyPrecedence for Expr<'a> {
+impl ApplyPrecedence for Expr {
     fn apply(&mut self, precs: &BTreeMap<Name, Precedence>) {
         match self {
             Expr::Binop {

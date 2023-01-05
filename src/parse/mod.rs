@@ -19,7 +19,7 @@ use precedence::{default_precs, ApplyPrecedence, Associativity, Precedence};
 #[cfg(test)]
 mod test;
 
-pub fn parse(input: &str) -> Result<Module, Error> {
+pub fn parse(input: &'static str) -> Result<Module, Error> {
     match preceded(
         ws(success(())),
         nom_tuple((opt(module_declaration), many0(statement))),
@@ -121,18 +121,18 @@ pub fn parse(input: &str) -> Result<Module, Error> {
     }
 }
 
-fn module_declaration(input: &str) -> IResult<&str, ModulePath> {
+fn module_declaration(input: &'static str) -> IResult<&'static str, ModulePath> {
     delimited(reserved("module"), module_path, semi)(input)
 }
 
-fn module_path(input: &str) -> IResult<&str, ModulePath> {
+fn module_path(input: &'static str) -> IResult<&'static str, ModulePath> {
     map(
         ws(recognize(separated_list1(tag("."), module_path_segment))),
         ModulePath,
     )(input)
 }
 
-fn statement(input: &str) -> IResult<&str, Statement> {
+fn statement(input: &'static str) -> IResult<&'static str, Statement> {
     alt((
         map(assign_with_type, |(ts, assign)| {
             Statement::AssignmentWithType(ts, assign)
@@ -170,7 +170,7 @@ fn statement(input: &str) -> IResult<&str, Statement> {
     ))(input)
 }
 
-fn assign_with_type(input: &str) -> IResult<&str, (TypeScheme, Assignment)> {
+fn assign_with_type(input: &'static str) -> IResult<&'static str, (TypeScheme, Assignment)> {
     terminated(
         map(
             nom_tuple((lhs, reserved_op(":"), type_scheme, reserved_op("="), expr)),
@@ -180,18 +180,18 @@ fn assign_with_type(input: &str) -> IResult<&str, (TypeScheme, Assignment)> {
     )(input)
 }
 
-fn assign(input: &str) -> IResult<&str, Assignment> {
+fn assign(input: &'static str) -> IResult<&'static str, Assignment> {
     terminated(separated_pair(lhs, reserved_op("="), expr), semi)(input)
 }
 
-fn prec(input: &str) -> IResult<&str, (Name, Precedence)> {
+fn prec(input: &'static str) -> IResult<&'static str, (Name, Precedence)> {
     map(
         terminated(nom_tuple((associativity, ws(nom_u8), operator)), semi),
         |(assoc, prec, op)| (op, Precedence(assoc, prec)),
     )(input)
 }
 
-fn associativity(input: &str) -> IResult<&str, Associativity> {
+fn associativity(input: &'static str) -> IResult<&'static str, Associativity> {
     alt((
         value(Associativity::Left, reserved("infixl")),
         value(Associativity::Right, reserved("infixr")),
@@ -199,7 +199,7 @@ fn associativity(input: &str) -> IResult<&str, Associativity> {
     ))(input)
 }
 
-fn lhs(input: &str) -> IResult<&str, Lhs> {
+fn lhs(input: &'static str) -> IResult<&'static str, Lhs> {
     alt((
         map(nom_tuple((pattern, operator, pattern)), |(a, op, b)| {
             Lhs::Binop { a, op, b }
@@ -210,7 +210,7 @@ fn lhs(input: &str) -> IResult<&str, Lhs> {
     ))(input)
 }
 
-fn pattern(input: &str) -> IResult<&str, Pattern> {
+fn pattern(input: &'static str) -> IResult<&'static str, Pattern> {
     alt((
         map(ws(var), Pattern::Bind),
         map(list(pattern), Pattern::List),
@@ -228,7 +228,7 @@ fn pattern(input: &str) -> IResult<&str, Pattern> {
     ))(input)
 }
 
-fn pattern_binop(input: &str) -> IResult<&str, Pattern> {
+fn pattern_binop(input: &'static str) -> IResult<&'static str, Pattern> {
     map(
         nom_tuple((pattern, operator, alt((pattern_binop, pattern)))),
         |(lhs, operator, rhs)| Pattern::Binop {
@@ -239,11 +239,11 @@ fn pattern_binop(input: &str) -> IResult<&str, Pattern> {
     )(input)
 }
 
-fn expr(input: &str) -> IResult<&str, Expr> {
+fn expr(input: &'static str) -> IResult<&'static str, Expr> {
     alt((binop, app, let_in, if_then_else, case, lambda))(input)
 }
 
-fn type_scheme(input: &str) -> IResult<&str, TypeScheme> {
+fn type_scheme(input: &'static str) -> IResult<&'static str, TypeScheme> {
     map(
         nom_tuple((
             opt(preceded(
@@ -263,7 +263,7 @@ fn type_scheme(input: &str) -> IResult<&str, TypeScheme> {
     )(input)
 }
 
-fn type_expr(input: &str) -> IResult<&str, TypeExpr> {
+fn type_expr(input: &'static str) -> IResult<&'static str, TypeExpr> {
     alt((
         // @Future @TypeBinops: type-level binops
         // Can possibly just modify the below line to use type_operator instead of reserved_op("->")
@@ -275,7 +275,7 @@ fn type_expr(input: &str) -> IResult<&str, TypeExpr> {
     ))(input)
 }
 
-fn type_app(input: &str) -> IResult<&str, TypeExpr> {
+fn type_app(input: &'static str) -> IResult<&'static str, TypeExpr> {
     map(many1(type_term), |ts| {
         ts.into_iter()
             .map(|t| TypeExpr::Term(t))
@@ -284,7 +284,7 @@ fn type_app(input: &str) -> IResult<&str, TypeExpr> {
     })(input)
 }
 
-fn type_term(input: &str) -> IResult<&str, TypeTerm> {
+fn type_term(input: &'static str) -> IResult<&'static str, TypeTerm> {
     alt((
         map(ws(upper_ident), TypeTerm::Concrete),
         map(ws(var), TypeTerm::Var),
@@ -297,7 +297,7 @@ fn type_term(input: &str) -> IResult<&str, TypeTerm> {
     ))(input)
 }
 
-fn binop(input: &str) -> IResult<&str, Expr> {
+fn binop(input: &'static str) -> IResult<&'static str, Expr> {
     map(nom_tuple((app, operator, expr)), |(lhs, operator, rhs)| {
         Expr::Binop {
             operator,
@@ -307,7 +307,7 @@ fn binop(input: &str) -> IResult<&str, Expr> {
     })(input)
 }
 
-fn app(input: &str) -> IResult<&str, Expr> {
+fn app(input: &'static str) -> IResult<&'static str, Expr> {
     map(many1(term), |ts| {
         ts.into_iter()
             .map(|t| Expr::Term(t))
@@ -319,7 +319,7 @@ fn app(input: &str) -> IResult<&str, Expr> {
     })(input)
 }
 
-fn let_in(input: &str) -> IResult<&str, Expr> {
+fn let_in(input: &'static str) -> IResult<&'static str, Expr> {
     map(
         nom_tuple((
             reserved("let"),
@@ -344,7 +344,7 @@ fn let_in(input: &str) -> IResult<&str, Expr> {
     )(input)
 }
 
-fn if_then_else(input: &str) -> IResult<&str, Expr> {
+fn if_then_else(input: &'static str) -> IResult<&'static str, Expr> {
     map(
         nom_tuple((
             reserved("if"),
@@ -362,7 +362,7 @@ fn if_then_else(input: &str) -> IResult<&str, Expr> {
     )(input)
 }
 
-fn case(input: &str) -> IResult<&str, Expr> {
+fn case(input: &'static str) -> IResult<&'static str, Expr> {
     map(
         nom_tuple((
             reserved("case"),
@@ -381,11 +381,11 @@ fn case(input: &str) -> IResult<&str, Expr> {
     )(input)
 }
 
-fn case_arm(input: &str) -> IResult<&str, (Pattern, Expr)> {
+fn case_arm(input: &'static str) -> IResult<&'static str, (Pattern, Expr)> {
     separated_pair(pattern, reserved_op("->"), expr)(input)
 }
 
-fn lambda(input: &str) -> IResult<&str, Expr> {
+fn lambda(input: &'static str) -> IResult<&'static str, Expr> {
     map(
         nom_tuple((reserved_op("\\"), many1(pattern), reserved_op("->"), expr)),
         |(_, args, _, rhs)| Expr::Lambda {
@@ -395,7 +395,7 @@ fn lambda(input: &str) -> IResult<&str, Expr> {
     )(input)
 }
 
-fn term(input: &str) -> IResult<&str, Term> {
+fn term(input: &'static str) -> IResult<&'static str, Term> {
     alt((
         map(numeral, Term::Numeral),
         map(string, Term::String),
@@ -407,7 +407,7 @@ fn term(input: &str) -> IResult<&str, Term> {
     ))(input)
 }
 
-fn var(input: &str) -> IResult<&str, &str> {
+fn var(input: &'static str) -> IResult<&'static str, &'static str> {
     verify(
         recognize(nom_tuple((
             satisfy(is_var_start_char),
@@ -417,21 +417,21 @@ fn var(input: &str) -> IResult<&str, &str> {
     )(input)
 }
 
-fn upper_ident(input: &str) -> IResult<&str, &str> {
+fn upper_ident(input: &'static str) -> IResult<&'static str, &'static str> {
     recognize(nom_tuple((
         satisfy(char::is_uppercase),
         many0(satisfy(is_name_char)),
     )))(input)
 }
 
-fn module_path_segment(input: &str) -> IResult<&str, &str> {
+fn module_path_segment(input: &'static str) -> IResult<&'static str, &'static str> {
     recognize(nom_tuple((
         satisfy(char::is_uppercase),
         many0(satisfy(char::is_alphabetic)),
     )))(input)
 }
 
-fn name(input: &str) -> IResult<&str, Name> {
+fn name(input: &'static str) -> IResult<&'static str, Name> {
     ws(alt((
         map(var, |s| Name::Ident(s.to_string())),
         map(upper_ident, |s| Name::Ident(s.to_string())),
@@ -439,23 +439,23 @@ fn name(input: &str) -> IResult<&str, Name> {
     )))(input)
 }
 
-fn upper_name(input: &str) -> IResult<&str, Name> {
+fn upper_name(input: &'static str) -> IResult<&'static str, Name> {
     ws(map(upper_ident, |s| Name::Ident(s.to_string())))(input)
 }
 
 /// Parses one term in a type constructor definition. e.g. in the following:
 ///     type Foo = Bar | Baz Int;
 /// `constructor_definition` would parse either "Bar" or "Baz Int".
-fn constructor_definition(input: &str) -> IResult<&str, ConstructorDefinition> {
+fn constructor_definition(input: &'static str) -> IResult<&'static str, ConstructorDefinition> {
     // @Future: type constructor binops
     nom_tuple((upper_name, many0(type_term)))(input)
 }
 
-fn constructor_lhs(input: &str) -> IResult<&str, (Name, Vec<&str>)> {
+fn constructor_lhs(input: &'static str) -> IResult<&'static str, (Name, Vec<&'static str>)> {
     nom_tuple((upper_name, many0(ws(var))))(input)
 }
 
-fn numeral(input: &str) -> IResult<&str, Numeral> {
+fn numeral(input: &'static str) -> IResult<&'static str, Numeral> {
     map(alt((numeral_positive, parens(numeral_negative))), |s| {
         if s.contains(&['.', 'e', 'E'][..]) {
             Numeral::Float(s)
@@ -465,7 +465,7 @@ fn numeral(input: &str) -> IResult<&str, Numeral> {
     })(input)
 }
 
-fn numeral_string(input: &str) -> IResult<&str, &str> {
+fn numeral_string(input: &'static str) -> IResult<&'static str, &'static str> {
     ws(alt((
         recognize(nom_tuple((alt((tag("0x"), tag("0X"))), hex_digit1))),
         recognize(nom_tuple((
@@ -476,15 +476,15 @@ fn numeral_string(input: &str) -> IResult<&str, &str> {
     )))(input)
 }
 
-fn numeral_positive(input: &str) -> IResult<&str, &str> {
+fn numeral_positive(input: &'static str) -> IResult<&'static str, &'static str> {
     preceded(not(tag("-")), numeral_string)(input)
 }
 
-fn numeral_negative(input: &str) -> IResult<&str, &str> {
+fn numeral_negative(input: &'static str) -> IResult<&'static str, &'static str> {
     recognize(nom_tuple((tag("-"), numeral_string)))(input)
 }
 
-fn string(input: &str) -> IResult<&str, &str> {
+fn string(input: &'static str) -> IResult<&'static str, &'static str> {
     // "hello, world"
     // @Note: includes the quotes
     ws(recognize(delimited(
@@ -497,9 +497,9 @@ fn string(input: &str) -> IResult<&str, &str> {
     )))(input)
 }
 
-fn list<'a, F: 'a, O>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, Vec<O>>
+fn list<F, O>(inner: F) -> impl FnMut(&'static str) -> IResult<&'static str, Vec<O>>
 where
-    F: FnMut(&'a str) -> IResult<&'a str, O>,
+    F: FnMut(&'static str) -> IResult<&'static str, O>,
 {
     delimited(
         ws(tag("[")),
@@ -508,9 +508,9 @@ where
     )
 }
 
-fn tuple<'a, F: 'a, O>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, Vec<O>>
+fn tuple<F, O>(inner: F) -> impl FnMut(&'static str) -> IResult<&'static str, Vec<O>>
 where
-    F: FnMut(&'a str) -> IResult<&'a str, O>,
+    F: FnMut(&'static str) -> IResult<&'static str, O>,
 {
     delimited(
         ws(tag("(")),
@@ -519,7 +519,7 @@ where
     )
 }
 
-fn operator(input: &str) -> IResult<&str, Name> {
+fn operator(input: &'static str) -> IResult<&'static str, Name> {
     map(
         verify(
             ws(recognize(alt((
@@ -532,19 +532,19 @@ fn operator(input: &str) -> IResult<&str, Name> {
     )(input)
 }
 
-fn operator_char(input: &str) -> IResult<&str, char> {
+fn operator_char(input: &'static str) -> IResult<&'static str, char> {
     one_of("=+-|!@#$%^&*:.,/~<>")(input)
 }
 
-fn semi(input: &str) -> IResult<&str, &str> {
+fn semi(input: &'static str) -> IResult<&'static str, &'static str> {
     ws(tag(";"))(input)
 }
 
-fn unit(input: &str) -> IResult<&str, &str> {
+fn unit(input: &'static str) -> IResult<&'static str, &'static str> {
     ws(tag("()"))(input)
 }
 
-fn comment(input: &str) -> IResult<&str, &str> {
+fn comment(input: &'static str) -> IResult<&'static str, &'static str> {
     recognize(nom_tuple((
         tag("(*"),
         many0_count(alt((
@@ -555,9 +555,9 @@ fn comment(input: &str) -> IResult<&str, &str> {
     )))(input)
 }
 
-fn ws<'a, F: 'a, O>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O>
+fn ws<F, O>(inner: F) -> impl FnMut(&'static str) -> IResult<&'static str, O>
 where
-    F: FnMut(&'a str) -> IResult<&'a str, O>,
+    F: FnMut(&'static str) -> IResult<&'static str, O>,
 {
     let space = satisfy(char::is_whitespace);
 
@@ -566,19 +566,19 @@ where
     terminated(inner, whitespace)
 }
 
-fn reserved<'a>(s: &'static str) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> {
+fn reserved(s: &'static str) -> impl FnMut(&'static str) -> IResult<&'static str, &'static str> {
     assert!(is_reserved(s));
     ws(terminated(tag(s), peek(not(satisfy(is_name_char)))))
 }
 
-fn reserved_op<'a>(s: &'static str) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> {
+fn reserved_op(s: &'static str) -> impl FnMut(&'static str) -> IResult<&'static str, &'static str> {
     assert!(is_reserved(s));
     ws(terminated(tag(s), peek(not(operator_char))))
 }
 
-fn parens<'a, F: 'a, O>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O>
+fn parens<F, O>(inner: F) -> impl FnMut(&'static str) -> IResult<&'static str, O>
 where
-    F: FnMut(&'a str) -> IResult<&'a str, O>,
+    F: FnMut(&'static str) -> IResult<&'static str, O>,
 {
     delimited(ws(tag("(")), inner, ws(tag(")")))
 }

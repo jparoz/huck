@@ -4,7 +4,7 @@ use crate::{ast::Name, parse::parse};
 
 use super::{constraint::ConstraintGenerator, substitution::ApplySub, Type, TypeVar};
 
-fn typ(s: &str) -> Type {
+fn typ(s: &'static str) -> Type {
     let parsed = parse(s).unwrap();
 
     assert!(parsed.definitions.len() == 1);
