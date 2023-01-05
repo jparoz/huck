@@ -60,7 +60,7 @@ pub fn transpile(huck: String) -> Result<String, HuckError> {
     let mut context = Context::default();
 
     // Parse
-    context.include_string(huck)?;
+    context.include_string(huck, "utils.transpile".to_string())?; // @XXX
 
     log::trace!(
         "Parsed module: {:?}",

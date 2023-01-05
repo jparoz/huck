@@ -9,7 +9,9 @@ pub struct Scope {
     pub definitions: BTreeMap<Name, (Type, Definition)>,
     pub type_definitions: BTreeMap<Name, TypeDefinition>,
     pub constructors: BTreeMap<Name, Type>,
-    pub imports: BTreeMap<Name, ModulePath>,
+
+    // Mapping from a name to its originating module's path and file stem.
+    pub imports: BTreeMap<Name, (ModulePath, String)>,
 }
 
 impl Scope {

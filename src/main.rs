@@ -40,7 +40,7 @@ fn do_main() -> Result<(), HuckError> {
 
             // let lua = utils::transpile(contents)?;
             // println!("{}", lua);
-            context.include_string(contents)?;
+            context.include_string(contents, filename)?;
         } else {
             // utils::transpile_file(filename)?;
             context.include_file(filename)?;
@@ -50,11 +50,11 @@ fn do_main() -> Result<(), HuckError> {
     // Typecheck
     context.typecheck()?;
 
-    // // @Todo @Fixme: generate code properly
-    // for scope in context.scopes.values() {
-    //     let lua = codegen::lua::generate(scope)?;
-    //     println!("{}", lua); // @XXX
-    // }
+    // @Todo @Fixme: generate code properly
+    for (path, stem) in context.file_stems {
+        let lua = codegen::lua::generate(&context.scopes[&path])?;
+        println!("{}", lua); // @XXX
+    }
 
     Ok(())
 }

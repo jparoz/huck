@@ -59,6 +59,11 @@ impl<'a> CodeGenerator<'a> {
     /// This will generate a Lua chunk which returns a table
     /// containing the definitions given in the Huck scope.
     fn generate(mut self) -> Result<String> {
+        log::trace!(
+            "Starting code generation for module {}",
+            self.scope.module_path
+        );
+
         let mut lua = String::new();
 
         writeln!(lua, "local {} = {{}}", PREFIX)?;
@@ -68,11 +73,23 @@ impl<'a> CodeGenerator<'a> {
         // because they don't have a real RHS,
         // so they can't refer to anything else.
 
+        log::trace!("  Generating type definitions");
         for (_name, type_defn) in self.scope.type_definitions.iter() {
             write!(lua, "{}", self.type_definition(type_defn)?)?;
         }
 
+        // Next import all the imports.
+        log::trace!("  Generating import statements");
+        for (name, (_path, stem)) in self.scope.imports.iter() {
+            writeln!(lua, r#"{PREFIX}["{name}"] = require("{stem}")["{name}"]"#,)?;
+
+            // Mark the import as generated.
+            // @Checkme: name clashes? Maybe already caught this?
+            assert!(self.generated.insert(name.clone()));
+        }
+
         // Next, we can generate all the definitions.
+        log::trace!("  Generating definitions");
 
         // Start by putting all definitions in the queue to be generated.
         // @Fixme: this probably doesn't need to be entirely cloned
@@ -80,15 +97,17 @@ impl<'a> CodeGenerator<'a> {
         let mut next_pass = Vec::new();
 
         loop {
-            // Keep track of whether we've generated anything in this pass.
-            let mut generated_anything = false;
-
             // If the queue is empty, we're done.
             if current_pass.len() == 0 {
                 break;
             }
 
+            log::trace!("  Started a new generation pass");
+            // Keep track of whether we've generated anything in this pass.
+            let mut generated_anything = false;
+
             for (name, mut typed_defn) in current_pass.drain(..) {
+                log::trace!("    Checking if we can generate {name}...");
                 let defn = &mut typed_defn.1;
 
                 // @Errors: this should throw an error saying that
@@ -116,12 +135,14 @@ impl<'a> CodeGenerator<'a> {
                 if has_any_args || has_all_deps {
                     // Because there are arguments, it's going to be a Lua function.
                     // Thus, we can generate in any order.
+                    log::trace!("    Generating {name}");
                     write!(lua, "{}", self.definition(&name, &defn)?)?;
 
                     // Mark that we have generated something in this pass.
                     generated_anything = true;
                 } else {
                     // Skip it for now
+                    log::trace!("    Skipping for now.");
                     next_pass.push((name, typed_defn));
                 }
             }
@@ -130,7 +151,7 @@ impl<'a> CodeGenerator<'a> {
             // it means we have a cyclic dependency.
             // @Checkme: is this the only time this happens?
             if !generated_anything {
-                log::warn!(
+                log::error!(
                     "Error, didn't generate anything in one pass. Next in queue: {:?}",
                     next_pass
                 );
@@ -146,8 +167,12 @@ impl<'a> CodeGenerator<'a> {
                 ));
             }
 
+            log::trace!("  Finished generation pass");
+
             std::mem::swap(&mut current_pass, &mut next_pass);
         }
+
+        log::trace!("Finished generating definitions");
 
         write!(lua, "return {{\n{}}}", self.return_entries)?;
 

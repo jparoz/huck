@@ -16,11 +16,14 @@ use crate::types::{ApplySub, ConstraintGenerator, Error as TypeError, Type};
 /// transpiled as part of the same Context.
 #[derive(Debug, Default)]
 pub struct Context {
+    /// The file stem of each included file in the context, e.g. "foo" in "foo.hk".
+    pub file_stems: BTreeMap<ModulePath, String>,
+
     /// Each Module in the context.
+    /// For each entry in this map, a related entry will be generated in the other maps.
     pub modules: BTreeMap<ModulePath, Module>,
 
     /// Each Scope in the context.
-    /// These must always have a corresponding entry in modules.
     pub scopes: BTreeMap<ModulePath, Scope>,
 
     /// These are assumptions made about imported names,
@@ -80,7 +83,10 @@ impl Context {
                 for name in names {
                     log::trace!("Inserting into scope of {module_path}: import {path} ({name})");
                     // @Todo @Checkme: name clashes?
-                    assert!(scope.imports.insert(name, path).is_none());
+                    assert!(scope
+                        .imports
+                        .insert(name, (path, self.file_stems[&path].clone()))
+                        .is_none());
                 }
             }
 
@@ -132,7 +138,7 @@ impl Context {
                 for assumed_type in assumed_types {
                     cg.implicit_instance(assumed_type, typ.clone());
                 }
-            } else if let Some(path) = scope.imports.get(&name) {
+            } else if let Some((path, _stem)) = scope.imports.get(&name) {
                 self.assumptions
                     .entry((*path, name))
                     .or_default()
@@ -185,22 +191,25 @@ impl Context {
         }
     }
 
-    pub fn include_string(&mut self, src: String) -> Result<(), HuckError> {
+    pub fn include_string(&mut self, src: String, file_stem: String) -> Result<(), HuckError> {
         let src = leak_string(src);
 
         let module = parse(src)?;
+        let path = module.path.unwrap_or_default();
 
-        if let Some(existing_module) = self.modules.insert(module.path.unwrap_or_default(), module)
-        {
+        if let Some(existing_module) = self.modules.insert(path, module) {
             match existing_module.path {
                 Some(path) => return Err(HuckError::MultipleModules(format!("{}", path))),
                 None => {
+                    // @Todo @Checkme: I suspect this is unreachable
                     return Err(HuckError::MultipleModules(
                         "Main (default when no name given)".to_string(),
-                    ))
+                    ));
                 }
             }
         }
+
+        assert!(self.file_stems.insert(path, file_stem).is_none());
 
         Ok(())
     }
@@ -216,7 +225,17 @@ impl Context {
         }
 
         let src = std::fs::read_to_string(&path)?;
-        self.include_string(src)
+
+        // Pass through the source string, as well as the filepath stem (converted to String).
+        self.include_string(
+            src,
+            path.as_ref()
+                .file_stem()
+                .expect("there should be a file name")
+                .to_os_string()
+                .into_string()
+                .expect("the file name should be utf8"),
+        )
     }
 }
 
