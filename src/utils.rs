@@ -1,5 +1,4 @@
 use std::io::Write;
-use std::path::Path;
 
 use crate::codegen;
 use crate::context::Context;
@@ -18,54 +17,13 @@ pub fn execute_lua(lua: &str) -> String {
     String::from_utf8(output.stdout).unwrap()
 }
 
-// @DRY
-/// Takes a Huck filename file.hk, transpiles it into Lua, and writes it to file.lua
-pub fn transpile_file<P>(path: P) -> Result<(), HuckError>
-where
-    P: AsRef<Path>,
-{
-    // Make a context with one file
-    let mut context = Context::default();
-
-    context.include_file(&path)?;
-
-    log::trace!(
-        "Parsed module: {:?}",
-        context.modules.iter().next().unwrap()
-    );
-
-    // Typecheck
-    context.typecheck()?;
-
-    // @Future: optimisations go here
-
-    // Generate code
-    for scope in context.scopes.values() {
-        let lua = codegen::lua::generate(scope)?;
-
-        log::trace!("Generated Lua code:\n{}", lua);
-
-        let lua = normalize(&lua);
-
-        std::fs::write(path.as_ref().with_extension("lua"), lua)?;
-    }
-
-    Ok(())
-}
-
-// @DRY
 /// Takes some Huck and turns it into Lua, doing every step in between.
 pub fn transpile(huck: String) -> Result<String, HuckError> {
     // Make a context with one file
     let mut context = Context::default();
 
     // Parse
-    context.include_string(huck, "utils.transpile".to_string())?; // @XXX
-
-    log::trace!(
-        "Parsed module: {:?}",
-        context.modules.iter().next().unwrap()
-    );
+    context.include_string(huck)?; // @XXX
 
     // Typecheck
     context.typecheck()?;

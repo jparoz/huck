@@ -35,25 +35,29 @@ fn do_main() -> Result<(), HuckError> {
     for filename in args {
         if filename == "-" {
             // stdin
+            log::info!("Adding <stdin> to the context");
             let mut contents = String::new();
             io::stdin().read_to_string(&mut contents).unwrap();
-
-            // let lua = utils::transpile(contents)?;
-            // println!("{}", lua);
-            context.include_string(contents, filename)?;
+            context.include_string(contents)?;
         } else {
-            // utils::transpile_file(filename)?;
+            log::info!("Adding {filename} to the context");
             context.include_file(filename)?;
         }
     }
 
     // Typecheck
+    log::info!("Typechecking");
     context.typecheck()?;
 
-    // @Todo @Fixme: generate code properly
-    for (path, stem) in context.file_stems {
-        let lua = codegen::lua::generate(&context.scopes[&path])?;
-        println!("{}", lua); // @XXX
+    // Generate code
+    for (module_path, mut file_path) in context.file_paths {
+        log::info!("Generating code for module {module_path}");
+        let lua = codegen::lua::generate(&context.scopes[&module_path])?;
+        let lua = utils::normalize(&lua);
+        assert!(file_path.set_extension("lua"));
+
+        log::info!("Writing generated output to {}", file_path.display());
+        std::fs::write(file_path, lua)?;
     }
 
     Ok(())

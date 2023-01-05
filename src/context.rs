@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::mem;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::ast::{Module, ModulePath, Name};
 use crate::codegen::lua::is_lua_binop;
@@ -16,8 +16,8 @@ use crate::types::{ApplySub, ConstraintGenerator, Error as TypeError, Type};
 /// transpiled as part of the same Context.
 #[derive(Debug, Default)]
 pub struct Context {
-    /// The file stem of each included file in the context, e.g. "foo" in "foo.hk".
-    pub file_stems: BTreeMap<ModulePath, String>,
+    /// The file path of each included file in the context.
+    pub file_paths: BTreeMap<ModulePath, PathBuf>,
 
     /// Each Module in the context.
     /// For each entry in this map, a related entry will be generated in the other maps.
@@ -85,7 +85,7 @@ impl Context {
                     // @Todo @Checkme: name clashes?
                     assert!(scope
                         .imports
-                        .insert(name, (path, self.file_stems[&path].clone()))
+                        .insert(name, (path, self.file_stem(path)))
                         .is_none());
                 }
             }
@@ -191,13 +191,37 @@ impl Context {
         }
     }
 
-    pub fn include_string(&mut self, src: String, file_stem: String) -> Result<(), HuckError> {
+    /// Adds the given file to the Context.
+    pub fn include_file<P>(&mut self, file_path: P) -> Result<(), HuckError>
+    where
+        P: AsRef<Path>,
+    {
+        match file_path.as_ref().extension() {
+            Some(ex) if ex == "hk" => (),
+            Some(_) => log::warn!("unknown filetype included: {:?}", file_path.as_ref()),
+            _ => log::warn!("file without extension included: {:?}", file_path.as_ref()),
+        }
+
+        let src = std::fs::read_to_string(&file_path)?;
         let src = leak_string(src);
 
-        let module = parse(src)?;
-        let path = module.path.unwrap_or_default();
+        self.include(src, Some(file_path.as_ref().to_path_buf()))
+    }
 
-        if let Some(existing_module) = self.modules.insert(path, module) {
+    /// Adds the given String to the Context, treating it as anonymous input e.g. REPL input.
+    pub fn include_string(&mut self, src: String) -> Result<(), HuckError> {
+        let src = leak_string(src);
+        self.include(src, None)
+    }
+
+    /// Actually includes the module in the Context.
+    /// Called by [include_file] and [include_string].
+    fn include(&mut self, src: &'static str, path_buf: Option<PathBuf>) -> Result<(), HuckError> {
+        let module = parse(src)?;
+        log::trace!("Parsed module: {:?}", module);
+        let module_path = module.path.unwrap_or_default();
+
+        if let Some(existing_module) = self.modules.insert(module_path, module) {
             match existing_module.path {
                 Some(path) => return Err(HuckError::MultipleModules(format!("{}", path))),
                 None => {
@@ -209,33 +233,31 @@ impl Context {
             }
         }
 
-        assert!(self.file_stems.insert(path, file_stem).is_none());
+        // If there is no file path, generate one from the module path.
+        let path_buf = if let Some(path_buf) = path_buf {
+            path_buf
+        } else {
+            let mut path_buf = PathBuf::new();
+            path_buf.push(format!("{}", module_path));
+            path_buf.set_extension("hk");
+            path_buf
+        };
+
+        // Insert the file path
+        assert!(self.file_paths.insert(module_path, path_buf).is_none());
 
         Ok(())
     }
 
-    pub fn include_file<P>(&mut self, path: P) -> Result<(), HuckError>
-    where
-        P: AsRef<Path>,
-    {
-        match path.as_ref().extension() {
-            Some(ex) if ex == "hk" => (),
-            Some(_) => log::warn!("unknown filetype included: {:?}", path.as_ref()),
-            _ => log::warn!("file without extension included: {:?}", path.as_ref()),
-        }
-
-        let src = std::fs::read_to_string(&path)?;
-
-        // Pass through the source string, as well as the filepath stem (converted to String).
-        self.include_string(
-            src,
-            path.as_ref()
-                .file_stem()
-                .expect("there should be a file name")
-                .to_os_string()
-                .into_string()
-                .expect("the file name should be utf8"),
-        )
+    /// Returns the file stem of the file path corresponding to the given module path.
+    /// Panics if there is no file path stored in the Context corresponding to the given path.
+    fn file_stem(&mut self, path: ModulePath) -> String {
+        self.file_paths[&path]
+            .file_stem()
+            .expect("there should be a file name")
+            .to_os_string()
+            .into_string()
+            .expect("the file name should be utf8")
     }
 }
 
