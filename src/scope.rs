@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
-use crate::ast::{Definition, ModulePath, Name};
-use crate::types::{Type, TypeDefinition};
+use crate::ast::{Definition, LuaName, ModulePath, Name};
+use crate::types::{Type, TypeDefinition, TypeScheme};
 
 #[derive(Debug, Default)]
 pub struct Scope {
@@ -12,6 +12,11 @@ pub struct Scope {
 
     // Mapping from a name to its originating module's path and file stem.
     pub imports: BTreeMap<Name, (ModulePath, String)>,
+
+    // Mapping from a name to its originating foreign module's require string,
+    // the corresponding Lua name,
+    // and the type scheme given at the import.
+    pub foreign_imports: BTreeMap<Name, (&'static str, LuaName, TypeScheme)>,
 }
 
 impl Scope {
@@ -26,6 +31,7 @@ impl Scope {
         self.definitions.contains_key(name)
             || self.constructors.contains_key(name)
             || self.imports.contains_key(name)
+            || self.foreign_imports.contains_key(name)
     }
 
     pub fn get_type(&self, name: &Name) -> Option<Type> {

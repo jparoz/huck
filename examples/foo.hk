@@ -5,3 +5,7 @@ import Bar (bar, baz);
 foreign import "inspect" (inspect : forall a. a -> String);
 
 foo = bar baz;
+
+myInspect = inspect;
+
+resultOfInspect = inspect foo;

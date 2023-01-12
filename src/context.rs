@@ -86,6 +86,28 @@ impl Context {
                 }
             }
 
+            // Insert all (foreign) imported names into the scope.
+            for (require_string, imports) in module.foreign_imports {
+                for (lua_name, huck_name, ast_type_scheme) in imports {
+                    log::trace!(
+                        "Inserting into scope of {module_path}: \
+                         foreign import {require_string} ({lua_name} as {huck_name})"
+                    );
+                    // @Todo @Checkme: name clashes?
+                    assert!(scope
+                        .foreign_imports
+                        .insert(
+                            huck_name,
+                            (
+                                require_string,
+                                lua_name,
+                                cg.generate_type_scheme(&ast_type_scheme)
+                            )
+                        )
+                        .is_none());
+                }
+            }
+
             // Polymorphically bind all top-level names.
             // If any assumptions were found to be imported,
             // their assumptions are promoted to Context level by this method.
@@ -131,10 +153,22 @@ impl Context {
 
         for (name, assumed_types) in assumptions {
             if let Some(typ) = scope.get_type(&name) {
+                // This means that it was defined in this module.
                 for assumed_type in assumed_types {
                     cg.implicit_instance(assumed_type, typ.clone());
                 }
+            } else if let Some((_require_string, _lua_name, type_scheme)) =
+                scope.foreign_imports.get(&name)
+            {
+                // This means that the name was imported from a foreign (Lua) module;
+                // this means that the Huck author gave an explicit type signature at the import.
+                for assumed_type in assumed_types {
+                    cg.explicit_instance(assumed_type, type_scheme.clone());
+                }
             } else if let Some((path, _stem)) = scope.imports.get(&name) {
+                // This means that the name was imported from another Huck module;
+                // so we need to resolve it at Context level later.
+                // We do this by pushing it into self.assumptions (i.e. the Context)
                 self.assumptions
                     .entry((*path, name))
                     .or_default()

@@ -112,6 +112,10 @@ impl ConstraintGenerator {
         ));
     }
 
+    pub fn explicit_instance(&mut self, tau: Type, sigma: TypeScheme) {
+        self.constrain(Constraint::ExplicitInstance(tau, sigma));
+    }
+
     /// Constrains all types in the given Vec to be equal, and returns that type.
     pub fn equate_all(&mut self, typs: Vec<Type>) -> Type {
         if typs.len() == 1 {
