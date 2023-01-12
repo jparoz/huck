@@ -215,7 +215,8 @@ impl Context {
     }
 
     /// Actually includes the module in the Context.
-    /// Called by [include_file] and [include_string].
+    /// Called by [`include_file`][Context::include_file]
+    /// and [`include_string`][Context::include_string].
     fn include(&mut self, src: &'static str, path_buf: Option<PathBuf>) -> Result<(), HuckError> {
         let module = parse(src)?;
         log::trace!("Parsed module: {:?}", module);
