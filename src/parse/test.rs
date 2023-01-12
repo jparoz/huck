@@ -112,6 +112,7 @@ fn unit() {
             definitions,
             type_definitions: BTreeMap::new(),
             imports: BTreeMap::new(),
+            foreign_imports: BTreeMap::new(),
         }
     })
 }
@@ -144,6 +145,7 @@ fn apply_to_unit() {
             definitions,
             type_definitions: BTreeMap::new(),
             imports: BTreeMap::new(),
+            foreign_imports: BTreeMap::new(),
         }
     })
 }
@@ -200,6 +202,7 @@ fn case() {
                 definitions,
                 type_definitions: BTreeMap::new(),
                 imports: BTreeMap::new(),
+                foreign_imports: BTreeMap::new(),
             }
         }
     )

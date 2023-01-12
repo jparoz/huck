@@ -14,6 +14,7 @@ pub struct Module {
     pub definitions: BTreeMap<Name, Definition>,
     pub type_definitions: BTreeMap<Name, TypeDefinition>,
     pub imports: BTreeMap<ModulePath, Vec<Name>>,
+    pub foreign_imports: BTreeMap<&'static str, Vec<(LuaName, Name, TypeScheme)>>,
 }
 
 /// A ModulePath is a path to a Huck module, as defined within that module.
@@ -69,12 +70,16 @@ pub enum Statement {
     TypeDefinition(TypeDefinition),
     Precedence(Name, Precedence),
     Import(ModulePath, Vec<Name>),
+
+    /// Includes the quotation marks in the require string
+    ForeignImport(&'static str, Vec<ForeignImportItem>),
 }
 
 pub type Assignment = (Lhs, Expr);
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub enum Name {
+    // @Todo @Cleanup: change to &'static str
     Ident(String),
     Binop(String),
     Lambda,
@@ -508,6 +513,15 @@ pub struct TypeDefinition {
 }
 
 pub type ConstructorDefinition = (Name, Vec<TypeTerm>);
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum ForeignImportItem {
+    SameName(Name, TypeScheme),
+    Rename(LuaName, Name, TypeScheme),
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
+pub struct LuaName(pub String);
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum Numeral {

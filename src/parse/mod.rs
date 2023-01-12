@@ -34,6 +34,8 @@ pub fn parse(input: &'static str) -> Result<Module, Error> {
             let mut type_definitions = BTreeMap::new();
             let mut precs = default_precs();
             let mut imports: BTreeMap<ModulePath, Vec<Name>> = BTreeMap::new();
+            let mut foreign_imports: BTreeMap<&'static str, Vec<(LuaName, Name, TypeScheme)>> =
+                BTreeMap::new();
 
             // Collect all the statements together into Definitions
             // (and precs).
@@ -102,6 +104,16 @@ pub fn parse(input: &'static str) -> Result<Module, Error> {
                     Statement::Import(path, names) => {
                         imports.entry(path).or_default().extend(names)
                     }
+
+                    Statement::ForeignImport(require_string, import_items) => foreign_imports
+                        .entry(require_string)
+                        .or_default()
+                        .extend(import_items.into_iter().map(|item| match item {
+                            ForeignImportItem::SameName(name, ts) => {
+                                (LuaName(name.as_str().to_string()), name, ts)
+                            }
+                            ForeignImportItem::Rename(_, _, _) => todo!(),
+                        })),
                 }
             }
 
@@ -115,6 +127,7 @@ pub fn parse(input: &'static str) -> Result<Module, Error> {
                 definitions,
                 type_definitions,
                 imports,
+                foreign_imports,
             })
         }
         Err(nom) => Err(Error::Nom(nom.to_string())),
@@ -134,14 +147,18 @@ fn module_path(input: &'static str) -> IResult<&'static str, ModulePath> {
 
 fn statement(input: &'static str) -> IResult<&'static str, Statement> {
     alt((
+        // Assignment with inline type annotation
         map(assign_with_type, |(ts, assign)| {
             Statement::AssignmentWithType(ts, assign)
         }),
+        // Assignment without inline type annotation
         map(assign, Statement::AssignmentWithoutType),
+        // Standalone type annotation
         map(
             terminated(separated_pair(name, reserved_op(":"), type_scheme), semi),
             |(name, scheme)| Statement::TypeAnnotation(name, scheme),
         ),
+        // Type definition
         map(
             nom_tuple((
                 reserved("type"),
@@ -158,7 +175,9 @@ fn statement(input: &'static str) -> IResult<&'static str, Statement> {
                 })
             },
         ),
+        // Precedence declaration
         map(prec, |(name, prec)| Statement::Precedence(name, prec)),
+        // Huck import statement
         map(
             delimited(
                 reserved("import"),
@@ -166,6 +185,35 @@ fn statement(input: &'static str) -> IResult<&'static str, Statement> {
                 semi,
             ),
             |(path, names)| Statement::Import(path, names),
+        ),
+        // Foreign (Lua) import statement
+        map(
+            delimited(
+                nom_tuple((reserved("foreign"), reserved("import"))),
+                nom_tuple((string, tuple(foreign_import_item))),
+                semi,
+            ),
+            |(require_string, import_items)| Statement::ForeignImport(require_string, import_items),
+        ),
+    ))(input)
+}
+
+fn foreign_import_item(input: &'static str) -> IResult<&'static str, ForeignImportItem> {
+    alt((
+        map(
+            // @Todo @Checkme: should this be name, or ws(var)?
+            separated_pair(name, reserved_op(":"), type_scheme),
+            |(name, ts)| ForeignImportItem::SameName(name, ts),
+        ),
+        map(
+            nom_tuple((
+                lua_name,
+                reserved("as"),
+                name,
+                reserved_op(":"),
+                type_scheme,
+            )),
+            |(lua_name, _, huck_name, _, ts)| ForeignImportItem::Rename(lua_name, huck_name, ts),
         ),
     ))(input)
 }
@@ -443,6 +491,16 @@ fn upper_name(input: &'static str) -> IResult<&'static str, Name> {
     ws(map(upper_ident, |s| Name::Ident(s.to_string())))(input)
 }
 
+fn lua_name(input: &'static str) -> IResult<&'static str, LuaName> {
+    ws(map(
+        recognize(nom_tuple((
+            satisfy(char::is_alphabetic),
+            many0(satisfy(char::is_alphanumeric)),
+        ))),
+        |s: &'static str| LuaName(s.to_string()),
+    ))(input)
+}
+
 /// Parses one term in a type constructor definition. e.g. in the following:
 ///     type Foo = Bar | Baz Int;
 /// `constructor_definition` would parse either "Bar" or "Baz Int".
@@ -595,9 +653,9 @@ fn is_var_start_char(c: char) -> bool {
 // an uppercase letter.
 fn is_reserved(word: &str) -> bool {
     match word {
-        "module" | "lazy" | "import" | "export" | "let" | "in" | "if" | "then" | "else"
-        | "case" | "of" | "do" | "infix" | "infixl" | "infixr" | "forall" | "type" | "=>" | ","
-        | "()" | "=" | ":" | "\\" | "->" | "<-" => true,
+        "module" | "lazy" | "import" | "export" | "foreign" | "as" | "let" | "in" | "if"
+        | "then" | "else" | "case" | "of" | "do" | "infix" | "infixl" | "infixr" | "forall"
+        | "type" | "=>" | "," | "()" | "=" | ":" | "\\" | "->" | "<-" => true,
         _ => false,
     }
 }

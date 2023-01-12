@@ -2,4 +2,6 @@ module Foo;
 
 import Bar (bar, baz);
 
+foreign import "inspect" (inspect : forall a. a -> String);
+
 foo = bar baz;
