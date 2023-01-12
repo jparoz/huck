@@ -81,9 +81,22 @@ impl<'a> CodeGenerator<'a> {
         // Next import all the imports.
         log::trace!("  Generating import statements");
         for (name, (_path, stem)) in self.scope.imports.iter() {
-            writeln!(lua, r#"{PREFIX}["{name}"] = require("{stem}")["{name}"]"#,)?;
+            writeln!(lua, r#"{PREFIX}["{name}"] = require("{stem}")["{name}"]"#)?;
 
             // Mark the import as generated.
+            // @Checkme: name clashes? Maybe already caught this?
+            assert!(self.generated.insert(name.clone()));
+        }
+
+        // Next import all the foreign imports.
+        log::trace!("  Generating foreign import statements");
+        for (name, (require_string, lua_name, _type_scheme)) in self.scope.foreign_imports.iter() {
+            writeln!(
+                lua,
+                r#"{PREFIX}["{name}"] = require({require_string})["{lua_name}"]"#
+            )?;
+
+            // Mark the foreign import as generated.
             // @Checkme: name clashes? Maybe already caught this?
             assert!(self.generated.insert(name.clone()));
         }
@@ -179,6 +192,7 @@ impl<'a> CodeGenerator<'a> {
         Ok(lua)
     }
 
+    // @Todo @Cleanup: move most of this comment to earlier in the pipe, when we make Definitions.
     /// Generates a Lua expression representing a Huck definition,
     /// even if it's defined on multiple lines.
     /// This has to be generated from the Vec<Assignment>,

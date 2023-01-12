@@ -112,7 +112,7 @@ pub fn parse(input: &'static str) -> Result<Module, Error> {
                             ForeignImportItem::SameName(name, ts) => {
                                 (LuaName(name.as_str().to_string()), name, ts)
                             }
-                            ForeignImportItem::Rename(_, _, _) => todo!(),
+                            ForeignImportItem::Rename(lua_name, name, ts) => (lua_name, name, ts),
                         })),
                 }
             }
