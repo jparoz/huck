@@ -21,14 +21,14 @@ pub struct Context {
 
     /// Each Module in the context.
     /// For each entry in this map, a related entry will be generated in the other maps.
-    pub modules: BTreeMap<ModulePath, Module>,
+    modules: BTreeMap<ModulePath, Module>,
 
     /// Each Scope in the context.
     pub scopes: BTreeMap<ModulePath, Scope>,
 
     /// These are assumptions made about imported names,
     /// so need to be handled at Context level rather than Scope level.
-    pub assumptions: BTreeMap<(ModulePath, Name), Vec<Type>>,
+    assumptions: BTreeMap<(ModulePath, Name), Vec<Type>>,
 }
 
 impl Context {
@@ -53,11 +53,7 @@ impl Context {
 
                 // @Note: guaranteed to be None,
                 // because we're iterating over a BTreeMap.
-                assert!(scope
-                    .definitions
-                    // @Cleanup: do we need to clone this much?
-                    .insert(name, (typ, defn))
-                    .is_none());
+                assert!(scope.definitions.insert(name, (typ, defn)).is_none());
             }
 
             // Generate constraints for each type definition
