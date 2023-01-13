@@ -1,0 +1,95 @@
+module Prelude;
+
+(* @Todo @Typeclasses:
+ * Almost all of these operators should have different types;
+ * in addition, some of them need to have more typesafe definitions
+ * to ensure that the type at runtime matches the Huck type.
+ *)
+
+(* Numeric operators *)
+
+(+) : Int -> Int -> Int;
+infixl 6 +;
+a + b = unsafe lua { a + b };
+
+(-) : Int -> Int -> Int;
+infixl 6 -;
+a - b = unsafe lua { a - b };
+
+( * ) : Int -> Int -> Int;
+infixl 7 *;
+a * b = unsafe lua { a * b };
+
+(/) : Float -> Float -> Float;
+infixl 7 /;
+a / b = unsafe lua { a / b };
+
+(//) : Int -> Int -> Int;
+infixl 7 //;
+a // b = unsafe lua { a // b };
+
+(%) : Int -> Int -> Int;
+infixl 7 %;
+a % b = unsafe lua { a % b };
+
+(^) : Int -> Int -> Int;
+infixr 8 ^;
+a ^ b = unsafe lua { a ^ b };
+
+negate : Int -> Int;
+negate n = unsafe lua { -n };
+
+
+(* Boolean type *)
+(* @Todo: This should have some more heavy-duty builtin thing *)
+type Bool = True | False;
+
+
+(* Boolean operators *)
+
+(&&) : Bool -> Bool -> Bool;
+infixr 3 &&;
+a && b = unsafe lua { a and b };
+
+(||) : Bool -> Bool -> Bool;
+infixr 2 ||;
+a || b = unsafe lua { a or b };
+
+not : Bool -> Bool;
+not a = unsafe lua { not a };
+
+
+(* Comparison operators *)
+
+(==) : forall a. a -> a -> Bool;
+infix 4 ==;
+a == b = unsafe lua { a == b };
+
+(!=) : forall a. a -> a -> Bool;
+infix 4 !=;
+a != b = unsafe lua { a ~= b };
+
+(<) : forall a. a -> a -> Bool;
+infix 4 <;
+a < b = unsafe lua { a < b };
+
+(>) : forall a. a -> a -> Bool;
+infix 4 >;
+a > b = unsafe lua { a > b };
+
+(<=) : forall a. a -> a -> Bool;
+infix 4 <=;
+a <= b = unsafe lua { a <= b };
+
+(>=) : forall a. a -> a -> Bool;
+infix 4 >=;
+a >= b = unsafe lua { a >= b };
+
+
+(* String concatenation operator *)
+concat : String -> String -> String;
+concat a b = unsafe lua { a .. b };
+
+(* Length operator *)
+length : forall a. [a] -> Int;
+length xs = unsafe lua { #xs };

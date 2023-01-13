@@ -18,7 +18,7 @@ pub fn execute_lua(lua: &str) -> String {
 }
 
 /// Takes some Huck and turns it into Lua, doing every step in between.
-pub fn transpile(huck: String) -> Result<String, HuckError> {
+pub fn transpile(huck: &'static str) -> Result<String, HuckError> {
     // Make a context with one file
     let mut context = Context::default();
 
@@ -54,4 +54,9 @@ pub fn normalize(lua: &str) -> String {
     String::from_utf8(output.stdout)
         .unwrap()
         .replace("\n\n", "\n")
+}
+
+/// Leak a string, returning a &'static str with its contents.
+pub fn leak_string(s: String) -> &'static str {
+    Box::leak(s.into_boxed_str())
 }

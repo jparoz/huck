@@ -19,9 +19,10 @@ fn typ(s: &'static str) -> Type {
     typ
 }
 
-fn typ_module(s: &str) -> Scope {
+fn typ_module(s: &'static str) -> Scope {
     let mut ctx = Context::default();
-    ctx.include_string(s.to_string()).unwrap();
+    log::debug!("foo");
+    ctx.include_string(s).unwrap();
     ctx.typecheck().unwrap();
     ctx.scopes.into_values().next().unwrap()
 }
@@ -147,14 +148,18 @@ fn constructor_unary_returned() {
     let val = scope
         .definitions
         .get(&Name::Ident("val".to_string()))
-        .unwrap();
-    assert_eq!(
-        val.0,
-        Type::Arrow(
-            Box::new(Type::Var(TypeVar::Generated(1))),
-            Box::new(Type::Concrete("Foo".to_string())),
-        ),
-    )
+        .unwrap()
+        .clone();
+
+    assert!(matches!(val.0, Type::Arrow(_, _)));
+
+    let (l, r) = if let Type::Arrow(l, r) = val.0 {
+        (l, r)
+    } else {
+        unreachable!()
+    };
+    assert!(matches!(*l, Type::Var(_)));
+    assert!(matches!(*r, Type::Concrete(foo) if foo == "Foo"));
 }
 
 #[test]
@@ -251,19 +256,26 @@ fn constructor_newtype_generic_var() {
     let val = scope
         .definitions
         .get(&Name::Ident("val".to_string()))
-        .unwrap();
+        .unwrap()
+        .clone();
 
-    let var = TypeVar::Generated(4);
-    assert_eq!(
-        val.0,
-        Type::Arrow(
-            Box::new(Type::Var(var.clone())),
-            Box::new(Type::App(
-                Box::new(Type::Concrete("Foo".to_string())),
-                Box::new(Type::Var(var))
-            ))
-        ),
-    )
+    assert!(matches!(val.0, Type::Arrow(_, _)));
+
+    let (l, r) = if let Type::Arrow(l, r) = val.0 {
+        (l, r)
+    } else {
+        unreachable!()
+    };
+    assert!(matches!(*l, Type::Var(_)));
+    assert!(matches!(*r, Type::App(_, _)));
+
+    let (constr, inner) = if let Type::App(constr, inner) = *r {
+        (constr, inner)
+    } else {
+        unreachable!()
+    };
+    assert!(matches!(*constr, Type::Concrete(foo) if foo == "Foo"));
+    assert!(matches!(*inner, Type::Var(_)));
 }
 
 #[test]

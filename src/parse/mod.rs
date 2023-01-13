@@ -14,7 +14,7 @@ use std::collections::BTreeMap;
 use crate::ast::*;
 
 pub mod precedence;
-use precedence::{default_precs, ApplyPrecedence, Associativity, Precedence};
+use precedence::{ApplyPrecedence, Associativity, Precedence};
 
 #[cfg(test)]
 mod test;
@@ -32,7 +32,7 @@ pub fn parse(input: &'static str) -> Result<Module, Error> {
 
             let mut definitions: BTreeMap<Name, Definition> = BTreeMap::new();
             let mut type_definitions = BTreeMap::new();
-            let mut precs = default_precs();
+            let mut precs = BTreeMap::new();
             let mut imports: BTreeMap<ModulePath, Vec<Name>> = BTreeMap::new();
             let mut foreign_imports: BTreeMap<&'static str, Vec<(LuaName, Name, TypeScheme)>> =
                 BTreeMap::new();

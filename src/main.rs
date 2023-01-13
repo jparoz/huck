@@ -14,6 +14,8 @@ use std::io::{self, Read};
 use context::Context;
 use error::Error as HuckError;
 
+use crate::utils::leak_string;
+
 fn main() {
     do_main().unwrap_or_else(|e| {
         eprintln!("Compile error: {}", e);
@@ -29,6 +31,7 @@ fn do_main() -> Result<(), HuckError> {
     // Ignore executable name
     args.next();
 
+    // Context::default() includes the Prelude from "../huck/Prelude.hk" by default.
     let mut context = Context::default();
 
     // Add all the given files to the Context.
@@ -38,7 +41,7 @@ fn do_main() -> Result<(), HuckError> {
             log::info!("Adding <stdin> to the context");
             let mut contents = String::new();
             io::stdin().read_to_string(&mut contents).unwrap();
-            context.include_string(contents)?;
+            context.include_string(leak_string(contents))?;
         } else {
             log::info!("Adding {filename} to the context");
             context.include_file(filename)?;

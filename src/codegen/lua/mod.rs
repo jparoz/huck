@@ -140,10 +140,7 @@ impl<'a> CodeGenerator<'a> {
                 let has_all_deps = defn
                     .dependencies()
                     .iter()
-                    // @Fixme: this should check the scope as well,
-                    // for e.g. imported functions,
-                    // rather than just checking if it's a builtin Lua binop.
-                    .all(|n| self.generated.contains(n) || is_lua_binop(n.as_str()));
+                    .all(|n| self.generated.contains(n));
 
                 if has_any_args || has_all_deps {
                     // Because there are arguments, it's going to be a Lua function.
@@ -651,15 +648,15 @@ impl<'a> CodeGenerator<'a> {
     }
 
     fn reference(&mut self, name: &ast::Name) -> Result<String> {
-        if self.scope.contains(name) {
-            // It's a top-level definition,
-            // so we should emit e.g. _HUCK["var"]
-            Ok(format!(r#"{}["{}"]"#, PREFIX, name))
-        } else if name.as_str() == "True" || name.as_str() == "False" {
-            // @Hardcode @Hack-ish @Prelude
+        // @Hack @Prelude
+        if name.as_str() == "True" || name.as_str() == "False" {
             let mut name_string = name.as_str().to_string();
             name_string.make_ascii_lowercase();
             Ok(name_string)
+        } else if self.scope.contains(name) {
+            // It's a top-level definition,
+            // so we should emit e.g. _HUCK["var"]
+            Ok(format!(r#"{}["{}"]"#, PREFIX, name))
         } else {
             // It's a locally-bound definition,
             // so we should emit e.g. var
@@ -674,8 +671,7 @@ impl<'a> CodeGenerator<'a> {
     }
 }
 
-// @Cleanup: not pub
-pub fn is_lua_binop(op: &str) -> bool {
+fn is_lua_binop(op: &str) -> bool {
     // @Prelude: we will want these ops to have different names in Huck to in Lua,
     // but for now, just pass them through.
     match op {

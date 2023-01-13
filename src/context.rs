@@ -3,18 +3,18 @@ use std::mem;
 use std::path::{Path, PathBuf};
 
 use crate::ast::{Module, ModulePath, Name};
-use crate::codegen::lua::is_lua_binop;
 use crate::error::Error as HuckError;
 use crate::parse::parse;
 use crate::scope::Scope;
 use crate::types::{ApplySub, ConstraintGenerator, Error as TypeError, Type};
+use crate::utils::leak_string;
 
 /// Context is the structure which manages module imports.
 /// It contains some modules, manages references between modules, and prepares for typechecking.
 ///
 /// If multiple modules depend on one another (with or without cycles), they must be typechecked and
 /// transpiled as part of the same Context.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Context {
     /// The file path of each included file in the context.
     pub file_paths: BTreeMap<ModulePath, PathBuf>,
@@ -22,6 +22,9 @@ pub struct Context {
     /// Each Module in the context.
     /// For each entry in this map, a related entry will be generated in the other maps.
     modules: BTreeMap<ModulePath, Module>,
+
+    /// The Prelude module.
+    prelude: Option<(ModulePath, Module)>,
 
     /// Each Scope in the context.
     pub scopes: BTreeMap<ModulePath, Scope>,
@@ -31,14 +34,40 @@ pub struct Context {
     assumptions: BTreeMap<(ModulePath, Name), Vec<Type>>,
 }
 
+impl Default for Context {
+    fn default() -> Self {
+        let mut ctx = Self {
+            file_paths: BTreeMap::new(),
+            modules: BTreeMap::new(),
+            prelude: None,
+            scopes: BTreeMap::new(),
+            assumptions: BTreeMap::new(),
+        };
+
+        // Add the prelude to the Context by default.
+        log::info!("Adding Prelude to the context");
+        ctx.include_prelude(include_str!("../huck/Prelude.hk"))
+            .unwrap();
+
+        ctx
+    }
+}
+
 impl Context {
     /// Typechecks the given Huck context.
     pub fn typecheck(&mut self) -> Result<(), TypeError> {
         let mut cg = ConstraintGenerator::default();
 
+        // First, typecheck the Prelude;
+        // then all the other modules.
+        // Has to be done in this order
+        // so that the Prelude can be imported into other modules.
         for (module_path, module) in self
-            .modules
+            .prelude
             .iter()
+            // This changes from &(p, m) to (&p, &m)
+            .map(|(p, m)| (p, m))
+            .chain(self.modules.iter())
             .map(|(p, m)| (p.clone(), m.clone()))
             .collect::<Vec<(ModulePath, Module)>>()
         {
@@ -108,6 +137,29 @@ impl Context {
                 }
             }
 
+            // If there is no explicit Prelude import already,
+            // import everything in Prelude.
+            let prelude_path = ModulePath("Prelude");
+            if module_path != prelude_path {
+                log::trace!("Importing Prelude into {module_path}");
+                let prelude_stem = self.file_stem(prelude_path);
+                let prelude_scope = &self.scopes[&prelude_path];
+                for name in prelude_scope
+                    .definitions
+                    .keys()
+                    .chain(prelude_scope.constructors.keys())
+                {
+                    log::trace!(
+                        "Inserting into scope of {module_path}: import {prelude_path} ({name})"
+                    );
+                    // @Todo @Checkme @Errors @Warn: name clashes?
+                    assert!(scope
+                        .imports
+                        .insert(name.clone(), (prelude_path, prelude_stem.clone()))
+                        .is_none());
+                }
+            }
+
             // Polymorphically bind all top-level names.
             // If any assumptions were found to be imported,
             // their assumptions are promoted to Context level by this method.
@@ -173,10 +225,8 @@ impl Context {
                     .entry((*path, name))
                     .or_default()
                     .extend(assumed_types);
-            } else if is_lua_binop(name.as_str()) {
-                // Do nothing. @XXX @Cleanup: don't do this
-                // @Prelude
             } else if name.as_str() == "True" || name.as_str() == "False" {
+                // Do nothing. @XXX @Cleanup: don't do this
                 // @Prelude
                 let bool_type = Type::Concrete("Bool".to_string());
                 for assumed_type in assumed_types {
@@ -238,10 +288,31 @@ impl Context {
         self.include(src, Some(file_path.as_ref().to_path_buf()))
     }
 
-    /// Adds the given String to the Context, treating it as anonymous input e.g. REPL input.
-    pub fn include_string(&mut self, src: String) -> Result<(), HuckError> {
-        let src = leak_string(src);
+    /// Adds the given string to the Context, treating it as anonymous input e.g. REPL input.
+    pub fn include_string(&mut self, src: &'static str) -> Result<(), HuckError> {
         self.include(src, None)
+    }
+
+    /// Adds the given String to the Context as the Prelude.
+    pub fn include_prelude(&mut self, src: &'static str) -> Result<(), HuckError> {
+        let module = parse(src)?;
+        log::trace!("Parsed module: {:?}", module);
+
+        // @Errors: do a proper error instead of expect and asserts
+        let module_path = module
+            .path
+            .expect("the prelude should have the module name Prelude");
+        assert_eq!(module_path, ModulePath("Prelude"));
+        assert!(
+            self.prelude.replace((module_path, module)).is_none(),
+            "can't define multiple preludes"
+        );
+
+        // Generate a PathBuf from the module path.
+        let path_buf = Path::new("Prelude.hk").to_path_buf();
+        assert!(self.file_paths.insert(module_path, path_buf).is_none());
+
+        Ok(())
     }
 
     /// Actually includes the module in the Context.
@@ -290,9 +361,4 @@ impl Context {
             .into_string()
             .expect("the file name should be utf8")
     }
-}
-
-/// Leak a string, returning a &'static str with its contents.
-fn leak_string(s: String) -> &'static str {
-    Box::leak(s.into_boxed_str())
 }

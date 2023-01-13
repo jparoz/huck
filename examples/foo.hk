@@ -1,20 +1,15 @@
 module Foo;
 
 import Bar (bar, baz);
-
-foreign import "inspect" (inspect : forall a. a -> String);
-
 foo = bar baz;
 
-myInspect = inspect;
-
+foreign import "inspect" (inspect : forall a. a -> String);
 resultOfInspect = inspect foo;
-
-luaAdd : Int -> Int -> IO Int;
-luaAdd a b = lua { a + b };
-
-add : Int -> Int -> Int;
-add a b = unsafe lua { a + b };
 
 luaCallMethodDelete : forall a. a -> IO ();
 luaCallMethodDelete obj = lua { obj:delete() };
+
+banana : Int;
+banana = 123 + 456;
+
+myTrue = True;

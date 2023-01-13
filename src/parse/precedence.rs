@@ -2,64 +2,6 @@ use std::collections::BTreeMap;
 
 use crate::ast::{Definition, Expr, Lhs, Name, Pattern, Term};
 
-// @Prelude
-pub fn default_precs() -> BTreeMap<Name, Precedence> {
-    BTreeMap::from([
-        (
-            Name::Binop("*".to_string()),
-            Precedence(Associativity::Left, 7),
-        ),
-        (
-            Name::Binop("/".to_string()),
-            Precedence(Associativity::Left, 7),
-        ),
-        (
-            Name::Binop("+".to_string()),
-            Precedence(Associativity::Left, 6),
-        ),
-        (
-            Name::Binop("-".to_string()),
-            Precedence(Associativity::Left, 6),
-        ),
-        (
-            Name::Binop(",".to_string()),
-            Precedence(Associativity::Right, 1),
-        ),
-        (
-            Name::Binop("::".to_string()),
-            Precedence(Associativity::Right, 5),
-        ),
-        (
-            Name::Binop("$".to_string()),
-            Precedence(Associativity::Right, 0),
-        ),
-        (
-            Name::Binop("==".to_string()),
-            Precedence(Associativity::None, 4),
-        ),
-        (
-            Name::Binop("!=".to_string()),
-            Precedence(Associativity::None, 4),
-        ),
-        (
-            Name::Binop("<".to_string()),
-            Precedence(Associativity::None, 4),
-        ),
-        (
-            Name::Binop("<=".to_string()),
-            Precedence(Associativity::None, 4),
-        ),
-        (
-            Name::Binop(">".to_string()),
-            Precedence(Associativity::None, 4),
-        ),
-        (
-            Name::Binop(">=".to_string()),
-            Precedence(Associativity::None, 4),
-        ),
-    ])
-}
-
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub struct Precedence(pub Associativity, pub u8);
 
