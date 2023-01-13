@@ -184,6 +184,12 @@ impl<'a> CodeGenerator<'a> {
 
         log::trace!("Finished generating definitions");
 
+        // Write out foreign exports
+        for (lua_lhs, expr) in self.scope.foreign_exports.iter() {
+            writeln!(lua, "{} = {}", lua_lhs, self.expr(&expr)?)?;
+        }
+
+        // Write out the return statement
         write!(lua, "return {{\n{}}}", self.return_entries)?;
 
         Ok(lua)

@@ -13,3 +13,5 @@ banana : Int;
 banana = 123 + 456;
 
 myTrue = True;
+
+foreign export main = \() -> lua { print("hello!") };

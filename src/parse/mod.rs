@@ -1,7 +1,7 @@
 use nom::branch::alt;
 use nom::bytes::complete::{escaped, is_not, tag};
-use nom::character::complete::u8 as nom_u8;
 use nom::character::complete::{anychar, char, hex_digit1, one_of, satisfy};
+use nom::character::complete::{none_of, u8 as nom_u8};
 use nom::combinator::{map, not, opt, peek, recognize, success, value, verify};
 use nom::multi::{many0, many0_count, many1, separated_list0, separated_list1};
 use nom::number::complete::recognize_float;
@@ -119,6 +119,10 @@ pub fn parse(input: &'static str) -> Result<Module, Error> {
                             }
                             ForeignImportItem::Rename(lua_name, name, ts) => (lua_name, name, ts),
                         })),
+
+                    Statement::ForeignExport(lua_lhs, expr) => {
+                        module.foreign_exports.push((lua_lhs, expr))
+                    }
                 }
             }
 
@@ -193,6 +197,16 @@ fn statement(input: &'static str) -> IResult<&'static str, Statement> {
                 semi,
             ),
             |(require_string, import_items)| Statement::ForeignImport(require_string, import_items),
+        ),
+        // Foreign (Lua) export statement
+        map(
+            delimited(
+                nom_tuple((reserved("foreign"), reserved("export"))),
+                // @Fixme: this should probably do some attempt to parse a valid Lua prefixexp
+                separated_pair(recognize(many1(none_of("="))), reserved_op("="), expr),
+                semi,
+            ),
+            |(lhs, expr)| Statement::ForeignExport(lhs, expr),
         ),
     ))(input)
 }

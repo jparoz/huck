@@ -15,6 +15,7 @@ pub struct Module {
     pub type_definitions: BTreeMap<Name, TypeDefinition>,
     pub imports: BTreeMap<ModulePath, Vec<Name>>,
     pub foreign_imports: BTreeMap<&'static str, Vec<(LuaName, Name, TypeScheme)>>,
+    pub foreign_exports: Vec<(&'static str, Expr)>,
 }
 
 /// A ModulePath is a path to a Huck module, as defined within that module.
@@ -73,6 +74,12 @@ pub enum Statement {
 
     /// Includes the quotation marks in the require string
     ForeignImport(&'static str, Vec<ForeignImportItem>),
+
+    /// The str is taken straight from the source
+    /// and dumped into the output Lua
+    /// without any sort of validation.
+    /// See `parse::statement`.
+    ForeignExport(&'static str, Expr),
 }
 
 pub type Assignment = (Lhs, Expr);

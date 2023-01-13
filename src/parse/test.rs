@@ -108,11 +108,8 @@ fn unit() {
             ));
 
         ast::Module {
-            path: None,
             definitions,
-            type_definitions: BTreeMap::new(),
-            imports: BTreeMap::new(),
-            foreign_imports: BTreeMap::new(),
+            ..ast::Module::default()
         }
     })
 }
@@ -141,11 +138,8 @@ fn apply_to_unit() {
             ));
 
         ast::Module {
-            path: None,
             definitions,
-            type_definitions: BTreeMap::new(),
-            imports: BTreeMap::new(),
-            foreign_imports: BTreeMap::new(),
+            ..ast::Module::default()
         }
     })
 }
@@ -198,11 +192,8 @@ fn case() {
                 ));
 
             ast::Module {
-                path: None,
                 definitions,
-                type_definitions: BTreeMap::new(),
-                imports: BTreeMap::new(),
-                foreign_imports: BTreeMap::new(),
+                ..ast::Module::default()
             }
         }
     )

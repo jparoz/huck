@@ -137,6 +137,9 @@ impl Context {
                 }
             }
 
+            // Insert all foreign exports into the scope.
+            scope.foreign_exports.extend(module.foreign_exports);
+
             // If there is no explicit Prelude import already,
             // import everything in Prelude.
             let prelude_path = ModulePath("Prelude");
