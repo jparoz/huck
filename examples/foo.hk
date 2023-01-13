@@ -9,3 +9,9 @@ foo = bar baz;
 myInspect = inspect;
 
 resultOfInspect = inspect foo;
+
+luaAdd : Int -> Int -> IO Int;
+luaAdd a b = lua { a + b };
+
+luaCallMethodDelete : forall a. a -> IO ();
+luaCallMethodDelete obj = lua { obj:delete() };

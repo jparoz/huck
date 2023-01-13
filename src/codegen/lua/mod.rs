@@ -286,6 +286,8 @@ impl<'a> CodeGenerator<'a> {
                 assert!(lhs.arg_count() > 0);
                 self.curried_function(&vec![(lhs.clone(), *rhs.clone())]) // @Fixme: don't clone?
             }
+
+            ast::Expr::Lua(lua_expr_str) => Ok(lua_expr_str.to_string()),
         }
     }
 

@@ -511,6 +511,11 @@ impl ConstraintGenerator {
 
                 res
             }
+
+            Expr::Lua(_) => Type::App(
+                Box::new(Type::Concrete("IO".to_string())),
+                Box::new(self.fresh()),
+            ),
         }
     }
 

@@ -288,7 +288,7 @@ fn pattern_binop(input: &'static str) -> IResult<&'static str, Pattern> {
 }
 
 fn expr(input: &'static str) -> IResult<&'static str, Expr> {
-    alt((binop, app, let_in, if_then_else, case, lambda))(input)
+    alt((binop, app, let_in, if_then_else, case, lambda, lua_expr))(input)
 }
 
 fn type_scheme(input: &'static str) -> IResult<&'static str, TypeScheme> {
@@ -441,6 +441,21 @@ fn lambda(input: &'static str) -> IResult<&'static str, Expr> {
             rhs: Box::new(rhs),
         },
     )(input)
+}
+
+fn lua_expr(input: &'static str) -> IResult<&'static str, Expr> {
+    fn nested_braces(input: &'static str) -> IResult<&'static str, &'static str> {
+        delimited(
+            tag("{"),
+            recognize(many0(alt((
+                value((), nom_tuple((peek(tag("{")), nested_braces))),
+                value((), nom_tuple((peek(not(tag("}"))), anychar))),
+            )))),
+            tag("}"),
+        )(input)
+    }
+
+    map(ws(preceded(reserved("lua"), ws(nested_braces))), Expr::Lua)(input)
 }
 
 fn term(input: &'static str) -> IResult<&'static str, Term> {
@@ -605,6 +620,7 @@ fn unit(input: &'static str) -> IResult<&'static str, &'static str> {
 fn comment(input: &'static str) -> IResult<&'static str, &'static str> {
     recognize(nom_tuple((
         tag("(*"),
+        // @Fixme @Checkme @Todo @Cleanup: We're not using the count, why is it _count?!
         many0_count(alt((
             value((), nom_tuple((peek(tag("(*")), comment))),
             value((), nom_tuple((peek(not(tag("*)"))), anychar))),
@@ -655,7 +671,7 @@ fn is_reserved(word: &str) -> bool {
     match word {
         "module" | "lazy" | "import" | "export" | "foreign" | "as" | "let" | "in" | "if"
         | "then" | "else" | "case" | "of" | "do" | "infix" | "infixl" | "infixr" | "forall"
-        | "type" | "=>" | "," | "()" | "=" | ":" | "\\" | "->" | "<-" => true,
+        | "type" | "lua" | "=>" | "," | "()" | "=" | ":" | "\\" | "->" | "<-" => true,
         _ => false,
     }
 }
@@ -665,6 +681,7 @@ pub enum Error {
     #[error("Nom error: {0}")]
     Nom(String),
 
+    // @Todo @Errors: convert this into a parse error which exposes the underlying cause from Nom
     #[error("Leftover input: {0}")]
     Leftover(String),
 

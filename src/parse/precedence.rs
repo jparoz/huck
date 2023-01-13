@@ -257,6 +257,8 @@ impl ApplyPrecedence for Expr {
                 }
                 rhs.apply(precs);
             }
+
+            Expr::Lua(_) => (),
         }
     }
 }
