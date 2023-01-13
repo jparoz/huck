@@ -516,6 +516,8 @@ impl ConstraintGenerator {
                 Box::new(Type::Concrete("IO".to_string())),
                 Box::new(self.fresh()),
             ),
+
+            Expr::UnsafeLua(_) => self.fresh(),
         }
     }
 

@@ -13,5 +13,8 @@ resultOfInspect = inspect foo;
 luaAdd : Int -> Int -> IO Int;
 luaAdd a b = lua { a + b };
 
+add : Int -> Int -> Int;
+add a b = unsafe lua { a + b };
+
 luaCallMethodDelete : forall a. a -> IO ();
 luaCallMethodDelete obj = lua { obj:delete() };

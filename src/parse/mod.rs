@@ -455,7 +455,16 @@ fn lua_expr(input: &'static str) -> IResult<&'static str, Expr> {
         )(input)
     }
 
-    map(ws(preceded(reserved("lua"), ws(nested_braces))), Expr::Lua)(input)
+    alt((
+        map(ws(preceded(reserved("lua"), ws(nested_braces))), Expr::Lua),
+        map(
+            ws(preceded(
+                nom_tuple((reserved("unsafe"), reserved("lua"))),
+                ws(nested_braces),
+            )),
+            Expr::UnsafeLua,
+        ),
+    ))(input)
 }
 
 fn term(input: &'static str) -> IResult<&'static str, Term> {
@@ -671,7 +680,7 @@ fn is_reserved(word: &str) -> bool {
     match word {
         "module" | "lazy" | "import" | "export" | "foreign" | "as" | "let" | "in" | "if"
         | "then" | "else" | "case" | "of" | "do" | "infix" | "infixl" | "infixr" | "forall"
-        | "type" | "lua" | "=>" | "," | "()" | "=" | ":" | "\\" | "->" | "<-" => true,
+        | "type" | "unsafe" | "lua" | "=>" | "," | "()" | "=" | ":" | "\\" | "->" | "<-" => true,
         _ => false,
     }
 }

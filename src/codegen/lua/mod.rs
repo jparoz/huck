@@ -287,7 +287,7 @@ impl<'a> CodeGenerator<'a> {
                 self.curried_function(&vec![(lhs.clone(), *rhs.clone())]) // @Fixme: don't clone?
             }
 
-            ast::Expr::Lua(lua_expr_str) => Ok(lua_expr_str.to_string()),
+            ast::Expr::Lua(lua) | ast::Expr::UnsafeLua(lua) => Ok(lua.to_string()),
         }
     }
 

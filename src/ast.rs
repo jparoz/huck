@@ -275,6 +275,8 @@ pub enum Expr {
     },
     // @Todo: test this
     Lua(&'static str),
+    // @Todo: test this
+    UnsafeLua(&'static str),
 }
 
 impl Expr {
@@ -376,7 +378,7 @@ impl Expr {
             // Lua inline expressions can't depend on Huck values,
             // or at least we can't (i.e. won't) check inside Lua for dependencies;
             // so we do nothing.
-            Expr::Lua(_) => (),
+            Expr::Lua(_) | Expr::UnsafeLua(_) => (),
         }
     }
 }
@@ -436,11 +438,11 @@ impl Display for Expr {
             Lua(lua_expr_str) => {
                 write!(f, "lua {{ {} }}", lua_expr_str)
             }
-        }
-        // @Debug: below is nonsense
 
-        // ?;
-        // write!(f, "<<M: {:?}>>", self.m)
+            UnsafeLua(lua_expr_str) => {
+                write!(f, "unsafe lua {{ {} }}", lua_expr_str)
+            }
+        }
     }
 }
 
