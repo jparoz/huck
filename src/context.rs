@@ -245,31 +245,46 @@ impl Context {
     }
 
     /// Binds all context-level assumptions (i.e. from imported names).
+    //
+    // @Note:
+    // We used to do this in a similar way to bind_all_module_level_assumptions,
+    // by iterating over self.assumptions and binding the names as they appear there.
+    // However, this didn't catch the error where
+    // an import was unused and also didn't exist in the imported module.
+    // By instead iterating over each scope's imported names,
+    // we ensure that all imports exist, whether they're used or not.
     fn bind_all_context_level_assumptions(&mut self, cg: &mut ConstraintGenerator) {
-        log::trace!("Emitting constraints about context-level assumptions:",);
+        log::trace!("Emitting constraints about context-level assumptions:");
 
-        let mut assumptions = BTreeMap::new();
-        mem::swap(&mut assumptions, &mut self.assumptions);
+        for scope in self.scopes.values() {
+            for (import_name, (import_path, _import_stem)) in scope.imports.iter() {
+                // Find the inferred type.
+                let import_scope = self.scopes.get(import_path).unwrap_or_else(|| {
+                    // @Errors: Scope error (nonexistent module)
+                    panic!("scope error (nonexistent module): {import_path}")
+                });
+                let typ = import_scope.get_type(import_name).unwrap_or_else(|| {
+                    // @Errors: Scope error (nonexistent import)
+                    panic!("scope error (imported name doesn't exist): {import_path}.{import_name}")
+                });
 
-        for ((path, name), assumed_types) in assumptions {
-            let scope = self.scopes.get(&path).unwrap_or_else(|| {
-                // @Todo @Cleanup: should we catch this earlier?
-                // If we didn't find the scope,
-                // then the module doesn't exist.
-                // @Errors: Scope error (import from nonexistent module)
-                panic!("scope error (import from nonexistent module): {path}");
-            });
-
-            let typ = scope.get_type(&name).unwrap_or_else(|| {
-                // If we didn't find the name in the module found above,
-                // then the module doesn't contain the name which was attempted to be imported.
-                // @Errors: Scope error (import)
-                panic!("scope error (import doesn't exist): {path}.{name}");
-            });
-
-            // Constrain that the assumed types are instances of the inferred type.
-            for assumed_type in assumed_types {
-                cg.implicit_instance(assumed_type, typ.clone());
+                // If there are any assumptions about the variable, bind them.
+                if let Some(assumed_types) =
+                    // @Checkme: do we need to clone?
+                    self
+                        .assumptions
+                        .remove(&(import_path.clone(), import_name.clone()))
+                {
+                    // Constrain that the assumed types are instances of the inferred type.
+                    for assumed_type in assumed_types {
+                        cg.implicit_instance(assumed_type, typ.clone());
+                    }
+                } else {
+                    // @Todo @Errors @Warn: emit a warning for unused imports
+                    if import_path != &ModulePath("Prelude") {
+                        log::warn!("unused: import {import_path} ({import_name})");
+                    }
+                }
             }
         }
     }
@@ -356,8 +371,18 @@ impl Context {
 
     /// Returns the file stem of the file path corresponding to the given module path.
     /// Panics if there is no file path stored in the Context corresponding to the given path.
+    /// @XXX: doesn't panic, just punts
     fn file_stem(&mut self, path: ModulePath) -> String {
-        self.file_paths[&path]
+        // @XXX @Hack: this is just a punt
+        // @Todo: do something smarter
+        let mut xxx_path_buf = None;
+
+        self.file_paths
+            .get(&path)
+            .unwrap_or_else(|| {
+                xxx_path_buf = Some(format!("{}.hk", path).into());
+                xxx_path_buf.as_ref().unwrap()
+            })
             .file_stem()
             .expect("there should be a file name")
             .to_os_string()
