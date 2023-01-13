@@ -30,19 +30,20 @@ pub fn parse(input: &'static str) -> Result<Module, Error> {
                 return Err(Error::Leftover(leftover.to_string()));
             }
 
-            let mut definitions: BTreeMap<Name, Definition> = BTreeMap::new();
-            let mut type_definitions = BTreeMap::new();
-            let mut precs = BTreeMap::new();
-            let mut imports: BTreeMap<ModulePath, Vec<Name>> = BTreeMap::new();
-            let mut foreign_imports: BTreeMap<&'static str, Vec<(LuaName, Name, TypeScheme)>> =
-                BTreeMap::new();
+            let mut module = Module {
+                path,
+                ..Module::default()
+            };
 
-            // Collect all the statements together into Definitions
-            // (and precs).
+            let mut precs = BTreeMap::new();
+
+            // Process all parsed statements,
+            // and insert them into the Module (and precs map).
             for stat in statements {
                 match stat {
                     Statement::AssignmentWithoutType((lhs, expr)) => {
-                        definitions
+                        module
+                            .definitions
                             .entry(lhs.name().clone())
                             .or_default()
                             .assignments
@@ -50,7 +51,7 @@ pub fn parse(input: &'static str) -> Result<Module, Error> {
                     }
 
                     Statement::AssignmentWithType(ts, (lhs, expr)) => {
-                        let defn = definitions.entry(lhs.name().clone()).or_default();
+                        let defn = module.definitions.entry(lhs.name().clone()).or_default();
 
                         // If there was already an explicit for this name, that's an error.
                         if let Some(previous_ts) = defn.explicit_type.replace(ts.clone()) {
@@ -66,7 +67,8 @@ pub fn parse(input: &'static str) -> Result<Module, Error> {
 
                     Statement::TypeAnnotation(name, ts) => {
                         // If there was already an explicit for this name, that's an error.
-                        if let Some(previous_ts) = definitions
+                        if let Some(previous_ts) = module
+                            .definitions
                             .entry(name.clone())
                             .or_default()
                             .explicit_type
@@ -83,7 +85,8 @@ pub fn parse(input: &'static str) -> Result<Module, Error> {
                     Statement::Precedence(name, prec) => {
                         precs.insert(name.clone(), prec);
                         // If there was already a precedence for this name, that's an error.
-                        if let Some(previous_prec) = definitions
+                        if let Some(previous_prec) = module
+                            .definitions
                             .entry(name.clone())
                             .or_default()
                             .precedence
@@ -94,18 +97,20 @@ pub fn parse(input: &'static str) -> Result<Module, Error> {
                     }
 
                     Statement::TypeDefinition(type_defn) => {
-                        if let Some(first_defn) =
-                            type_definitions.insert(type_defn.name.clone(), type_defn)
+                        if let Some(first_defn) = module
+                            .type_definitions
+                            .insert(type_defn.name.clone(), type_defn)
                         {
                             return Err(Error::MultipleTypeDefinitions(first_defn.name));
                         }
                     }
 
                     Statement::Import(path, names) => {
-                        imports.entry(path).or_default().extend(names)
+                        module.imports.entry(path).or_default().extend(names)
                     }
 
-                    Statement::ForeignImport(require_string, import_items) => foreign_imports
+                    Statement::ForeignImport(require_string, import_items) => module
+                        .foreign_imports
                         .entry(require_string)
                         .or_default()
                         .extend(import_items.into_iter().map(|item| match item {
@@ -118,17 +123,11 @@ pub fn parse(input: &'static str) -> Result<Module, Error> {
             }
 
             // Modify the AST to take precedence statements into account.
-            for defn in definitions.values_mut() {
+            for defn in module.definitions.values_mut() {
                 defn.apply(&precs);
             }
 
-            Ok(Module {
-                path,
-                definitions,
-                type_definitions,
-                imports,
-                foreign_imports,
-            })
+            Ok(module)
         }
         Err(nom) => Err(Error::Nom(nom.to_string())),
     }

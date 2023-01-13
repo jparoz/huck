@@ -8,7 +8,7 @@ use crate::parse::precedence::Precedence;
 /// by using the parsed precedence rules to reshape the AST,
 /// and collecting statements referring to the same function
 /// into a single Definition struct for each function name.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Default)]
 pub struct Module {
     pub path: Option<ModulePath>,
     pub definitions: BTreeMap<Name, Definition>,
