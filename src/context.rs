@@ -251,7 +251,7 @@ impl Context {
         let mut assumptions = BTreeMap::new();
         mem::swap(&mut assumptions, &mut self.assumptions);
 
-        for ((path, name), mut assumed_types) in assumptions {
+        for ((path, name), assumed_types) in assumptions {
             let scope = self.scopes.get(&path).unwrap_or_else(|| {
                 // @Todo @Cleanup: should we catch this earlier?
                 // If we didn't find the scope,
@@ -267,10 +267,10 @@ impl Context {
                 panic!("scope error (import doesn't exist): {path}.{name}");
             });
 
-            // @Checkme: is this the right constraint?
-            // Constrain that the assumed types are equal to the inferred type.
-            assumed_types.push(typ);
-            cg.equate_all(assumed_types);
+            // Constrain that the assumed types are instances of the inferred type.
+            for assumed_type in assumed_types {
+                cg.implicit_instance(assumed_type, typ.clone());
+            }
         }
     }
 

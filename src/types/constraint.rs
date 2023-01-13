@@ -117,7 +117,7 @@ impl ConstraintGenerator {
     }
 
     /// Constrains all types in the given Vec to be equal, and returns that type.
-    pub fn equate_all(&mut self, typs: Vec<Type>) -> Type {
+    fn equate_all(&mut self, typs: Vec<Type>) -> Type {
         if typs.len() == 1 {
             return typs[0].clone();
         }
