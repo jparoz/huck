@@ -220,23 +220,12 @@ impl<'a> CodeGenerator<'a> {
             ast::Expr::App { func, argument } => {
                 Ok(format!("({})({})", self.expr(func)?, self.expr(argument)?))
             }
-            ast::Expr::Binop { operator, lhs, rhs } => {
-                if is_lua_binop(operator.as_str()) {
-                    Ok(format!(
-                        "({} {} {})",
-                        self.expr(lhs)?,
-                        operator,
-                        self.expr(rhs)?
-                    ))
-                } else {
-                    Ok(format!(
-                        "{}({})({})",
-                        self.reference(operator)?,
-                        self.expr(lhs)?,
-                        self.expr(rhs)?
-                    ))
-                }
-            }
+            ast::Expr::Binop { operator, lhs, rhs } => Ok(format!(
+                "{}({})({})",
+                self.reference(operator)?,
+                self.expr(lhs)?,
+                self.expr(rhs)?
+            )),
 
             ast::Expr::Let {
                 definitions,
@@ -668,16 +657,6 @@ impl<'a> CodeGenerator<'a> {
         let id = self.id_counter;
         self.id_counter += 1;
         id
-    }
-}
-
-fn is_lua_binop(op: &str) -> bool {
-    // @Prelude: we will want these ops to have different names in Huck to in Lua,
-    // but for now, just pass them through.
-    match op {
-        "+" | "-" | "*" | "/" | "//" | "^" | "%" | "&" | "~" | "|" | ">>" | "<<" | ".." | "<"
-        | "<=" | ">" | ">=" | "==" | "~=" | "and" | "or" => true,
-        _ => false,
     }
 }
 
