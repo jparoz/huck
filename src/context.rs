@@ -30,6 +30,10 @@ pub struct Context {
     /// Each Scope in the context.
     pub scopes: BTreeMap<ModulePath, Scope>,
 
+    /// The constraint generator.
+    // @Todo @Cleanup: inline this?
+    cg: ConstraintGenerator,
+
     /// These are assumptions made about imported names,
     /// so need to be handled at Context level rather than Scope level.
     assumptions: BTreeMap<(ModulePath, Name), Vec<Type>>,
@@ -43,6 +47,7 @@ impl Default for Context {
             prelude: None,
             scopes: BTreeMap::new(),
             assumptions: BTreeMap::new(),
+            cg: ConstraintGenerator::default(),
         };
 
         // Add the prelude to the Context by default.
@@ -57,8 +62,6 @@ impl Default for Context {
 impl Context {
     /// Typechecks the given Huck context.
     pub fn typecheck(&mut self) -> Result<(), TypeError> {
-        let mut cg = ConstraintGenerator::default();
-
         // First, typecheck the Prelude;
         // then all the other modules.
         // Has to be done in this order
@@ -78,7 +81,7 @@ impl Context {
 
             // Generate constraints for each definition, while keeping track of inferred types
             for (name, defn) in module.definitions {
-                let typ = cg.generate_definition(&defn);
+                let typ = self.cg.generate_definition(&defn);
                 log::trace!(
                     log::TYPECHECK,
                     "Initial inferred type for {}: {}",
@@ -93,7 +96,7 @@ impl Context {
 
             // Generate constraints for each type definition
             for (_name, ast_type_defn) in module.type_definitions {
-                let type_defn = cg.generate_type_definition(&ast_type_defn);
+                let type_defn = self.cg.generate_type_definition(&ast_type_defn);
 
                 for (constr_name, constr_type) in type_defn.constructors.iter() {
                     scope
@@ -140,7 +143,7 @@ impl Context {
                             (
                                 require_string,
                                 lua_name,
-                                cg.generate_type_scheme(&ast_type_scheme)
+                                self.cg.generate_type_scheme(&ast_type_scheme)
                             )
                         )
                         .is_none());
@@ -176,17 +179,17 @@ impl Context {
             // Polymorphically bind all top-level names.
             // If any assumptions were found to be imported,
             // their assumptions are promoted to Context level by this method.
-            self.bind_all_module_level_assumptions(&scope, &mut cg);
+            self.bind_all_module_level_assumptions(&scope);
 
             // Add the scope to the context.
             assert!(self.scopes.insert(module_path, scope).is_none());
         }
 
         // Constrain any names which were promoted to the Context level (i.e. imported names).
-        self.bind_all_context_level_assumptions(&mut cg);
+        self.bind_all_context_level_assumptions();
 
         // Solve the type constraints
-        let soln = cg.solve()?;
+        let soln = self.cg.solve()?;
 
         // @Todo: apply soln to the Scope directly, after impl ApplySub for Scope
         // Apply the solution to each Scope.
@@ -206,21 +209,17 @@ impl Context {
     /// If the name isn't defined in this module, check if it's imported;
     /// if it is, then this assumption is promoted to Context level
     /// by inserting it into the Context.
-    pub fn bind_all_module_level_assumptions(
-        &mut self,
-        scope: &Scope,
-        cg: &mut ConstraintGenerator,
-    ) {
+    pub fn bind_all_module_level_assumptions(&mut self, scope: &Scope) {
         log::trace!(log::TYPECHECK, "Emitting constraints about assumptions:");
 
         let mut assumptions = BTreeMap::new();
-        mem::swap(&mut assumptions, &mut cg.assumptions);
+        mem::swap(&mut assumptions, &mut self.cg.assumptions);
 
         for (name, assumed_types) in assumptions {
             if let Some(typ) = scope.get_type(&name) {
                 // This means that it was defined in this module.
                 for assumed_type in assumed_types {
-                    cg.implicit_instance(assumed_type, typ.clone());
+                    self.cg.implicit_instance(assumed_type, typ.clone());
                 }
             } else if let Some((_require_string, _lua_name, type_scheme)) =
                 scope.foreign_imports.get(&name)
@@ -228,7 +227,7 @@ impl Context {
                 // This means that the name was imported from a foreign (Lua) module;
                 // this means that the Huck author gave an explicit type signature at the import.
                 for assumed_type in assumed_types {
-                    cg.explicit_instance(assumed_type, type_scheme.clone());
+                    self.cg.explicit_instance(assumed_type, type_scheme.clone());
                 }
             } else if let Some((path, _stem)) = scope.imports.get(&name) {
                 // This means that the name was imported from another Huck module;
@@ -256,7 +255,7 @@ impl Context {
     // an import was unused and also didn't exist in the imported module.
     // By instead iterating over each scope's imported names,
     // we ensure that all imports exist, whether they're used or not.
-    fn bind_all_context_level_assumptions(&mut self, cg: &mut ConstraintGenerator) {
+    fn bind_all_context_level_assumptions(&mut self) {
         log::trace!(
             log::TYPECHECK,
             "Emitting constraints about context-level assumptions:"
@@ -283,7 +282,7 @@ impl Context {
                 {
                     // Constrain that the assumed types are instances of the inferred type.
                     for assumed_type in assumed_types {
-                        cg.implicit_instance(assumed_type, typ.clone());
+                        self.cg.implicit_instance(assumed_type, typ.clone());
                     }
                 } else {
                     // @Todo @Errors @Warn: emit a warning for unused imports
