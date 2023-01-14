@@ -8,8 +8,12 @@ use crate::types::{Type, TypeDefinition};
 
 use std::collections::BTreeSet;
 use std::fmt::Write;
+use std::sync::atomic::{self, AtomicU64};
 
 use super::Error as CodegenError;
+
+/// Used for generating unique variable IDs.
+static UNIQUE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 const PREFIX: &str = "_HUCK";
 
@@ -36,8 +40,6 @@ struct CodeGenerator<'a> {
     generated: BTreeSet<ast::Name>,
 
     scope: &'a Scope,
-
-    id_counter: u64,
 }
 
 impl<'a> CodeGenerator<'a> {
@@ -51,8 +53,6 @@ impl<'a> CodeGenerator<'a> {
             generated: BTreeSet::new(),
 
             scope,
-
-            id_counter: 0,
         }
     }
 
@@ -319,7 +319,7 @@ impl<'a> CodeGenerator<'a> {
         let mut has_any_conditions = false;
         let mut has_unconditional_branch = false;
 
-        let id = self.unique();
+        let id = Self::unique();
 
         // Start a new scope.
         writeln!(lua, "(function()")?;
@@ -390,7 +390,7 @@ impl<'a> CodeGenerator<'a> {
 
         // Start the functions
         for i in 0..arg_count {
-            let id = self.unique();
+            let id = Self::unique();
             ids.push(id);
 
             writeln!(lua, "function({}_{})", PREFIX, ids[i])?;
@@ -605,7 +605,7 @@ impl<'a> CodeGenerator<'a> {
 
         // Start the functions
         while let Type::Arrow(_a, b) = constr_type {
-            let id = self.unique();
+            let id = Self::unique();
             ids.push(id);
 
             writeln!(lua, "function({}_{})", PREFIX, id)?;
@@ -653,10 +653,15 @@ impl<'a> CodeGenerator<'a> {
         }
     }
 
-    fn unique(&mut self) -> u64 {
-        let id = self.id_counter;
-        self.id_counter += 1;
-        id
+    /// Generates a new and unique u64 each time it's called.
+    fn unique() -> u64 {
+        UNIQUE_COUNTER.fetch_add(1, atomic::Ordering::Relaxed)
+    }
+
+    /// Resets the unique ID counter.
+    #[cfg(test)]
+    pub fn reset_unique() {
+        UNIQUE_COUNTER.store(0, atomic::Ordering::Relaxed);
     }
 }
 

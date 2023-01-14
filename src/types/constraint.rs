@@ -70,15 +70,16 @@ pub struct ConstraintGenerator {
     /// All the currently assumed types of name uses.
     pub assumptions: BTreeMap<Name, Vec<Type>>,
 
-    // @Todo @Cleanup: change this to do the same atomic thingy as in codegen
-    next_typevar_id: usize,
     m_stack: Vec<TypeVar>,
 }
 
 impl ConstraintGenerator {
+    /// Generates a new and unique TypeVar each time it's called.
     fn fresh_var(&mut self) -> TypeVar {
-        let id = self.next_typevar_id;
-        self.next_typevar_id += 1;
+        use std::sync::atomic::{self, AtomicUsize};
+
+        static UNIQUE_COUNTER: AtomicUsize = AtomicUsize::new(0);
+        let id = UNIQUE_COUNTER.fetch_add(1, atomic::Ordering::Relaxed);
         TypeVar::Generated(id)
     }
 

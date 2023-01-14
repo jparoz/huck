@@ -2,7 +2,6 @@
 #[rustfmt::skip] pub const PARSE     : &'static str = "     parse";
 #[rustfmt::skip] pub const TYPECHECK : &'static str = " typecheck";
 #[rustfmt::skip] pub const CODEGEN   : &'static str = "   codegen";
-#[rustfmt::skip] pub const UTILS     : &'static str = "     utils";
 
 #[allow(unused_macros)]
 macro_rules! error {

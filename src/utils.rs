@@ -1,10 +1,5 @@
 use std::io::Write;
 
-use crate::codegen;
-use crate::context::Context;
-use crate::error::Error as HuckError;
-use crate::log;
-
 /// Takes Lua code as input, executes it using a Lua interpreter found in PATH,
 /// and returns the contents of stdout in a String.
 pub fn execute_lua(lua: &str) -> String {
@@ -16,29 +11,6 @@ pub fn execute_lua(lua: &str) -> String {
         .output()
         .unwrap();
     String::from_utf8(output.stdout).unwrap()
-}
-
-/// Takes some Huck and turns it into Lua, doing every step in between.
-pub fn transpile(huck: &'static str) -> Result<String, HuckError> {
-    // Make a context with one file
-    let mut context = Context::default();
-
-    // Parse
-    context.include_string(huck)?; // @XXX
-
-    // Typecheck
-    context.typecheck()?;
-
-    // @Future: optimisations go here
-
-    // Generate code
-    let scope = context.scopes.values().next().unwrap();
-
-    let lua = codegen::lua::generate(scope)?;
-
-    log::trace!(log::UTILS, "Generated Lua code:\n{}", lua);
-
-    Ok(normalize(&lua))
 }
 
 /// Takes some Lua and normalizes it into a consistent format.

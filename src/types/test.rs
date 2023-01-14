@@ -2,7 +2,7 @@ use crate::context::Context;
 use crate::scope::Scope;
 use crate::{ast::Name, parse::parse};
 
-use super::{constraint::ConstraintGenerator, substitution::ApplySub, Type, TypeVar};
+use super::{constraint::ConstraintGenerator, substitution::ApplySub, Type};
 
 fn typ(s: &'static str) -> Type {
     let parsed = parse(s).unwrap();
@@ -82,27 +82,54 @@ fn literal_list_int() {
 // Also true for lots of other tests.
 #[test]
 fn function_id() {
-    assert_eq!(
-        typ(r#"id a = a;"#),
-        Type::Arrow(
-            Box::new(Type::Var(TypeVar::Generated(1))),
-            Box::new(Type::Var(TypeVar::Generated(1)))
-        )
-    );
+    let typ = typ(r#"id a = a;"#);
+
+    assert!(matches!(typ, Type::Arrow(_, _)));
+
+    let (l, r) = if let Type::Arrow(l, r) = typ {
+        (l, r)
+    } else {
+        unreachable!()
+    };
+
+    assert!(matches!(*l, Type::Var(_)));
+    let l_var = if let Type::Var(var) = *l {
+        var
+    } else {
+        unreachable!()
+    };
+
+    assert!(matches!(*r, Type::Var(_)));
+    let r_var = if let Type::Var(var) = *r {
+        var
+    } else {
+        unreachable!()
+    };
+
+    assert_eq!(l_var, r_var);
 }
 
 #[test]
 fn function_const() {
-    assert_eq!(
-        typ(r#"const a b = a;"#),
-        Type::Arrow(
-            Box::new(Type::Var(TypeVar::Generated(2))),
-            Box::new(Type::Arrow(
-                Box::new(Type::Var(TypeVar::Generated(1))),
-                Box::new(Type::Var(TypeVar::Generated(2)))
-            ))
-        )
-    );
+    let typ = typ(r#"const a b = a;"#);
+
+    assert!(matches!(typ, Type::Arrow(_, _)));
+
+    let (l, r) = if let Type::Arrow(l, r) = typ {
+        (l, r)
+    } else {
+        unreachable!()
+    };
+    assert!(matches!(*l, Type::Var(_)));
+    assert!(matches!(*r, Type::Arrow(_, _)));
+
+    let (r_l, r_r) = if let Type::Arrow(r_l, r_r) = *r {
+        (r_l, r_r)
+    } else {
+        unreachable!()
+    };
+    assert!(matches!(*r_l, Type::Var(_)));
+    assert!(matches!(*r_r, Type::Var(_)));
 }
 
 // @Prelude

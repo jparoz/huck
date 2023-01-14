@@ -1,4 +1,29 @@
-use crate::utils::{normalize, transpile};
+use crate::utils::normalize;
+
+use crate::codegen;
+use crate::context::Context;
+use crate::error::Error as HuckError;
+
+/// Takes some Huck and turns it into Lua, doing every step in between.
+pub fn transpile(huck: &'static str) -> Result<String, HuckError> {
+    // Reset the unique ID counter to get consistent results
+    codegen::lua::CodeGenerator::reset_unique();
+
+    // Make a context with one file
+    let mut context = Context::default();
+
+    // Parse
+    context.include_string(huck)?;
+
+    // Typecheck
+    context.typecheck()?;
+
+    // Generate code
+    let scope = context.scopes.values().next().unwrap();
+    let lua = codegen::lua::generate(scope)?;
+
+    Ok(normalize(&lua))
+}
 
 macro_rules! wrap {
     ($name:literal, $expr:literal) => {
