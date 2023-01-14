@@ -50,11 +50,17 @@ impl FromIterator<(TypeVar, Type)> for Substitution {
 
 impl Debug for Substitution {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Substitution:")?;
-        for (fr, to) in self.iter() {
-            writeln!(f, "    {} ↦ {}", fr, to)?;
+        write!(f, "(")?;
+
+        let mut iter = self.iter().peekable();
+        while let Some((fr, to)) = iter.next() {
+            write!(f, "{} ↦ {}", fr, to)?;
+            if !iter.peek().is_none() {
+                write!(f, ", ")?;
+            }
         }
-        Ok(())
+
+        write!(f, ")")
     }
 }
 

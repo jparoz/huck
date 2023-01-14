@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::ast::{Module, ModulePath, Name};
 use crate::error::Error as HuckError;
+use crate::log;
 use crate::parse::parse;
 use crate::scope::Scope;
 use crate::types::{ApplySub, ConstraintGenerator, Error as TypeError, Type};
@@ -45,7 +46,7 @@ impl Default for Context {
         };
 
         // Add the prelude to the Context by default.
-        log::info!("Adding Prelude to the context");
+        log::info!(log::IMPORT, "Adding Prelude to the context");
         ctx.include_prelude(include_str!("../huck/Prelude.hk"))
             .unwrap();
 
@@ -71,14 +72,19 @@ impl Context {
             .map(|(p, m)| (p.clone(), m.clone()))
             .collect::<Vec<(ModulePath, Module)>>()
         {
-            log::trace!("Typechecking: module {module_path};");
+            log::trace!(log::TYPECHECK, "Typechecking: module {module_path};");
             // Set the scope's module path.
             let mut scope = Scope::new(module_path);
 
             // Generate constraints for each definition, while keeping track of inferred types
             for (name, defn) in module.definitions {
                 let typ = cg.generate_definition(&defn);
-                log::trace!("Initial inferred type for {}: {}", name, typ);
+                log::trace!(
+                    log::TYPECHECK,
+                    "Initial inferred type for {}: {}",
+                    name,
+                    typ
+                );
 
                 // @Note: guaranteed to be None,
                 // because we're iterating over a BTreeMap.
@@ -106,7 +112,10 @@ impl Context {
             // Insert all imported names into the scope.
             for (path, names) in module.imports {
                 for name in names {
-                    log::trace!("Inserting into scope of {module_path}: import {path} ({name})");
+                    log::trace!(
+                        log::IMPORT,
+                        "Inserting into scope of {module_path}: import {path} ({name})"
+                    );
                     // @Todo @Checkme: name clashes?
                     assert!(scope
                         .imports
@@ -119,6 +128,7 @@ impl Context {
             for (require_string, imports) in module.foreign_imports {
                 for (lua_name, huck_name, ast_type_scheme) in imports {
                     log::trace!(
+                        log::IMPORT,
                         "Inserting into scope of {module_path}: \
                          foreign import {require_string} ({lua_name} as {huck_name})"
                     );
@@ -144,7 +154,10 @@ impl Context {
             // import everything in Prelude.
             let prelude_path = ModulePath("Prelude");
             if module_path != prelude_path {
-                log::trace!("Importing Prelude into {module_path}");
+                log::trace!(
+                    log::IMPORT,
+                    "Importing contents of Prelude into {module_path}"
+                );
                 let prelude_stem = self.file_stem(prelude_path);
                 let prelude_scope = &self.scopes[&prelude_path];
                 for name in prelude_scope
@@ -152,9 +165,6 @@ impl Context {
                     .keys()
                     .chain(prelude_scope.constructors.keys())
                 {
-                    log::trace!(
-                        "Inserting into scope of {module_path}: import {prelude_path} ({name})"
-                    );
                     // @Todo @Checkme @Errors @Warn: name clashes?
                     assert!(scope
                         .imports
@@ -181,10 +191,10 @@ impl Context {
         // @Todo: apply soln to the Scope directly, after impl ApplySub for Scope
         // Apply the solution to each Scope.
         for scope in self.scopes.values_mut() {
-            log::info!("module {}:", scope.module_path);
+            log::info!(log::TYPECHECK, "module {}:", scope.module_path);
             for (name, (ref mut typ, _definition)) in scope.definitions.iter_mut() {
                 typ.apply(&soln);
-                log::info!("  Inferred type for {} : {}", name, typ);
+                log::info!(log::TYPECHECK, "  Inferred type for {} : {}", name, typ);
             }
         }
 
@@ -201,7 +211,7 @@ impl Context {
         scope: &Scope,
         cg: &mut ConstraintGenerator,
     ) {
-        log::trace!("Emitting constraints about assumptions:");
+        log::trace!(log::TYPECHECK, "Emitting constraints about assumptions:");
 
         let mut assumptions = BTreeMap::new();
         mem::swap(&mut assumptions, &mut cg.assumptions);
@@ -254,7 +264,10 @@ impl Context {
     // By instead iterating over each scope's imported names,
     // we ensure that all imports exist, whether they're used or not.
     fn bind_all_context_level_assumptions(&mut self, cg: &mut ConstraintGenerator) {
-        log::trace!("Emitting constraints about context-level assumptions:");
+        log::trace!(
+            log::TYPECHECK,
+            "Emitting constraints about context-level assumptions:"
+        );
 
         for scope in self.scopes.values() {
             for (import_name, (import_path, _import_stem)) in scope.imports.iter() {
@@ -282,7 +295,7 @@ impl Context {
                 } else {
                     // @Todo @Errors @Warn: emit a warning for unused imports
                     if import_path != &ModulePath("Prelude") {
-                        log::warn!("unused: import {import_path} ({import_name})");
+                        log::warn!(log::IMPORT, "unused: import {import_path} ({import_name})");
                     }
                 }
             }
@@ -296,8 +309,16 @@ impl Context {
     {
         match file_path.as_ref().extension() {
             Some(ex) if ex == "hk" => (),
-            Some(_) => log::warn!("unknown filetype included: {:?}", file_path.as_ref()),
-            _ => log::warn!("file without extension included: {:?}", file_path.as_ref()),
+            Some(_) => log::warn!(
+                log::IMPORT,
+                "unknown filetype included: {:?}",
+                file_path.as_ref()
+            ),
+            _ => log::warn!(
+                log::IMPORT,
+                "file without extension included: {:?}",
+                file_path.as_ref()
+            ),
         }
 
         let src = std::fs::read_to_string(&file_path)?;
@@ -314,7 +335,7 @@ impl Context {
     /// Adds the given String to the Context as the Prelude.
     pub fn include_prelude(&mut self, src: &'static str) -> Result<(), HuckError> {
         let module = parse(src)?;
-        log::trace!("Parsed module: {:?}", module);
+        log::trace!(log::PARSE, "Parsed module: {:?}", module);
 
         // @Errors: do a proper error instead of expect and asserts
         let module_path = module
@@ -338,7 +359,7 @@ impl Context {
     /// and [`include_string`][Context::include_string].
     fn include(&mut self, src: &'static str, path_buf: Option<PathBuf>) -> Result<(), HuckError> {
         let module = parse(src)?;
-        log::trace!("Parsed module: {:?}", module);
+        log::trace!(log::PARSE, "Parsed module: {:?}", module);
         let module_path = module.path.unwrap_or_default();
 
         if let Some(existing_module) = self.modules.insert(module_path, module) {

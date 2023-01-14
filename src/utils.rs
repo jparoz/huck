@@ -3,6 +3,7 @@ use std::io::Write;
 use crate::codegen;
 use crate::context::Context;
 use crate::error::Error as HuckError;
+use crate::log;
 
 /// Takes Lua code as input, executes it using a Lua interpreter found in PATH,
 /// and returns the contents of stdout in a String.
@@ -35,7 +36,7 @@ pub fn transpile(huck: &'static str) -> Result<String, HuckError> {
 
     let lua = codegen::lua::generate(scope)?;
 
-    log::trace!("Generated Lua code:\n{}", lua);
+    log::trace!(log::UTILS, "Generated Lua code:\n{}", lua);
 
     Ok(normalize(&lua))
 }

@@ -1,10 +1,9 @@
 use std::collections::{BTreeMap, VecDeque};
-use std::fmt::{self, Debug};
+use std::fmt::{self, Debug, Write};
 use std::iter;
 
-use log::log_enabled;
-
 use crate::ast::{self, Assignment, Definition, Expr, Lhs, Name, Numeral, Pattern, Term};
+use crate::log;
 use crate::types::{
     self, ApplySub, Substitution, Type, TypeDefinition, TypeScheme, TypeVar, TypeVarSet,
 };
@@ -88,7 +87,7 @@ impl ConstraintGenerator {
     }
 
     fn assume(&mut self, name: Name, typ: Type) {
-        log::trace!("Assuming type: {} : {}", name, typ);
+        log::trace!(log::TYPECHECK, "Assuming type: {} : {}", name, typ);
         self.assumptions
             .entry(name)
             .or_insert(Vec::with_capacity(1))
@@ -96,7 +95,7 @@ impl ConstraintGenerator {
     }
 
     fn constrain(&mut self, constraint: Constraint) {
-        log::trace!("Emitting constraint: {:?}", constraint);
+        log::trace!(log::TYPECHECK, "Emitting constraint: {:?}", constraint);
         self.constraints.push(constraint);
     }
 
@@ -217,7 +216,7 @@ impl ConstraintGenerator {
         if let Some(assumptions) = self.assumptions.remove(name) {
             for assumed in assumptions {
                 self.constrain(Constraint::Equality(assumed, typ.clone()));
-                log::trace!("Bound (mono): {} to type {}", name, typ);
+                log::trace!(log::TYPECHECK, "Bound (mono): {} to type {}", name, typ);
             }
         }
     }
@@ -232,6 +231,7 @@ impl ConstraintGenerator {
                     self.m_stack.iter().cloned().collect(),
                 ));
                 log::trace!(
+                    log::TYPECHECK,
                     "Bound (poly): {} to type {} (M = {})",
                     name,
                     typ,
@@ -242,30 +242,39 @@ impl ConstraintGenerator {
     }
 
     pub fn solve(&mut self) -> Result<Substitution, types::Error> {
-        log::trace!("-----");
-        log::trace!("START SOLVING");
-        let mut sub = Substitution::empty();
+        log::trace!(
+            log::TYPECHECK,
+            "Called ConstraintGenerator::solve, starting constraints:"
+        );
+        for constraint in self.constraints.iter() {
+            log::trace!(log::TYPECHECK, "  {:?}", constraint);
+        }
+
+        log::trace!(log::TYPECHECK, "{:-^100}", " START SOLVING ");
+        let mut solution = Substitution::empty();
 
         let mut constraints = VecDeque::from(self.constraints.clone());
 
-        while let Some(c) = constraints.pop_front() {
-            log::trace!("-");
-            log::trace!("Looking at: {:?}", c);
-            match c {
+        while let Some(constraint) = constraints.pop_front() {
+            let constraint_str = format!("{constraint:?}");
+            let mut new_str = String::new();
+
+            match constraint {
                 Constraint::Equality(t1, t2) => {
-                    let s = t1.unify(t2)?;
+                    let new_sub = t1.unify(t2)?;
 
                     for c in constraints.iter_mut() {
-                        c.apply(&s);
+                        c.apply(&new_sub);
                     }
 
-                    sub = s.then(sub);
+                    write!(new_str, "{new_sub:?}").unwrap();
+                    solution = new_sub.then(solution);
                 }
 
                 Constraint::ExplicitInstance(t, ts) => {
-                    let cons = Constraint::Equality(t, self.instantiate(ts));
-                    log::trace!("Replacing with new constraint: {:?}", cons);
-                    constraints.push_back(cons)
+                    let new_constraint = Constraint::Equality(t, self.instantiate(ts));
+                    write!(new_str, "{new_constraint:?}").unwrap();
+                    constraints.push_back(new_constraint)
                 }
 
                 Constraint::ImplicitInstance(t1, t2, m)
@@ -275,36 +284,29 @@ impl ConstraintGenerator {
                         .intersection(&constraints.active_vars())
                         .is_empty() =>
                 {
-                    let cons = Constraint::ExplicitInstance(t1, t2.generalize(&m));
-                    log::trace!("Replacing with new constraint: {:?}", cons);
-                    constraints.push_back(cons)
+                    let new_constraint = Constraint::ExplicitInstance(t1, t2.generalize(&m));
+                    write!(new_str, "{new_constraint:?}").unwrap();
+                    constraints.push_back(new_constraint)
                 }
 
-                c @ Constraint::ImplicitInstance(..) => {
+                constraint @ Constraint::ImplicitInstance(..) => {
                     // @Note: This should never diverge, i.e. there should always be at least one
                     // constraint in the set that meets the criteria to be solvable. See HHS02.
-                    log::trace!("Skipping for now");
-                    constraints.push_back(c);
+                    write!(new_str, "[Skipping for now]").unwrap();
+                    constraints.push_back(constraint);
                 }
             }
 
-            if log_enabled!(log::Level::Trace) {
-                log::trace!("Substitution:");
-                for (fr, to) in sub.iter() {
-                    log::trace!("    {} ↦ {}", fr, to);
-                }
-
-                log::trace!("Constraints:");
-                for c in constraints.iter() {
-                    log::trace!("    {:?}", c);
-                }
-            }
+            log::trace!(log::TYPECHECK, "{constraint_str:>60} ==> {new_str}");
         }
 
-        log::trace!("FINISH SOLVING");
-        log::trace!("-----");
+        log::trace!(log::TYPECHECK, "{:-^100}", " FINISH SOLVING ");
+        log::trace!(log::TYPECHECK, "Solution:");
+        for (fr, to) in solution.iter() {
+            log::trace!(log::TYPECHECK, "  {} ↦ {}", fr, to);
+        }
 
-        Ok(sub)
+        Ok(solution)
     }
 
     // Generation methods

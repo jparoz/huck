@@ -21,7 +21,6 @@ fn typ(s: &'static str) -> Type {
 
 fn typ_module(s: &'static str) -> Scope {
     let mut ctx = Context::default();
-    log::debug!("foo");
     ctx.include_string(s).unwrap();
     ctx.typecheck().unwrap();
     ctx.scopes.into_values().next().unwrap()

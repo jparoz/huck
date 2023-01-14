@@ -2,6 +2,7 @@
 mod test;
 
 use crate::ast;
+use crate::log;
 use crate::scope::Scope;
 use crate::types::{Type, TypeDefinition};
 
@@ -59,11 +60,6 @@ impl<'a> CodeGenerator<'a> {
     /// This will generate a Lua chunk which returns a table
     /// containing the definitions given in the Huck scope.
     fn generate(mut self) -> Result<String> {
-        log::trace!(
-            "Starting code generation for module {}",
-            self.scope.module_path
-        );
-
         let mut lua = String::new();
 
         writeln!(lua, "local {} = {{}}", PREFIX)?;
@@ -73,13 +69,13 @@ impl<'a> CodeGenerator<'a> {
         // because they don't have a real RHS,
         // so they can't refer to anything else.
 
-        log::trace!("  Generating type definitions");
+        log::trace!(log::CODEGEN, "  Generating type definitions");
         for (_name, type_defn) in self.scope.type_definitions.iter() {
             write!(lua, "{}", self.type_definition(type_defn)?)?;
         }
 
         // Next import all the imports.
-        log::trace!("  Generating import statements");
+        log::trace!(log::CODEGEN, "  Generating import statements");
         for (name, (_path, stem)) in self.scope.imports.iter() {
             writeln!(lua, r#"{PREFIX}["{name}"] = require("{stem}")["{name}"]"#)?;
 
@@ -89,7 +85,7 @@ impl<'a> CodeGenerator<'a> {
         }
 
         // Next import all the foreign imports.
-        log::trace!("  Generating foreign import statements");
+        log::trace!(log::CODEGEN, "  Generating foreign import statements");
         for (name, (require_string, lua_name, _type_scheme)) in self.scope.foreign_imports.iter() {
             writeln!(
                 lua,
@@ -102,7 +98,7 @@ impl<'a> CodeGenerator<'a> {
         }
 
         // Next, we can generate all the definitions.
-        log::trace!("  Generating definitions");
+        log::trace!(log::CODEGEN, "  Generating definitions");
 
         // Start by putting all definitions in the queue to be generated.
         // @Fixme: this probably doesn't need to be entirely cloned
@@ -115,12 +111,11 @@ impl<'a> CodeGenerator<'a> {
                 break;
             }
 
-            log::trace!("  Started a new generation pass");
+            log::trace!(log::CODEGEN, "  Started a new generation pass");
             // Keep track of whether we've generated anything in this pass.
             let mut generated_anything = false;
 
             for (name, mut typed_defn) in current_pass.drain(..) {
-                log::trace!("    Checking if we can generate {name}...");
                 let defn = &mut typed_defn.1;
 
                 // @Errors: this should throw an error saying that
@@ -145,14 +140,14 @@ impl<'a> CodeGenerator<'a> {
                 if has_any_args || has_all_deps {
                     // Because there are arguments, it's going to be a Lua function.
                     // Thus, we can generate in any order.
-                    log::trace!("    Generating {name}");
+                    log::trace!(log::CODEGEN, "    Generating {name}");
                     write!(lua, "{}", self.definition(&name, &defn)?)?;
 
                     // Mark that we have generated something in this pass.
                     generated_anything = true;
                 } else {
                     // Skip it for now
-                    log::trace!("    Skipping for now.");
+                    log::trace!(log::CODEGEN, "    Skipping {name}");
                     next_pass.push((name, typed_defn));
                 }
             }
@@ -162,6 +157,7 @@ impl<'a> CodeGenerator<'a> {
             // @Checkme: is this the only time this happens?
             if !generated_anything {
                 log::error!(
+                    log::CODEGEN,
                     "Error, didn't generate anything in one pass. Next in queue: {:?}",
                     next_pass
                 );
@@ -177,12 +173,10 @@ impl<'a> CodeGenerator<'a> {
                 ));
             }
 
-            log::trace!("  Finished generation pass");
+            log::trace!(log::CODEGEN, "  Finished generation pass");
 
             std::mem::swap(&mut current_pass, &mut next_pass);
         }
-
-        log::trace!("Finished generating definitions");
 
         // Write out foreign exports
         for (lua_lhs, expr) in self.scope.foreign_exports.iter() {
