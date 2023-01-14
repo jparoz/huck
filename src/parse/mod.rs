@@ -3,7 +3,7 @@ use nom::bytes::complete::{escaped, is_not, tag};
 use nom::character::complete::{anychar, char, hex_digit1, one_of, satisfy};
 use nom::character::complete::{none_of, u8 as nom_u8};
 use nom::combinator::{map, not, opt, peek, recognize, success, value, verify};
-use nom::multi::{many0, many0_count, many1, separated_list0, separated_list1};
+use nom::multi::{many0, many1, separated_list0, separated_list1};
 use nom::number::complete::recognize_float;
 use nom::sequence::tuple as nom_tuple;
 use nom::sequence::{delimited, preceded, separated_pair, terminated};
@@ -642,8 +642,7 @@ fn unit(input: &'static str) -> IResult<&'static str, &'static str> {
 fn comment(input: &'static str) -> IResult<&'static str, &'static str> {
     recognize(nom_tuple((
         tag("(*"),
-        // @Fixme @Checkme @Todo @Cleanup: We're not using the count, why is it _count?!
-        many0_count(alt((
+        many0(alt((
             value((), nom_tuple((peek(tag("(*")), comment))),
             value((), nom_tuple((peek(not(tag("*)"))), anychar))),
         ))),
