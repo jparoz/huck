@@ -99,10 +99,6 @@ impl ConstraintGenerator {
         self.constraints.push(constraint);
     }
 
-    pub fn equate(&mut self, a: Type, b: Type) {
-        self.constrain(Constraint::Equality(a, b))
-    }
-
     pub fn implicit_instance(&mut self, a: Type, b: Type) {
         self.constrain(Constraint::ImplicitInstance(
             a,

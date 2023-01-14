@@ -238,13 +238,6 @@ impl Context {
                     .entry((*path, name))
                     .or_default()
                     .extend(assumed_types);
-            } else if name.as_str() == "True" || name.as_str() == "False" {
-                // Do nothing. @XXX @Cleanup: don't do this
-                // @Prelude
-                let bool_type = Type::Concrete("Bool".to_string());
-                for assumed_type in assumed_types {
-                    cg.equate(assumed_type, bool_type.clone());
-                }
             } else {
                 // If there is no inferred type for the name (i.e. it's not in scope),
                 // then it's a scope error.
