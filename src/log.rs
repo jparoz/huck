@@ -1,3 +1,4 @@
+#[rustfmt::skip] pub const METRICS   : &'static str = "   metrics";
 #[rustfmt::skip] pub const IMPORT    : &'static str = "    import";
 #[rustfmt::skip] pub const PARSE     : &'static str = "     parse";
 #[rustfmt::skip] pub const TYPECHECK : &'static str = " typecheck";
