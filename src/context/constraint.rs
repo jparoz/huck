@@ -61,14 +61,12 @@ impl<'file> Debug for Constraint {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct ConstraintGenerator {
     constraints: Vec<Constraint>,
 
-    // @Cleanup: does this really need to be pub? Only used in mod context.
-    // Maybe we should move context to types::context?
     /// All the currently assumed types of name uses.
-    pub assumptions: BTreeMap<Name, Vec<Type>>,
+    pub(super) assumptions: BTreeMap<Name, Vec<Type>>,
 
     m_stack: Vec<TypeVar>,
 }
@@ -606,25 +604,5 @@ impl ConstraintGenerator {
                 Type::Tuple(exprs.iter().map(|e| self.generate_type_expr(e)).collect())
             }
         }
-    }
-}
-
-impl Debug for ConstraintGenerator {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Constraints:")?;
-        for constraint in self.constraints.iter() {
-            writeln!(f, "    {:?}", constraint)?;
-        }
-
-        if self.assumptions.len() > 0 {
-            writeln!(f, "Assumptions:")?;
-            for (name, vars) in self.assumptions.iter() {
-                for var in vars {
-                    writeln!(f, "    {} : {}", name, var)?;
-                }
-            }
-        }
-
-        Ok(())
     }
 }

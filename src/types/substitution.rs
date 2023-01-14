@@ -1,8 +1,9 @@
 use std::collections::BTreeMap;
 use std::fmt::{self, Debug};
 
-use super::TypeVarSet;
-use super::{constraint::Constraint, Type, TypeScheme, TypeVar};
+use crate::context::Constraint;
+
+use super::{Type, TypeScheme, TypeVar, TypeVarSet};
 
 pub struct Substitution(BTreeMap<TypeVar, Type>);
 

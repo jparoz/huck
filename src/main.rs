@@ -34,8 +34,8 @@ fn do_main() -> Result<(), HuckError> {
     // Ignore executable name
     args.next();
 
-    // Context::default() includes the Prelude from "../huck/Prelude.hk" by default.
-    let mut context = Context::default();
+    // Context::new() includes the Prelude from "huck/huck/Prelude.hk" by default.
+    let mut context = Context::new();
 
     // Add all the given files to the Context.
     for filename in args {

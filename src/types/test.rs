@@ -1,29 +1,19 @@
+use crate::ast::Name;
 use crate::context::Context;
 use crate::scope::Scope;
-use crate::{ast::Name, parse::parse};
+use crate::types::Type;
 
-use super::{constraint::ConstraintGenerator, substitution::ApplySub, Type};
-
-fn typ(s: &'static str) -> Type {
-    let parsed = parse(s).unwrap();
-
-    assert!(parsed.definitions.len() == 1);
-    let (_name, defn) = parsed.definitions.into_iter().next().unwrap();
-
-    let mut cg = ConstraintGenerator::default();
-    let mut typ = cg.generate_definition(&defn);
-
-    let soln = cg.solve().unwrap();
-    typ.apply(&soln);
-
-    typ
-}
-
+/// Typechecks the given module and returns the resulting Scope.
 fn typ_module(s: &'static str) -> Scope {
-    let mut ctx = Context::default();
+    let mut ctx = Context::new();
     ctx.include_string(s).unwrap();
     ctx.typecheck().unwrap();
     ctx.scopes.into_values().next().unwrap()
+}
+
+/// Infers the type of the given definition.
+fn typ(s: &'static str) -> Type {
+    typ_module(s).definitions.into_values().next().unwrap().0
 }
 
 #[test]

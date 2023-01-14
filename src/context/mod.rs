@@ -7,15 +7,19 @@ use crate::error::Error as HuckError;
 use crate::log;
 use crate::parse::parse;
 use crate::scope::Scope;
-use crate::types::{ApplySub, ConstraintGenerator, Error as TypeError, Type};
+use crate::types::{ApplySub, Error as TypeError, Type};
 use crate::utils::leak_string;
+
+mod constraint;
+
+pub use constraint::{Constraint, ConstraintGenerator};
 
 /// Context is the structure which manages module imports.
 /// It contains some modules, manages references between modules, and prepares for typechecking.
 ///
 /// If multiple modules depend on one another (with or without cycles), they must be typechecked and
 /// transpiled as part of the same Context.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Context {
     /// The file path of each included file in the context.
     pub file_paths: BTreeMap<ModulePath, PathBuf>,
@@ -31,7 +35,6 @@ pub struct Context {
     pub scopes: BTreeMap<ModulePath, Scope>,
 
     /// The constraint generator.
-    // @Todo @Cleanup: inline this?
     cg: ConstraintGenerator,
 
     /// These are assumptions made about imported names,
@@ -39,27 +42,20 @@ pub struct Context {
     assumptions: BTreeMap<(ModulePath, Name), Vec<Type>>,
 }
 
-impl Default for Context {
-    fn default() -> Self {
-        let mut ctx = Self {
-            file_paths: BTreeMap::new(),
-            modules: BTreeMap::new(),
-            prelude: None,
-            scopes: BTreeMap::new(),
-            assumptions: BTreeMap::new(),
-            cg: ConstraintGenerator::default(),
-        };
+impl Context {
+    pub fn new() -> Self {
+        let mut ctx = Self::default();
 
         // Add the prelude to the Context by default.
         log::info!(log::IMPORT, "Adding Prelude to the context");
-        ctx.include_prelude(include_str!("../huck/Prelude.hk"))
+        // @Todo: move this to a file packaged with the compiler somehow,
+        // rather than having it be included into the source like this.
+        ctx.include_prelude(include_str!("../../huck/Prelude.hk"))
             .unwrap();
 
         ctx
     }
-}
 
-impl Context {
     /// Typechecks the given Huck context.
     pub fn typecheck(&mut self) -> Result<(), TypeError> {
         // First, typecheck the Prelude;

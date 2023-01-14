@@ -3,14 +3,12 @@ use std::fmt::{self, Display};
 
 use crate::ast;
 
-mod constraint;
 mod error;
 mod substitution;
 
 #[cfg(test)]
 mod test;
 
-pub use constraint::ConstraintGenerator;
 pub use error::Error;
 pub use substitution::{ApplySub, Substitution};
 

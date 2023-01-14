@@ -10,7 +10,7 @@ pub fn transpile(huck: &'static str) -> Result<String, HuckError> {
     codegen::lua::CodeGenerator::reset_unique();
 
     // Make a context with one file
-    let mut context = Context::default();
+    let mut context = Context::new();
 
     // Parse
     context.include_string(huck)?;
