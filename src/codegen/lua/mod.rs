@@ -9,6 +9,7 @@ use crate::types::{Type, TypeDefinition};
 use std::collections::BTreeSet;
 use std::fmt::Write;
 use std::sync::atomic::{self, AtomicU64};
+use std::time::Instant;
 
 use super::Error as CodegenError;
 
@@ -19,7 +20,17 @@ const PREFIX: &str = "_HUCK";
 
 /// Generates Lua for the given Huck Scope.
 pub fn generate(scope: &Scope) -> Result<String> {
-    CodeGenerator::new(scope).generate()
+    let start_time = Instant::now();
+
+    let generated = CodeGenerator::new(scope).generate();
+
+    log::info!(
+        log::METRICS,
+        "Generated module {}, {:?} elapsed",
+        scope.module_path,
+        start_time.elapsed()
+    );
+    generated
 }
 
 type Result<T> = std::result::Result<T, CodegenError>;

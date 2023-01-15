@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::mem;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use crate::ast::{Module, ModulePath, Name};
 use crate::error::Error as HuckError;
@@ -58,6 +59,10 @@ impl Context {
 
     /// Typechecks the given Huck context.
     pub fn typecheck(&mut self) -> Result<(), TypeError> {
+        // Start the timer to measure how long typechecking takes.
+        let start_time = Instant::now();
+        log::info!(log::TYPECHECK, "Typechecking all modules...");
+
         // First, typecheck the Prelude;
         // then all the other modules.
         // Has to be done in this order
@@ -197,6 +202,12 @@ impl Context {
             }
         }
 
+        log::info!(
+            log::METRICS,
+            "Typechecking completed, {:?} elapsed",
+            start_time.elapsed()
+        );
+
         Ok(())
     }
 
@@ -323,7 +334,7 @@ impl Context {
     /// Adds the given String to the Context as the Prelude.
     pub fn include_prelude(&mut self, src: &'static str) -> Result<(), HuckError> {
         let module = parse(src)?;
-        log::trace!(log::PARSE, "Parsed module: {:?}", module);
+        log::trace!(log::PARSE, "Parsed module (prelude): {:?}", module);
 
         // @Errors: do a proper error instead of expect and asserts
         let module_path = module

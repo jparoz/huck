@@ -30,7 +30,6 @@ fn do_main() -> Result<(), HuckError> {
         .init();
 
     let compilation_start = Instant::now();
-    log::trace!(log::METRICS, "Started compilation timer");
 
     let mut args = std::env::args();
 
@@ -56,28 +55,20 @@ fn do_main() -> Result<(), HuckError> {
 
     log::info!(
         log::METRICS,
-        "Parsing completed, {:?} elapsed",
+        "Loaded and parsed all modules, {:?} elapsed",
         compilation_start.elapsed()
     );
 
     // Typecheck
-    let typecheck_start = Instant::now();
-    log::info!(log::TYPECHECK, "Typechecking");
     context.typecheck()?;
-    log::info!(
-        log::METRICS,
-        "Typechecking completed, {:?} elapsed",
-        typecheck_start.elapsed()
-    );
 
     // Generate code
-    let codegen_start = Instant::now();
     for (module_path, mut file_path) in context.file_paths {
         log::info!(log::CODEGEN, "Generating code for module {module_path}");
         let lua = codegen::lua::generate(&context.scopes[&module_path])?;
         let lua = utils::normalize(&lua);
-        assert!(file_path.set_extension("lua"));
 
+        assert!(file_path.set_extension("lua"));
         log::info!(
             log::CODEGEN,
             "Writing generated output to {}",
@@ -85,11 +76,6 @@ fn do_main() -> Result<(), HuckError> {
         );
         std::fs::write(file_path, lua)?;
     }
-    log::info!(
-        log::METRICS,
-        "Code generation completed, {:?} elapsed",
-        codegen_start.elapsed()
-    );
 
     log::info!(
         log::METRICS,

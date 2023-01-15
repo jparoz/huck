@@ -10,8 +10,9 @@ use nom::sequence::{delimited, preceded, separated_pair, terminated};
 use nom::IResult;
 
 use std::collections::BTreeMap;
+use std::time::Instant;
 
-use crate::ast::*;
+use crate::{ast::*, log};
 
 pub mod precedence;
 use precedence::{ApplyPrecedence, Associativity, Precedence};
@@ -20,7 +21,10 @@ use precedence::{ApplyPrecedence, Associativity, Precedence};
 mod test;
 
 pub fn parse(input: &'static str) -> Result<Module, Error> {
-    match preceded(
+    // Start the timer to measure how long parsing takes.
+    let start_time = Instant::now();
+
+    let module = match preceded(
         ws(success(())),
         nom_tuple((opt(module_declaration), many0(statement))),
     )(input)
@@ -131,10 +135,19 @@ pub fn parse(input: &'static str) -> Result<Module, Error> {
                 defn.apply(&precs);
             }
 
-            Ok(module)
+            module
         }
-        Err(nom) => Err(Error::Nom(nom.to_string())),
-    }
+        Err(nom) => return Err(Error::Nom(nom.to_string())),
+    };
+
+    log::info!(
+        log::METRICS,
+        "Parsing module {} completed, {:?} elapsed",
+        module.path.unwrap_or_default(),
+        start_time.elapsed()
+    );
+
+    Ok(module)
 }
 
 fn module_declaration(input: &'static str) -> IResult<&'static str, ModulePath> {
