@@ -73,7 +73,7 @@ impl Context {
             // This changes from &(p, m) to (&p, &m)
             .map(|(p, m)| (p, m))
             .chain(self.modules.iter())
-            .map(|(p, m)| (p.clone(), m.clone()))
+            .map(|(p, m)| (*p, m.clone()))
             .collect::<Vec<(ModulePath, Module)>>()
         {
             log::trace!(log::TYPECHECK, "Typechecking: module {module_path};");
@@ -285,7 +285,7 @@ impl Context {
                     // @Checkme: do we need to clone?
                     self
                         .assumptions
-                        .remove(&(import_path.clone(), import_name.clone()))
+                        .remove(&(*import_path, import_name.clone()))
                 {
                     // Constrain that the assumed types are instances of the inferred type.
                     for assumed_type in assumed_types {

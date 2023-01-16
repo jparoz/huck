@@ -63,7 +63,7 @@ impl Type {
                 (Type::Var(var), t) | (t, Type::Var(var)) => {
                     if t.free_vars().contains(&var) {
                         // @CheckMe
-                        return Err(TypeError::CouldNotUnifyRecursive(t.clone(), Type::Var(var)));
+                        return Err(TypeError::CouldNotUnifyRecursive(t, Type::Var(var)));
                     } else {
                         let s = Substitution::single(var.clone(), t.clone());
                         for (a2, b2) in pairs.iter_mut() {

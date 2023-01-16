@@ -1,8 +1,8 @@
-#[rustfmt::skip] pub const METRICS   : &'static str = "   metrics";
-#[rustfmt::skip] pub const IMPORT    : &'static str = "    import";
-#[rustfmt::skip] pub const PARSE     : &'static str = "     parse";
-#[rustfmt::skip] pub const TYPECHECK : &'static str = " typecheck";
-#[rustfmt::skip] pub const CODEGEN   : &'static str = "   codegen";
+#[rustfmt::skip] pub const METRICS   : &str = "   metrics";
+#[rustfmt::skip] pub const IMPORT    : &str = "    import";
+#[rustfmt::skip] pub const PARSE     : &str = "     parse";
+#[rustfmt::skip] pub const TYPECHECK : &str = " typecheck";
+#[rustfmt::skip] pub const CODEGEN   : &str = "   codegen";
 
 #[allow(unused_macros)]
 macro_rules! error {

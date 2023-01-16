@@ -352,7 +352,7 @@ fn type_expr(input: &'static str) -> IResult<&'static str, TypeExpr> {
 fn type_app(input: &'static str) -> IResult<&'static str, TypeExpr> {
     map(many1(type_term), |ts| {
         ts.into_iter()
-            .map(|t| TypeExpr::Term(t))
+            .map(TypeExpr::Term)
             .reduce(|a, b| TypeExpr::App(Box::new(a), Box::new(b)))
             .unwrap() // safe unwrap because we're mapping over many1
     })(input)
@@ -384,7 +384,7 @@ fn binop(input: &'static str) -> IResult<&'static str, Expr> {
 fn app(input: &'static str) -> IResult<&'static str, Expr> {
     map(many1(term), |ts| {
         ts.into_iter()
-            .map(|t| Expr::Term(t))
+            .map(Expr::Term)
             .reduce(|a, b| Expr::App {
                 func: Box::new(a),
                 argument: Box::new(b),
@@ -403,11 +403,11 @@ fn let_in(input: &'static str) -> IResult<&'static str, Expr> {
             expr,
         )),
         |(_, assigns, _, _, in_expr)| {
-            let mut local_env = BTreeMap::new();
+            let mut local_env: BTreeMap<Name, Vec<Assignment>> = BTreeMap::new();
             for (lhs, expr) in assigns {
                 local_env
                     .entry(lhs.name().clone())
-                    .or_insert(Vec::new())
+                    .or_default()
                     .push((lhs, expr));
             }
             Expr::Let {
@@ -702,12 +702,38 @@ fn is_var_start_char(c: char) -> bool {
 // @Note: In the definition of upper_ident, we assume there are no reserved words beginning with
 // an uppercase letter.
 fn is_reserved(word: &str) -> bool {
-    match word {
-        "module" | "lazy" | "import" | "export" | "foreign" | "as" | "let" | "in" | "if"
-        | "then" | "else" | "case" | "of" | "do" | "infix" | "infixl" | "infixr" | "forall"
-        | "type" | "unsafe" | "lua" | "=>" | "," | "()" | "=" | ":" | "\\" | "->" | "<-" => true,
-        _ => false,
-    }
+    matches!(
+        word,
+        "module"
+            | "lazy"
+            | "import"
+            | "export"
+            | "foreign"
+            | "as"
+            | "let"
+            | "in"
+            | "if"
+            | "then"
+            | "else"
+            | "case"
+            | "of"
+            | "do"
+            | "infix"
+            | "infixl"
+            | "infixr"
+            | "forall"
+            | "type"
+            | "unsafe"
+            | "lua"
+            | "=>"
+            | ","
+            | "()"
+            | "="
+            | ":"
+            | "\\"
+            | "->"
+            | "<-"
+    )
 }
 
 #[derive(thiserror::Error, Debug)]

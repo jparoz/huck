@@ -118,7 +118,7 @@ impl<'a> CodeGenerator<'a> {
 
         loop {
             // If the queue is empty, we're done.
-            if current_pass.len() == 0 {
+            if current_pass.is_empty() {
                 break;
             }
 
@@ -131,7 +131,7 @@ impl<'a> CodeGenerator<'a> {
 
                 // @Errors: this should throw an error saying that
                 // there was a type annotation without a corresponding definition.
-                assert!(defn.assignments.len() > 0);
+                assert!(!defn.assignments.is_empty());
 
                 // @Lazy @Laziness: lazy values can be generated in any order
 
@@ -152,7 +152,7 @@ impl<'a> CodeGenerator<'a> {
                     // Because there are arguments, it's going to be a Lua function.
                     // Thus, we can generate in any order.
                     log::trace!(log::CODEGEN, "    Generating {name}");
-                    write!(lua, "{}", self.definition(&name, &defn)?)?;
+                    write!(lua, "{}", self.definition(&name, defn)?)?;
 
                     // Mark that we have generated something in this pass.
                     generated_anything = true;
@@ -191,7 +191,7 @@ impl<'a> CodeGenerator<'a> {
 
         // Write out foreign exports
         for (lua_lhs, expr) in self.scope.foreign_exports.iter() {
-            writeln!(lua, "{} = {}", lua_lhs, self.expr(&expr)?)?;
+            writeln!(lua, "{} = {}", lua_lhs, self.expr(expr)?)?;
         }
 
         // Write out the return statement
@@ -392,7 +392,7 @@ impl<'a> CodeGenerator<'a> {
     }
 
     fn curried_function(&mut self, assignments: &Vec<(ast::Lhs, ast::Expr)>) -> Result<String> {
-        assert!(assignments.len() > 0);
+        assert!(!assignments.is_empty());
 
         let arg_count = assignments[0].0.arg_count();
         let mut ids = Vec::with_capacity(arg_count);
@@ -517,9 +517,9 @@ impl<'a> CodeGenerator<'a> {
                     .push(format!("#{} == {}", lua_arg_name, list.len()));
 
                 // Check that each pattern matches
-                for j in 0..list.len() {
-                    let new_lua_arg_name = format!("{}[{}]", lua_arg_name, j + 1);
-                    self.pattern_match(&list[j], &new_lua_arg_name)?;
+                for (i, pat) in list.iter().enumerate() {
+                    let new_lua_arg_name = format!("{}[{}]", lua_arg_name, i + 1);
+                    self.pattern_match(pat, &new_lua_arg_name)?;
                 }
             }
 
@@ -539,9 +539,9 @@ impl<'a> CodeGenerator<'a> {
                 ));
 
                 // Check that each pattern matches
-                for j in 0..args.len() {
-                    let new_lua_arg_name = format!("{}[{}]", lua_arg_name, j + 1);
-                    self.pattern_match(&args[j], &new_lua_arg_name)?;
+                for (i, pat) in args.iter().enumerate() {
+                    let new_lua_arg_name = format!("{}[{}]", lua_arg_name, i + 1);
+                    self.pattern_match(pat, &new_lua_arg_name)?;
                 }
             }
 
@@ -553,10 +553,10 @@ impl<'a> CodeGenerator<'a> {
                 ));
 
                 // Check that the LHS pattern matches
-                self.pattern_match(&lhs, &format!("{}[{}]", lua_arg_name, 1))?;
+                self.pattern_match(lhs, &format!("{}[{}]", lua_arg_name, 1))?;
 
                 // Check that the RHS pattern matches
-                self.pattern_match(&rhs, &format!("{}[{}]", lua_arg_name, 2))?;
+                self.pattern_match(rhs, &format!("{}[{}]", lua_arg_name, 2))?;
             }
 
             // @Hardcode @Hack-ish @Prelude
@@ -622,7 +622,7 @@ impl<'a> CodeGenerator<'a> {
             writeln!(lua, "function({}_{})", PREFIX, id)?;
             write!(lua, "return ")?;
 
-            constr_type = &b;
+            constr_type = b;
         }
 
         // @Errors: assert that we have the terminal type left?
@@ -660,7 +660,7 @@ impl<'a> CodeGenerator<'a> {
         } else {
             // It's a locally-bound definition,
             // so we should emit e.g. var
-            Ok(format!(r#"{}"#, lua_safe(name.as_str())))
+            Ok(lua_safe(name.as_str()))
         }
     }
 

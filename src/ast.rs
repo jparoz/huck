@@ -95,7 +95,7 @@ pub enum Name {
 impl Name {
     pub fn as_str(&self) -> &str {
         match self {
-            Name::Ident(s) | Name::Binop(s) => &s,
+            Name::Ident(s) | Name::Binop(s) => s,
             Name::Lambda => "<lambda>",
         }
     }
@@ -410,7 +410,7 @@ impl Display for Expr {
                 in_expr,
             } => {
                 write!(f, "let")?;
-                for (_name, assignments) in definitions {
+                for assignments in definitions.values() {
                     for (lhs, rhs) in assignments {
                         write!(f, " {} = {}", lhs, rhs)?;
                         write!(f, "{};{}", DIM, RESET)?;

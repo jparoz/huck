@@ -122,10 +122,10 @@ impl ApplyPrecedence for Expr {
 
                     // @Note: this default is borrowed from Haskell; think about the right value
                     let Precedence(l_assoc, l_pri) = precs
-                        .get(&l_op)
+                        .get(l_op)
                         .unwrap_or(&Precedence(Associativity::Left, 9));
                     let Precedence(r_assoc, r_pri) = precs
-                        .get(&r_op)
+                        .get(r_op)
                         .unwrap_or(&Precedence(Associativity::Left, 9));
 
                     if l_pri == r_pri
@@ -167,7 +167,7 @@ impl ApplyPrecedence for Expr {
                 definitions,
                 in_expr,
             } => {
-                for (_name, defn) in definitions {
+                for defn in definitions.values_mut() {
                     for (lhs, rhs) in defn.iter_mut() {
                         lhs.apply(precs);
                         rhs.apply(precs);

@@ -33,10 +33,10 @@ impl ActiveVars for Constraint {
 
 impl ActiveVars for &[Constraint] {
     fn active_vars(&self) -> TypeVarSet {
-        self.into_iter()
+        self.iter()
             .map(Constraint::active_vars)
             .reduce(|vars1, vars2| vars1.union(&vars2))
-            .unwrap_or(TypeVarSet::empty())
+            .unwrap_or_else(TypeVarSet::empty)
     }
 }
 
@@ -47,7 +47,7 @@ impl ActiveVars for VecDeque<Constraint> {
     }
 }
 
-impl<'file> Debug for Constraint {
+impl Debug for Constraint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Constraint::Equality(a, b) => write!(f, "{} ≡ {}", a, b),
@@ -89,7 +89,7 @@ impl ConstraintGenerator {
         log::trace!(log::TYPECHECK, "Assuming type: {} : {}", name, typ);
         self.assumptions
             .entry(name)
-            .or_insert(Vec::with_capacity(1))
+            .or_insert_with(|| Vec::with_capacity(1))
             .push(typ);
     }
 
@@ -421,7 +421,7 @@ impl ConstraintGenerator {
                         .map(|assign| self.generate_assignment(assign))
                         .collect();
                     let typ = self.equate_all(typs);
-                    self.bind_assumptions_poly(&name, &typ);
+                    self.bind_assumptions_poly(name, &typ);
                 }
 
                 beta
@@ -555,7 +555,7 @@ impl ConstraintGenerator {
 
         for (constr_name, args) in constrs {
             let constr_type = args
-                .into_iter()
+                .iter()
                 .rev()
                 .map(|term| self.generate_type_term(term))
                 .fold(typ.clone(), |res, a| {

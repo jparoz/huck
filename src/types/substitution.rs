@@ -56,7 +56,7 @@ impl Debug for Substitution {
         let mut iter = self.iter().peekable();
         while let Some((fr, to)) = iter.next() {
             write!(f, "{} ↦ {}", fr, to)?;
-            if !iter.peek().is_none() {
+            if iter.peek().is_some() {
                 write!(f, ", ")?;
             }
         }
@@ -93,7 +93,7 @@ impl ApplySub for Type {
     fn apply(&mut self, sub: &Substitution) {
         match self {
             Type::Var(var) => {
-                if let Some(replacement) = sub.get(&var) {
+                if let Some(replacement) = sub.get(var) {
                     *self = replacement.clone();
                 }
             }
