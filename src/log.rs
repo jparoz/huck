@@ -1,3 +1,5 @@
+#[allow(dead_code)]
+#[rustfmt::skip] pub const DEBUG     : &str = "     debug";
 #[rustfmt::skip] pub const METRICS   : &str = "   metrics";
 #[rustfmt::skip] pub const IMPORT    : &str = "    import";
 #[rustfmt::skip] pub const PARSE     : &str = "     parse";
@@ -26,15 +28,30 @@ macro_rules! info {
 pub(crate) use info;
 
 #[allow(unused_macros)]
-macro_rules! debug {
-    ($target:expr, $($arg:tt)+) => (log_crate::log!(target: $target, log_crate::Level::Debug, $($arg)+))
-}
-#[allow(unused_imports)]
-pub(crate) use debug;
-
-#[allow(unused_macros)]
 macro_rules! trace {
     ($target:expr, $($arg:tt)+) => (log_crate::log!(target: $target, log_crate::Level::Trace, $($arg)+))
 }
 #[allow(unused_imports)]
 pub(crate) use trace;
+
+/// Debug is different
+#[allow(unused_macros)]
+macro_rules! debug {
+    ($lit:literal, $($arg:tt)+) => (log_crate::log!(
+            target: $crate::log::DEBUG,
+            log_crate::Level::Debug,
+            $lit, $($arg)+)
+        );
+    ($lit:literal) => (log_crate::log!(
+            target: $crate::log::DEBUG,
+            log_crate::Level::Debug,
+            $lit)
+        );
+    ($arg:expr) => (log_crate::log!(
+            target: $crate::log::DEBUG,
+            log_crate::Level::Debug,
+            concat!(stringify!($arg), ": {:?}"), $arg)
+        );
+}
+#[allow(unused_imports)]
+pub(crate) use debug;

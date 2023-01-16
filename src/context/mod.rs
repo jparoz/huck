@@ -9,7 +9,6 @@ use crate::log;
 use crate::parse::parse;
 use crate::scope::Scope;
 use crate::types::{ApplySub, Error as TypeError, Type};
-use crate::utils::leak_string;
 
 mod constraint;
 
@@ -45,16 +44,7 @@ pub struct Context {
 
 impl Context {
     pub fn new() -> Self {
-        let mut ctx = Self::default();
-
-        // Add the prelude to the Context by default.
-        log::info!(log::IMPORT, "Adding Prelude to the context");
-        // @Todo: move this to a file packaged with the compiler somehow,
-        // rather than having it be included into the source like this.
-        ctx.include_prelude(include_str!("../../huck/Prelude.hk"))
-            .unwrap();
-
-        ctx
+        Self::default()
     }
 
     /// Typechecks the given Huck context.
@@ -306,6 +296,12 @@ impl Context {
     where
         P: AsRef<Path>,
     {
+        log::info!(
+            log::IMPORT,
+            "Adding {path} to the context",
+            path = file_path.as_ref().display()
+        );
+
         match file_path.as_ref().extension() {
             Some(ex) if ex == "hk" => (),
             Some(_) => log::warn!(
@@ -323,45 +319,70 @@ impl Context {
         let src = std::fs::read_to_string(&file_path)?;
         let src = leak_string(src);
 
-        self.include(src, Some(file_path.as_ref().to_path_buf()))
+        self.include(src, Some(file_path.as_ref().to_path_buf()), false)
     }
 
+    #[cfg(test)]
     /// Adds the given string to the Context, treating it as anonymous input e.g. REPL input.
     pub fn include_string(&mut self, src: &'static str) -> Result<(), HuckError> {
-        self.include(src, None)
+        self.include(src, None, false)
     }
 
-    /// Adds the given String to the Context as the Prelude.
-    pub fn include_prelude(&mut self, src: &'static str) -> Result<(), HuckError> {
-        let module = parse(src)?;
-        log::trace!(log::PARSE, "Parsed module (prelude): {:?}", module);
-
-        // @Errors: do a proper error instead of expect and asserts
-        let module_path = module
-            .path
-            .expect("the prelude should have the module name Prelude");
-        assert_eq!(module_path, ModulePath("Prelude"));
-        assert!(
-            self.prelude.replace((module_path, module)).is_none(),
-            "can't define multiple preludes"
+    /// Adds the given file to the Context as the Prelude.
+    pub fn include_prelude<P>(&mut self, file_path: P) -> Result<(), HuckError>
+    where
+        P: AsRef<Path>,
+    {
+        log::info!(
+            log::IMPORT,
+            "Adding {path} to the context as prelude",
+            path = file_path.as_ref().display()
         );
 
-        // Generate a PathBuf from the module path.
-        let path_buf = Path::new("Prelude.hk").to_path_buf();
-        assert!(self.file_paths.insert(module_path, path_buf).is_none());
+        match file_path.as_ref().extension() {
+            Some(ex) if ex == "hk" => (),
+            Some(_) => log::warn!(
+                log::IMPORT,
+                "unknown filetype included: {:?}",
+                file_path.as_ref()
+            ),
+            _ => log::warn!(
+                log::IMPORT,
+                "file without extension included: {:?}",
+                file_path.as_ref()
+            ),
+        }
 
-        Ok(())
+        let src = std::fs::read_to_string(&file_path)?;
+        let src = leak_string(src);
+
+        self.include(src, Some(file_path.as_ref().to_path_buf()), true)
     }
 
     /// Actually includes the module in the Context.
     /// Called by [`include_file`][Context::include_file]
     /// and [`include_string`][Context::include_string].
-    fn include(&mut self, src: &'static str, path_buf: Option<PathBuf>) -> Result<(), HuckError> {
+    fn include(
+        &mut self,
+        src: &'static str,
+        path_buf: Option<PathBuf>,
+        is_prelude: bool,
+    ) -> Result<(), HuckError> {
         let module = parse(src)?;
         log::trace!(log::PARSE, "Parsed module: {:?}", module);
         let module_path = module.path.unwrap_or_default();
 
-        if let Some(existing_module) = self.modules.insert(module_path, module) {
+        if is_prelude {
+            // @Errors: do a proper error instead of expect and asserts
+            let module_path = module
+                .path
+                .expect("the prelude should have the module name Prelude");
+            assert_eq!(module_path, ModulePath("Prelude"));
+            assert!(
+                self.prelude.replace((module_path, module)).is_none(),
+                "can't define multiple preludes"
+            );
+        } else if let Some(existing_module) = self.modules.insert(module_path, module) {
             match existing_module.path {
                 Some(path) => return Err(HuckError::MultipleModules(format!("{}", path))),
                 None => {
@@ -409,4 +430,9 @@ impl Context {
             .into_string()
             .expect("the file name should be utf8")
     }
+}
+
+/// Leak a string, returning a &'static str with its contents.
+fn leak_string(s: String) -> &'static str {
+    Box::leak(s.into_boxed_str())
 }

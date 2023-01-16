@@ -42,8 +42,3 @@ pub fn normalize(lua: &str) -> String {
 
     res
 }
-
-/// Leak a string, returning a &'static str with its contents.
-pub fn leak_string(s: String) -> &'static str {
-    Box::leak(s.into_boxed_str())
-}

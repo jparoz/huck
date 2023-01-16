@@ -12,6 +12,11 @@ pub fn transpile(huck: &'static str) -> Result<String, HuckError> {
     // Make a context with one file
     let mut context = Context::new();
 
+    // Include the prelude
+    context
+        .include_prelude(concat!(env!("CARGO_MANIFEST_DIR"), "/huck/Prelude.hk"))
+        .unwrap();
+
     // Parse
     context.include_string(huck)?;
 

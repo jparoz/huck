@@ -6,6 +6,8 @@ use crate::types::Type;
 /// Typechecks the given module and returns the resulting Scope.
 fn typ_module(s: &'static str) -> Scope {
     let mut ctx = Context::new();
+    ctx.include_prelude(concat!(env!("CARGO_MANIFEST_DIR"), "/huck/Prelude.hk"))
+        .unwrap();
     ctx.include_string(s).unwrap();
     ctx.typecheck().unwrap();
     ctx.scopes.into_values().next().unwrap()
