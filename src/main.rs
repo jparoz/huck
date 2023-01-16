@@ -11,14 +11,18 @@ mod types;
 mod utils;
 
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::time::Instant;
 
+use clap::builder::TypedValueParser as _;
 use clap::Parser;
 
 use context::Context;
 use error::Error as HuckError;
 
+/// Compiler for the Huck programming language
 #[derive(Parser, Debug)]
+#[command(version, about, arg_required_else_help(true))]
 struct Args {
     /// Use this file as the prelude
     #[arg(short = 'P', long, value_name = "FILE", value_hint = clap::ValueHint::DirPath,
@@ -26,6 +30,16 @@ struct Args {
         default_value = concat!(env!("CARGO_MANIFEST_DIR"), "/huck/Prelude.hk")
         )]
     prelude: PathBuf,
+
+    /// Logging level
+    #[arg(
+        long,
+        value_name = "LEVEL",
+        default_value = "off",
+        value_parser = clap::builder::PossibleValuesParser::new(["error", "warn", "info", "debug", "trace", "off"])
+                .map(|s| log_crate::LevelFilter::from_str(&s).unwrap()),
+        )]
+    log: log_crate::LevelFilter,
 
     /// Input files to be included in compilation
     files: Vec<PathBuf>,
@@ -39,15 +53,24 @@ fn main() {
 }
 
 fn do_main() -> Result<(), HuckError> {
-    env_logger::Builder::from_default_env()
-        .format_timestamp(None)
-        .init();
-
     let compilation_start = Instant::now();
 
     let args = Args::parse();
 
+    env_logger::Builder::new()
+        .filter(None, args.log)
+        .format_timestamp(None)
+        .init();
+
     let mut context = Context::new();
+
+    log::info!(
+        log::METRICS,
+        "Initialized compiler, {:?} elapsed",
+        compilation_start.elapsed()
+    );
+
+    let parse_start = Instant::now();
 
     // Add the Prelude to the context.
     context.include_prelude(args.prelude)?;
@@ -60,7 +83,7 @@ fn do_main() -> Result<(), HuckError> {
     log::info!(
         log::METRICS,
         "Loaded and parsed all modules, {:?} elapsed",
-        compilation_start.elapsed()
+        parse_start.elapsed()
     );
 
     // Typecheck
