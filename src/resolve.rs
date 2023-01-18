@@ -5,7 +5,7 @@ use crate::ast::{ForeignImportItem, LuaName, Module, ModulePath, Name, Statement
 use crate::log;
 use crate::parse::precedence::{ApplyPrecedence, Precedence};
 
-pub fn resolve(path: ModulePath, statements: Vec<Statement>) -> Result<Module, Error> {
+pub fn resolve(path: ModulePath, mut statements: Vec<Statement>) -> Result<Module, Error> {
     // Start the timer to measure how long resolution takes.
     let start_time = Instant::now();
 
@@ -16,11 +16,44 @@ pub fn resolve(path: ModulePath, statements: Vec<Statement>) -> Result<Module, E
 
     let mut precs = BTreeMap::new();
 
+    // Sort the statements so they're processed in the correct order.
+    //
+    // @Note @Important:
+    // This relies on the (derived!) impl PartialOrd for Statement.
+    {
+        // @Note @Performance:
+        // This could be really slow on big programs.
+        // For now we just time it and log,
+        // but one day we might need to optimise this a bit more carefully.
+        let sort_time = Instant::now();
+        statements.sort();
+        log::trace!(
+            log::METRICS,
+            "Statement sort time in resolve: {:?}",
+            sort_time.elapsed()
+        );
+    }
+
     // Process all parsed statements,
     // and insert them into the Module (and precs map).
     log::trace!(log::RESOLVE, "Processing parsed statements");
     for stat in statements {
         match stat {
+            // @Todo: do some actual resolution
+            Statement::Import(path, names) => module.imports.entry(path).or_default().extend(names),
+
+            // @Todo: do some actual resolution
+            Statement::ForeignImport(require_string, import_items) => module
+                .foreign_imports
+                .entry(require_string)
+                .or_default()
+                .extend(import_items.into_iter().map(|item| match item {
+                    ForeignImportItem::SameName(name, ts) => {
+                        (LuaName(name.as_str().to_string()), name, ts)
+                    }
+                    ForeignImportItem::Rename(lua_name, name, ts) => (lua_name, name, ts),
+                })),
+
             Statement::AssignmentWithoutType((lhs, expr)) => {
                 module
                     .definitions
@@ -84,21 +117,6 @@ pub fn resolve(path: ModulePath, statements: Vec<Statement>) -> Result<Module, E
                     return Err(Error::MultipleTypeDefinitions(first_defn.name));
                 }
             }
-
-            // @Todo: do some actual resolution
-            Statement::Import(path, names) => module.imports.entry(path).or_default().extend(names),
-
-            // @Todo: do some actual resolution
-            Statement::ForeignImport(require_string, import_items) => module
-                .foreign_imports
-                .entry(require_string)
-                .or_default()
-                .extend(import_items.into_iter().map(|item| match item {
-                    ForeignImportItem::SameName(name, ts) => {
-                        (LuaName(name.as_str().to_string()), name, ts)
-                    }
-                    ForeignImportItem::Rename(lua_name, name, ts) => (lua_name, name, ts),
-                })),
 
             Statement::ForeignExport(lua_lhs, expr) => module.foreign_exports.push((lua_lhs, expr)),
         }

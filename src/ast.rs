@@ -63,22 +63,27 @@ impl Definition {
 }
 
 /// A Statement is a sum type for any of the top-level Huck constructs.
-#[derive(Debug, PartialEq, Eq)]
+/// The order here is important! See [`resolve::resolve`](crate::resolve::resolve).
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Statement {
-    AssignmentWithType(TypeScheme, Assignment),
-    AssignmentWithoutType(Assignment),
-    TypeAnnotation(Name, TypeScheme),
-    TypeDefinition(TypeDefinition),
-    Precedence(Name, Precedence),
+    // @Note: Import and ForeignImport MUST come before assignments.
     Import(ModulePath, Vec<Name>),
 
     /// Includes the quotation marks in the require string
     ForeignImport(&'static str, Vec<ForeignImportItem>),
 
+    // @Note: Precedence MUST come before assignments.
+    Precedence(Name, Precedence),
+
+    AssignmentWithType(TypeScheme, Assignment),
+    AssignmentWithoutType(Assignment),
+    TypeAnnotation(Name, TypeScheme),
+    TypeDefinition(TypeDefinition),
+
     /// The str is taken straight from the source
     /// and dumped into the output Lua
     /// without any sort of validation.
-    /// See `parse::statement`.
+    /// See [`parse::statement`](crate::parse::statement).
     ForeignExport(&'static str, Expr),
 }
 
@@ -107,7 +112,7 @@ impl Display for Name {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub enum Lhs {
     Func { name: Name, args: Vec<Pattern> },
     Binop { a: Pattern, op: Name, b: Pattern },
@@ -165,7 +170,7 @@ impl Display for Lhs {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub enum Pattern {
     Bind(&'static str),
     List(Vec<Pattern>),
@@ -249,7 +254,7 @@ impl Display for Pattern {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub enum Expr {
     Term(Term),
     App {
@@ -453,7 +458,7 @@ impl Display for Expr {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub enum Term {
     Numeral(Numeral),
     String(&'static str),
@@ -500,13 +505,13 @@ impl Display for Term {
 
 /// This represents an explicitly-written type scheme, i.e. the RHS of a `:`.
 /// e.g. in `id : forall a. a;` the TypeScheme represents `forall a. a`.
-#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub struct TypeScheme {
     pub vars: Vec<&'static str>, // @Checkme: &str, or maybe Name?
     pub typ: TypeExpr,
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub enum TypeExpr {
     Term(TypeTerm),
     App(Box<TypeExpr>, Box<TypeExpr>),
@@ -514,7 +519,7 @@ pub enum TypeExpr {
     // @Future @TypeBinops: type-level binops
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
 pub enum TypeTerm {
     Concrete(&'static str),
     Var(&'static str),
@@ -525,7 +530,7 @@ pub enum TypeTerm {
 }
 
 /// Parsed representation of a new type definition (e.g. `type Foo = Bar;`).
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct TypeDefinition {
     pub name: Name,
     pub vars: Vec<&'static str>,
@@ -534,7 +539,7 @@ pub struct TypeDefinition {
 
 pub type ConstructorDefinition = (Name, Vec<TypeTerm>);
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum ForeignImportItem {
     SameName(Name, TypeScheme),
     Rename(LuaName, Name, TypeScheme),
@@ -549,7 +554,7 @@ impl Display for LuaName {
     }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Debug)]
 pub enum Numeral {
     Int(&'static str),
     Float(&'static str),

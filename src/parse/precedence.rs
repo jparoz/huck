@@ -2,10 +2,10 @@ use std::collections::BTreeMap;
 
 use crate::ast::{Definition, Expr, Lhs, Name, Pattern, Term};
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub struct Precedence(pub Associativity, pub u8);
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub enum Associativity {
     Left,
     Right,
