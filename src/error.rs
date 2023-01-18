@@ -1,4 +1,4 @@
-use crate::{codegen, parse, types};
+use crate::{codegen, parse, resolve, types};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -10,6 +10,9 @@ pub enum Error {
 
     #[error("Parse error: {0}")]
     Parse(#[from] parse::Error),
+
+    #[error("Resolution error: {0}")]
+    Resolve(#[from] resolve::Error),
 
     #[error("Type error: {0}")]
     Type(#[from] types::Error),

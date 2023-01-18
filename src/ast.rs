@@ -10,7 +10,7 @@ use crate::parse::precedence::Precedence;
 /// into a single Definition struct for each function name.
 #[derive(Debug, PartialEq, Eq, Clone, Default)]
 pub struct Module {
-    pub path: Option<ModulePath>,
+    pub path: ModulePath,
     pub definitions: BTreeMap<Name, Definition>,
     pub type_definitions: BTreeMap<Name, TypeDefinition>,
     pub imports: BTreeMap<ModulePath, Vec<Name>>,

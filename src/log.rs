@@ -3,6 +3,7 @@
 #[rustfmt::skip] pub const METRICS   : &str = "   metrics";
 #[rustfmt::skip] pub const IMPORT    : &str = "    import";
 #[rustfmt::skip] pub const PARSE     : &str = "     parse";
+#[rustfmt::skip] pub const RESOLVE   : &str = "   resolve";
 #[rustfmt::skip] pub const TYPECHECK : &str = " typecheck";
 #[rustfmt::skip] pub const CODEGEN   : &str = "   codegen";
 

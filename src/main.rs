@@ -4,6 +4,7 @@ mod context;
 mod error;
 mod log;
 mod parse;
+mod resolve;
 mod scope;
 mod types;
 

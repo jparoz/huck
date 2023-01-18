@@ -7,6 +7,7 @@ use crate::ast::{Module, ModulePath, Name};
 use crate::error::Error as HuckError;
 use crate::log;
 use crate::parse::parse;
+use crate::resolve::resolve;
 use crate::scope::Scope;
 use crate::types::{ApplySub, Error as TypeError, Type};
 
@@ -368,32 +369,27 @@ impl Context {
         path_buf: Option<PathBuf>,
         is_prelude: bool,
     ) -> Result<(), HuckError> {
-        let module = parse(src)?;
-        log::trace!(log::PARSE, "Parsed module: {:?}", module);
-        let module_path = module.path.unwrap_or_default();
+        let (module_path, statements) = parse(src)?;
+        log::trace!(log::PARSE, "Parsed module {module_path}: {statements:?}");
+
+        let module = resolve(module_path, statements)?;
 
         if is_prelude {
             // @Errors: do a proper error instead of expect and asserts
-            let module_path = module
-                .path
-                .expect("the prelude should have the module name Prelude");
-            assert_eq!(module_path, ModulePath("Prelude"));
+            assert_eq!(
+                module_path,
+                ModulePath("Prelude"),
+                "the prelude should have the module name Prelude"
+            );
             assert!(
                 self.prelude.replace((module_path, module)).is_none(),
                 "can't define multiple preludes"
             );
-        } else if let Some(existing_module) = self.modules.insert(module_path, module) {
-            match existing_module.path {
-                Some(path) => return Err(HuckError::MultipleModules(format!("{}", path))),
-                None => {
-                    // @Todo @Checkme: I suspect this is unreachable
-                    return Err(HuckError::MultipleModules(
-                        "Main (default when no name given)".to_string(),
-                    ));
-                }
-            }
+        } else if self.modules.insert(module_path, module).is_some() {
+            return Err(HuckError::MultipleModules(format!("{}", module_path)));
         }
 
+        // @Todo @Cleanup: don't do this, because there should always be a file path.
         // If there is no file path, generate one from the module path.
         let path_buf = if let Some(path_buf) = path_buf {
             path_buf

@@ -1,3 +1,4 @@
+use crate::ast::ModulePath;
 use crate::utils::normalize;
 
 use crate::codegen;
@@ -17,6 +18,8 @@ pub fn transpile(huck: &'static str) -> Result<String, HuckError> {
         .include_prelude(concat!(env!("CARGO_MANIFEST_DIR"), "/huck/Prelude.hk"))
         .unwrap();
 
+    let huck = Box::leak(format!("module Test; {huck}").into_boxed_str());
+
     // Parse
     context.include_string(huck)?;
 
@@ -24,8 +27,8 @@ pub fn transpile(huck: &'static str) -> Result<String, HuckError> {
     context.typecheck()?;
 
     // Generate code
-    let scope = context.scopes.values().next().unwrap();
-    let lua = codegen::lua::generate(scope)?;
+    let scope = context.scopes.remove(&ModulePath("Test")).unwrap();
+    let lua = codegen::lua::generate(&scope)?;
 
     Ok(normalize(&lua))
 }

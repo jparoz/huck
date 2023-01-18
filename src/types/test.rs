@@ -1,4 +1,4 @@
-use crate::ast::Name;
+use crate::ast::{ModulePath, Name};
 use crate::context::Context;
 use crate::scope::Scope;
 use crate::types::Type;
@@ -8,9 +8,10 @@ fn typ_module(s: &'static str) -> Scope {
     let mut ctx = Context::new();
     ctx.include_prelude(concat!(env!("CARGO_MANIFEST_DIR"), "/huck/Prelude.hk"))
         .unwrap();
+    let s = Box::leak(format!("module Test; {s}").into_boxed_str());
     ctx.include_string(s).unwrap();
     ctx.typecheck().unwrap();
-    ctx.scopes.into_values().next().unwrap()
+    ctx.scopes.remove(&ModulePath("Test")).unwrap()
 }
 
 /// Infers the type of the given definition.
