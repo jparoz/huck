@@ -7,9 +7,13 @@ use crate::log;
 use crate::parse::precedence::{ApplyPrecedence, Precedence};
 
 impl Context {
-    pub fn resolve(&mut self) -> Result<(), Error> {
-        // @Todo @XXX: don't clone
-        for (path, mut statements) in self.parsed.clone() {
+    pub fn resolve(
+        &mut self,
+        parsed: BTreeMap<ModulePath, Vec<Statement>>,
+    ) -> Result<BTreeMap<ModulePath, Module>, Error> {
+        let mut modules = BTreeMap::new();
+
+        for (path, mut statements) in parsed {
             // Start the timer to measure how long resolution takes.
             let start_time = Instant::now();
 
@@ -151,10 +155,10 @@ impl Context {
                 start_time.elapsed()
             );
 
-            self.modules.insert(path, module);
+            modules.insert(path, module);
         }
 
-        Ok(())
+        Ok(modules)
     }
 }
 

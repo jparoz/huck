@@ -24,13 +24,13 @@ pub fn transpile(huck: &'static str) -> Result<String, HuckError> {
     context.include_string(huck)?;
 
     // Resolve
-    context.resolve()?;
+    let modules = context.resolve(context.parsed.clone())?;
 
     // Typecheck
-    context.typecheck()?;
+    let mut scopes = context.typecheck(modules)?;
 
     // Generate code
-    let scope = context.scopes.remove(&ModulePath("Test")).unwrap();
+    let scope = scopes.remove(&ModulePath("Test")).unwrap();
     let lua = codegen::lua::generate(&scope)?;
 
     Ok(normalize(&lua))

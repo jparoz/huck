@@ -6,7 +6,6 @@ use std::time::Instant;
 use crate::ast::{Module, ModulePath, Name, Statement};
 use crate::error::Error as HuckError;
 use crate::parse::parse;
-use crate::parse::precedence::Precedence;
 use crate::scope::Scope;
 use crate::types::{ApplySub, Error as TypeError, Type};
 use crate::{codegen, log};
@@ -28,12 +27,6 @@ pub struct Context {
 
     /// The freshly parsed statement lists for each module.
     pub parsed: BTreeMap<ModulePath, Vec<Statement>>,
-
-    /// Each Module in the context.
-    pub modules: BTreeMap<ModulePath, Module>,
-
-    /// Each Scope in the context.
-    pub scopes: BTreeMap<ModulePath, Scope>,
 
     /// The constraint generator.
     cg: ConstraintGenerator,
@@ -57,17 +50,18 @@ impl Context {
         // @Todo @Cleanup: Move lots of the state stored on Context to be variables here.
 
         // Resolve names
-        self.resolve()?;
+        // @XXX @Todo: don't clone
+        let modules = self.resolve(self.parsed.clone())?;
 
         // Typecheck
-        self.typecheck()?;
+        let scopes = self.typecheck(modules)?;
 
         // Generate code
         let mut generated = Vec::new();
 
         for (module_path, file_path) in self.file_paths {
             log::trace!(log::CODEGEN, "Generating code for module {module_path}");
-            let lua = codegen::lua::generate(&self.scopes[&module_path])?;
+            let lua = codegen::lua::generate(&scopes[&module_path])?;
             generated.push((file_path, lua));
         }
 
@@ -76,15 +70,17 @@ impl Context {
 
     /// Typechecks the given Huck context.
     // @Cleanup: not pub (? maybe needed in tests)
-    pub fn typecheck(&mut self) -> Result<(), TypeError> {
+    pub fn typecheck(
+        &mut self,
+        modules: BTreeMap<ModulePath, Module>,
+    ) -> Result<BTreeMap<ModulePath, Scope>, TypeError> {
         // Start the timer to measure how long typechecking takes.
         let start_time = Instant::now();
         log::info!(log::TYPECHECK, "Typechecking all modules...");
 
         // Clone the modules into a Vec.
         // @Todo @Cleanup @Checkme: do we need this? maybe not after refactoring Context::compile
-        let mut modules = self
-            .modules
+        let mut modules = modules
             .iter()
             .map(|(p, m)| (*p, m.clone()))
             .collect::<Vec<(ModulePath, Module)>>();
@@ -101,6 +97,8 @@ impl Context {
                 std::cmp::Ordering::Greater
             }
         });
+
+        let mut scopes = BTreeMap::new();
 
         for (module_path, module) in modules {
             log::trace!(log::TYPECHECK, "Typechecking: module {module_path};");
@@ -190,7 +188,7 @@ impl Context {
                     "Importing contents of Prelude into {module_path}"
                 );
                 let prelude_stem = self.file_stem(prelude_path);
-                let prelude_scope = &self.scopes[&prelude_path];
+                let prelude_scope: &Scope = &scopes[&prelude_path];
                 for name in prelude_scope
                     .definitions
                     .keys()
@@ -210,18 +208,18 @@ impl Context {
             self.bind_all_module_level_assumptions(&scope);
 
             // Add the scope to the context.
-            assert!(self.scopes.insert(module_path, scope).is_none());
+            assert!(scopes.insert(module_path, scope).is_none());
         }
 
         // Constrain any names which were promoted to the Context level (i.e. imported names).
-        self.bind_all_context_level_assumptions();
+        self.bind_all_context_level_assumptions(&scopes);
 
         // Solve the type constraints
         let soln = self.cg.solve()?;
 
         // @Todo: apply soln to the Scope directly, after impl ApplySub for Scope
         // Apply the solution to each Scope.
-        for scope in self.scopes.values_mut() {
+        for scope in scopes.values_mut() {
             log::info!(log::TYPECHECK, "module {}:", scope.module_path);
             for (name, (ref mut typ, _definition)) in scope.definitions.iter_mut() {
                 typ.apply(&soln);
@@ -235,7 +233,7 @@ impl Context {
             start_time.elapsed()
         );
 
-        Ok(())
+        Ok(scopes)
     }
 
     /// Binds all top level assumptions to the types found in their definition.
@@ -289,16 +287,16 @@ impl Context {
     // an import was unused and also didn't exist in the imported module.
     // By instead iterating over each scope's imported names,
     // we ensure that all imports exist, whether they're used or not.
-    fn bind_all_context_level_assumptions(&mut self) {
+    fn bind_all_context_level_assumptions(&mut self, scopes: &BTreeMap<ModulePath, Scope>) {
         log::trace!(
             log::TYPECHECK,
             "Emitting constraints about context-level assumptions:"
         );
 
-        for scope in self.scopes.values() {
+        for scope in scopes.values() {
             for (import_name, (import_path, _import_stem)) in scope.imports.iter() {
                 // Find the inferred type.
-                let import_scope = self.scopes.get(import_path).unwrap_or_else(|| {
+                let import_scope = scopes.get(import_path).unwrap_or_else(|| {
                     // @Errors: Scope error (nonexistent module)
                     panic!("scope error (nonexistent module): {import_path}")
                 });

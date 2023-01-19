@@ -10,9 +10,9 @@ fn typ_module(s: &'static str) -> Scope {
         .unwrap();
     let s = Box::leak(format!("module Test; {s}").into_boxed_str());
     ctx.include_string(s).unwrap();
-    ctx.resolve().unwrap();
-    ctx.typecheck().unwrap();
-    ctx.scopes.remove(&ModulePath("Test")).unwrap()
+    let modules = ctx.resolve(ctx.parsed.clone()).unwrap();
+    let mut scopes = ctx.typecheck(modules).unwrap();
+    scopes.remove(&ModulePath("Test")).unwrap()
 }
 
 /// Infers the type of the given definition.
