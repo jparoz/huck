@@ -123,7 +123,7 @@ id a = a;
 const a b = a;
 
 bar any 0 = 0;
-bar x y = x / y;
+bar x y = x // y;
 
 (* usesUnit : () -> String *)
 usesUnit () = "foo";
@@ -152,7 +152,7 @@ addIfOne [_, x] = x;
 tuple = (1, "hi");
 
 usesTuple : (Int, String) -> (Int, String);
-usesTuple (n, s) = (n*2, s .. s);
+usesTuple (n, s) = (n*2, concat s s);
 
 callsTheTupleFunctionA = usesTuple (123, "cat");
 callsTheTupleFunctionB = usesTuple tuple;

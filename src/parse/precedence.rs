@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::ast::{Definition, Expr, Lhs, Name, Pattern, Term};
+use crate::ast::{Assignment, Definition, Expr, Lhs, Name, Pattern, Term};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub struct Precedence(pub Associativity, pub u8);
@@ -18,10 +18,16 @@ pub trait ApplyPrecedence {
 
 impl ApplyPrecedence for Definition {
     fn apply(&mut self, precs: &BTreeMap<Name, Precedence>) {
-        for (lhs, rhs) in self.assignments.iter_mut() {
-            lhs.apply(precs);
-            rhs.apply(precs);
-        }
+        self.assignments.iter_mut().for_each(|a| a.apply(precs));
+    }
+}
+
+impl ApplyPrecedence for Assignment {
+    fn apply(&mut self, precs: &BTreeMap<Name, Precedence>) {
+        // LHS
+        self.0.apply(precs);
+        // RHS
+        self.1.apply(precs);
     }
 }
 

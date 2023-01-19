@@ -10,7 +10,7 @@ luaCallMethodDelete : forall a. a -> IO ();
 luaCallMethodDelete obj = lua { obj:delete() };
 
 banana : Int;
-banana = 123 + 456;
+banana = 123 + 2 * 456;
 
 myTrue = True;
 

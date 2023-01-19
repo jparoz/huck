@@ -22,7 +22,14 @@ const PREFIX: &str = "_HUCK";
 pub fn generate(scope: &Scope) -> Result<String> {
     let start_time = Instant::now();
 
-    let generated = CodeGenerator::new(scope).generate();
+    let generated = CodeGenerator::new(scope).generate()?;
+
+    log::trace!(
+        log::CODEGEN,
+        "Generated module {}:\n{}",
+        scope.module_path,
+        generated
+    );
 
     log::info!(
         log::METRICS,
@@ -30,7 +37,8 @@ pub fn generate(scope: &Scope) -> Result<String> {
         scope.module_path,
         start_time.elapsed()
     );
-    generated
+
+    Ok(generated)
 }
 
 type Result<T> = std::result::Result<T, CodegenError>;

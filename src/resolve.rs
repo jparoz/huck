@@ -54,31 +54,60 @@ pub fn resolve(path: ModulePath, mut statements: Vec<Statement>) -> Result<Modul
                     ForeignImportItem::Rename(lua_name, name, ts) => (lua_name, name, ts),
                 })),
 
-            Statement::AssignmentWithoutType((lhs, expr)) => {
-                module
+            Statement::Precedence(name, prec) => {
+                precs.insert(name.clone(), prec);
+                // If there was already a precedence for this name, that's an error.
+                if let Some(previous_prec) = module
                     .definitions
-                    .entry(lhs.name().clone())
+                    .entry(name.clone())
                     .or_default()
-                    .assignments
-                    .push((lhs, expr));
+                    .precedence
+                    .replace(prec)
+                {
+                    return Err(Error::MultiplePrecs(name, prec, previous_prec));
+                }
             }
 
-            Statement::AssignmentWithType(ts, (lhs, expr)) => {
-                let defn = module.definitions.entry(lhs.name().clone()).or_default();
+            Statement::AssignmentWithoutType(mut assign) => {
+                // Modify this assignment to take precedence statements into account.
+                // @Note: we've already processed all the precedence statements,
+                //        because of the sorted processing order.
+                assign.apply(&precs);
+
+                module
+                    .definitions
+                    .entry(assign.0.name().clone())
+                    .or_default()
+                    .assignments
+                    .push(assign);
+            }
+
+            Statement::AssignmentWithType(ts, mut assign) => {
+                // Modify this assignment to take precedence statements into account.
+                // @Note: we've already processed all the precedence statements,
+                //        because of the sorted processing order.
+                assign.apply(&precs);
+
+                let defn = module
+                    .definitions
+                    .entry(assign.0.name().clone())
+                    .or_default();
 
                 // If there was already an explicit for this name, that's an error.
                 if let Some(previous_ts) = defn.explicit_type.replace(ts.clone()) {
                     return Err(Error::MultipleTypes(
-                        lhs.name().clone(),
+                        assign.0.name().clone(),
                         // @Cleanup: don't have this dodgy whitespace
                         format!("\n    {:?}\n    {:?}", ts, previous_ts),
                     ));
                 }
 
-                defn.assignments.push((lhs, expr));
+                defn.assignments.push(assign);
             }
 
             Statement::TypeAnnotation(name, ts) => {
+                // @Future @TypeBinops: handle precedence here as well
+
                 // If there was already an explicit for this name, that's an error.
                 if let Some(previous_ts) = module
                     .definitions
@@ -95,20 +124,6 @@ pub fn resolve(path: ModulePath, mut statements: Vec<Statement>) -> Result<Modul
                 }
             }
 
-            Statement::Precedence(name, prec) => {
-                precs.insert(name.clone(), prec);
-                // If there was already a precedence for this name, that's an error.
-                if let Some(previous_prec) = module
-                    .definitions
-                    .entry(name.clone())
-                    .or_default()
-                    .precedence
-                    .replace(prec)
-                {
-                    return Err(Error::MultiplePrecs(name, prec, previous_prec));
-                }
-            }
-
             Statement::TypeDefinition(type_defn) => {
                 if let Some(first_defn) = module
                     .type_definitions
@@ -120,12 +135,6 @@ pub fn resolve(path: ModulePath, mut statements: Vec<Statement>) -> Result<Modul
 
             Statement::ForeignExport(lua_lhs, expr) => module.foreign_exports.push((lua_lhs, expr)),
         }
-    }
-
-    // Modify the AST to take precedence statements into account.
-    log::trace!(log::RESOLVE, "Applying precedence statements to the AST");
-    for defn in module.definitions.values_mut() {
-        defn.apply(&precs);
     }
 
     log::info!(
