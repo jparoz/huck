@@ -6,10 +6,11 @@ use crate::types::Type;
 /// Typechecks the given module and returns the resulting Scope.
 fn typ_module(s: &'static str) -> Scope {
     let mut ctx = Context::new();
-    ctx.include_prelude(concat!(env!("CARGO_MANIFEST_DIR"), "/huck/Prelude.hk"))
+    ctx.include_file(concat!(env!("CARGO_MANIFEST_DIR"), "/huck/Prelude.hk"))
         .unwrap();
     let s = Box::leak(format!("module Test; {s}").into_boxed_str());
     ctx.include_string(s).unwrap();
+    ctx.resolve().unwrap();
     ctx.typecheck().unwrap();
     ctx.scopes.remove(&ModulePath("Test")).unwrap()
 }

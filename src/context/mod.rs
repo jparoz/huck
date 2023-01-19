@@ -3,10 +3,10 @@ use std::mem;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use crate::ast::{Module, ModulePath, Name};
+use crate::ast::{Module, ModulePath, Name, Statement};
 use crate::error::Error as HuckError;
 use crate::parse::parse;
-use crate::resolve::resolve;
+use crate::parse::precedence::Precedence;
 use crate::scope::Scope;
 use crate::types::{ApplySub, Error as TypeError, Type};
 use crate::{codegen, log};
@@ -23,14 +23,14 @@ pub use constraint::{Constraint, ConstraintGenerator};
 #[derive(Debug, Default)]
 pub struct Context {
     /// The file path of each included file in the context.
+    /// For each entry in this map, a related entry will be generated in the other maps.
     pub file_paths: BTreeMap<ModulePath, PathBuf>,
 
-    /// Each Module in the context.
-    /// For each entry in this map, a related entry will be generated in the other maps.
-    modules: BTreeMap<ModulePath, Module>,
+    /// The freshly parsed statement lists for each module.
+    pub parsed: BTreeMap<ModulePath, Vec<Statement>>,
 
-    /// The Prelude module.
-    prelude: Option<(ModulePath, Module)>,
+    /// Each Module in the context.
+    pub modules: BTreeMap<ModulePath, Module>,
 
     /// Each Scope in the context.
     pub scopes: BTreeMap<ModulePath, Scope>,
@@ -54,6 +54,11 @@ impl Context {
     // @Future: we could incrementally process modules somehow,
     // rather than just having this monolithic all-or-nothing compile step.
     pub fn compile(mut self) -> Result<Vec<(PathBuf, String)>, HuckError> {
+        // @Todo @Cleanup: Move lots of the state stored on Context to be variables here.
+
+        // Resolve names
+        self.resolve()?;
+
         // Typecheck
         self.typecheck()?;
 
@@ -76,19 +81,28 @@ impl Context {
         let start_time = Instant::now();
         log::info!(log::TYPECHECK, "Typechecking all modules...");
 
-        // First, typecheck the Prelude;
-        // then all the other modules.
-        // Has to be done in this order
-        // so that the Prelude can be imported into other modules.
-        for (module_path, module) in self
-            .prelude
+        // Clone the modules into a Vec.
+        // @Todo @Cleanup @Checkme: do we need this? maybe not after refactoring Context::compile
+        let mut modules = self
+            .modules
             .iter()
-            // This changes from &(p, m) to (&p, &m)
-            .map(|(p, m)| (p, m))
-            .chain(self.modules.iter())
             .map(|(p, m)| (*p, m.clone()))
-            .collect::<Vec<(ModulePath, Module)>>()
-        {
+            .collect::<Vec<(ModulePath, Module)>>();
+
+        // Sort the modules so that the prelude is typechecked first.
+        // Has to be done in this order
+        // so that the implicit Prelude import statement
+        // can be imported into other modules.
+        let prelude_path = ModulePath("Prelude");
+        modules.sort_by(|(a, _), (_b, _)| {
+            if a == &prelude_path {
+                std::cmp::Ordering::Less
+            } else {
+                std::cmp::Ordering::Greater
+            }
+        });
+
+        for (module_path, module) in modules {
             log::trace!(log::TYPECHECK, "Typechecking: module {module_path};");
             // Set the scope's module path.
             let mut scope = Scope::new(module_path);
@@ -342,72 +356,23 @@ impl Context {
         let src = std::fs::read_to_string(&file_path)?;
         let src = leak_string(src);
 
-        self.include(src, Some(file_path.as_ref().to_path_buf()), false)
+        self.include(src, Some(file_path.as_ref().to_path_buf()))
     }
 
     #[cfg(test)]
     /// Adds the given string to the Context, treating it as anonymous input e.g. REPL input.
     pub fn include_string(&mut self, src: &'static str) -> Result<(), HuckError> {
-        self.include(src, None, false)
-    }
-
-    /// Adds the given file to the Context as the Prelude.
-    pub fn include_prelude<P>(&mut self, file_path: P) -> Result<(), HuckError>
-    where
-        P: AsRef<Path>,
-    {
-        log::info!(
-            log::IMPORT,
-            "Adding {path} to the context as prelude",
-            path = file_path.as_ref().display()
-        );
-
-        match file_path.as_ref().extension() {
-            Some(ex) if ex == "hk" => (),
-            Some(_) => log::warn!(
-                log::IMPORT,
-                "unknown filetype included: {:?}",
-                file_path.as_ref()
-            ),
-            _ => log::warn!(
-                log::IMPORT,
-                "file without extension included: {:?}",
-                file_path.as_ref()
-            ),
-        }
-
-        let src = std::fs::read_to_string(&file_path)?;
-        let src = leak_string(src);
-
-        self.include(src, Some(file_path.as_ref().to_path_buf()), true)
+        self.include(src, None)
     }
 
     /// Actually includes the module in the Context.
     /// Called by [`include_file`][Context::include_file]
     /// and [`include_string`][Context::include_string].
-    fn include(
-        &mut self,
-        src: &'static str,
-        path_buf: Option<PathBuf>,
-        is_prelude: bool,
-    ) -> Result<(), HuckError> {
+    fn include(&mut self, src: &'static str, path_buf: Option<PathBuf>) -> Result<(), HuckError> {
         let (module_path, statements) = parse(src)?;
         log::trace!(log::PARSE, "Parsed module {module_path}: {statements:?}");
 
-        let module = resolve(module_path, statements)?;
-
-        if is_prelude {
-            // @Errors: do a proper error instead of expect and asserts
-            assert_eq!(
-                module_path,
-                ModulePath("Prelude"),
-                "the prelude should have the module name Prelude"
-            );
-            assert!(
-                self.prelude.replace((module_path, module)).is_none(),
-                "can't define multiple preludes"
-            );
-        } else if self.modules.insert(module_path, module).is_some() {
+        if self.parsed.insert(module_path, statements).is_some() {
             return Err(HuckError::MultipleModules(format!("{}", module_path)));
         }
 

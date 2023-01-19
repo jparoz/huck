@@ -64,7 +64,7 @@ impl Definition {
 
 /// A Statement is a sum type for any of the top-level Huck constructs.
 /// The order here is important! See [`resolve::resolve`](crate::resolve::resolve).
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum Statement {
     // @Note: Import and ForeignImport MUST come before assignments.
     Import(ModulePath, Vec<Name>),

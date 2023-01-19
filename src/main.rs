@@ -74,7 +74,7 @@ fn do_main() -> Result<(), HuckError> {
     let parse_start = Instant::now();
 
     // Add the Prelude to the context.
-    context.include_prelude(args.prelude)?;
+    context.include_file(args.prelude)?;
 
     // Add all the given files to the Context.
     for filename in args.files {

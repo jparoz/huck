@@ -15,13 +15,16 @@ pub fn transpile(huck: &'static str) -> Result<String, HuckError> {
 
     // Include the prelude
     context
-        .include_prelude(concat!(env!("CARGO_MANIFEST_DIR"), "/huck/Prelude.hk"))
+        .include_file(concat!(env!("CARGO_MANIFEST_DIR"), "/huck/Prelude.hk"))
         .unwrap();
 
     let huck = Box::leak(format!("module Test; {huck}").into_boxed_str());
 
     // Parse
     context.include_string(huck)?;
+
+    // Resolve
+    context.resolve()?;
 
     // Typecheck
     context.typecheck()?;
