@@ -5,11 +5,11 @@ use std::time::Instant;
 
 use crate::ast::{Module, ModulePath, Name};
 use crate::error::Error as HuckError;
-use crate::log;
 use crate::parse::parse;
 use crate::resolve::resolve;
 use crate::scope::Scope;
 use crate::types::{ApplySub, Error as TypeError, Type};
+use crate::{codegen, log};
 
 mod constraint;
 
@@ -48,7 +48,29 @@ impl Context {
         Self::default()
     }
 
+    /// Does every step necessary to take the added modules to compiled state.
+    /// Returns a Vec of tuples of originating Huck file paths, and the resulting Lua as a String.
+    //
+    // @Future: we could incrementally process modules somehow,
+    // rather than just having this monolithic all-or-nothing compile step.
+    pub fn compile(mut self) -> Result<Vec<(PathBuf, String)>, HuckError> {
+        // Typecheck
+        self.typecheck()?;
+
+        // Generate code
+        let mut generated = Vec::new();
+
+        for (module_path, file_path) in self.file_paths {
+            log::trace!(log::CODEGEN, "Generating code for module {module_path}");
+            let lua = codegen::lua::generate(&self.scopes[&module_path])?;
+            generated.push((file_path, lua));
+        }
+
+        Ok(generated)
+    }
+
     /// Typechecks the given Huck context.
+    // @Cleanup: not pub (? maybe needed in tests)
     pub fn typecheck(&mut self) -> Result<(), TypeError> {
         // Start the timer to measure how long typechecking takes.
         let start_time = Instant::now();

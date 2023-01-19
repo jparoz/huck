@@ -87,15 +87,12 @@ fn do_main() -> Result<(), HuckError> {
         parse_start.elapsed()
     );
 
-    // Typecheck
-    context.typecheck()?;
-
-    // Generate code
-    for (module_path, mut file_path) in context.file_paths {
-        log::info!(log::CODEGEN, "Generating code for module {module_path}");
-        let lua = codegen::lua::generate(&context.scopes[&module_path])?;
+    // We're done adding modules, so now we can compile.
+    for (mut file_path, lua) in context.compile()? {
+        // @Todo: make this optional via command line flag
         let lua = utils::normalize(&lua);
 
+        // Write the compiled Lua to a .lua file.
         assert!(file_path.set_extension("lua"));
         log::info!(
             log::CODEGEN,
