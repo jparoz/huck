@@ -434,13 +434,13 @@ fn upper_name(input: &'static str) -> IResult<&'static str, Name> {
     ws(map(upper_ident, |s| Name::Ident(s.to_string())))(input)
 }
 
-fn lua_name(input: &'static str) -> IResult<&'static str, LuaName> {
+fn lua_name(input: &'static str) -> IResult<&'static str, ForeignName> {
     ws(map(
         recognize(nom_tuple((
             satisfy(char::is_alphabetic),
             many0(satisfy(char::is_alphanumeric)),
         ))),
-        |s: &'static str| LuaName(s.to_string()),
+        |s: &'static str| ForeignName(s.to_string()),
     ))(input)
 }
 

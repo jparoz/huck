@@ -14,7 +14,7 @@ pub struct Module {
     pub definitions: BTreeMap<Name, Definition>,
     pub type_definitions: BTreeMap<Name, TypeDefinition>,
     pub imports: BTreeMap<ModulePath, Vec<Name>>,
-    pub foreign_imports: BTreeMap<&'static str, Vec<(LuaName, Name, TypeScheme)>>,
+    pub foreign_imports: BTreeMap<&'static str, Vec<(ForeignName, Name, TypeScheme)>>,
     pub foreign_exports: Vec<(&'static str, Expr)>,
 }
 
@@ -22,6 +22,7 @@ pub struct Module {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ModulePath(pub &'static str);
 
+// @Cleanup @Todo @DeleteMe
 impl Default for ModulePath {
     fn default() -> Self {
         ModulePath("Main")
@@ -89,7 +90,7 @@ pub enum Statement {
 
 pub type Assignment = (Lhs, Expr);
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub enum Name {
     // @Todo @Cleanup: change to &'static str
     Ident(String),
@@ -112,7 +113,7 @@ impl Display for Name {
     }
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub enum Lhs {
     Func { name: Name, args: Vec<Pattern> },
     Binop { a: Pattern, op: Name, b: Pattern },
@@ -148,8 +149,8 @@ impl Display for Lhs {
         match self {
             Lhs::Func { name, args } => {
                 match name {
-                    Name::Ident(s) => write!(f, "{}", s)?,
-                    Name::Binop(s) => write!(f, "({})", s)?,
+                    Name::Ident(s) => write!(f, "{s}")?,
+                    Name::Binop(s) => write!(f, "({s})")?,
                     Name::Lambda => unreachable!(),
                 }
                 for arg in args.iter() {
@@ -170,7 +171,7 @@ impl Display for Lhs {
     }
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub enum Pattern {
     Bind(&'static str),
     List(Vec<Pattern>),
@@ -505,13 +506,13 @@ impl Display for Term {
 
 /// This represents an explicitly-written type scheme, i.e. the RHS of a `:`.
 /// e.g. in `id : forall a. a;` the TypeScheme represents `forall a. a`.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub struct TypeScheme {
     pub vars: Vec<&'static str>, // @Checkme: &str, or maybe Name?
     pub typ: TypeExpr,
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub enum TypeExpr {
     Term(TypeTerm),
     App(Box<TypeExpr>, Box<TypeExpr>),
@@ -519,7 +520,7 @@ pub enum TypeExpr {
     // @Future @TypeBinops: type-level binops
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub enum TypeTerm {
     Concrete(&'static str),
     Var(&'static str),
@@ -542,13 +543,13 @@ pub type ConstructorDefinition = (Name, Vec<TypeTerm>);
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum ForeignImportItem {
     SameName(Name, TypeScheme),
-    Rename(LuaName, Name, TypeScheme),
+    Rename(ForeignName, Name, TypeScheme),
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
-pub struct LuaName(pub String);
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
+pub struct ForeignName(pub String);
 
-impl Display for LuaName {
+impl Display for ForeignName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.0)
     }

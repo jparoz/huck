@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::ast::{Definition, Expr, LuaName, ModulePath, Name};
+use crate::ast::{Definition, Expr, ForeignName, ModulePath, Name};
 use crate::types::{Type, TypeDefinition, TypeScheme};
 
 #[derive(Debug, Default)]
@@ -16,7 +16,7 @@ pub struct Scope {
     /// Mapping from a name to its originating foreign module's require string,
     /// the corresponding Lua name,
     /// and the type scheme given at the import.
-    pub foreign_imports: BTreeMap<Name, (&'static str, LuaName, TypeScheme)>,
+    pub foreign_imports: BTreeMap<Name, (&'static str, ForeignName, TypeScheme)>,
 
     /// Vec of Lua assignments to make at the end of the module.
     pub foreign_exports: Vec<(&'static str, Expr)>,

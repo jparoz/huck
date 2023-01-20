@@ -11,8 +11,9 @@ use crate::types::{ApplySub, Error as TypeError, Type};
 use crate::{codegen, log};
 
 mod constraint;
+use constraint::ConstraintGenerator;
 
-pub use constraint::{Constraint, ConstraintGenerator};
+pub use constraint::Constraint;
 
 /// Context is the structure which manages module imports.
 /// It contains some modules, manages references between modules, and prepares for typechecking.
@@ -59,6 +60,7 @@ impl Context {
         // Generate code
         let mut generated = Vec::new();
 
+        // @Todo @Cleanup: move this into codegen (?)
         for (module_path, file_path) in self.file_paths {
             log::trace!(log::CODEGEN, "Generating code for module {module_path}");
             let lua = codegen::lua::generate(&scopes[&module_path])?;

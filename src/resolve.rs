@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::time::Instant;
 
-use crate::ast::{ForeignImportItem, LuaName, Module, ModulePath, Name, Statement};
+use crate::ast::{ForeignImportItem, ForeignName, Module, ModulePath, Name, Statement};
 use crate::context::Context;
 use crate::log;
 use crate::parse::precedence::{ApplyPrecedence, Precedence};
@@ -59,7 +59,7 @@ impl Context {
                         .or_default()
                         .extend(import_items.into_iter().map(|item| match item {
                             ForeignImportItem::SameName(name, ts) => {
-                                (LuaName(name.as_str().to_string()), name, ts)
+                                (ForeignName(name.as_str().to_string()), name, ts)
                             }
                             ForeignImportItem::Rename(lua_name, name, ts) => (lua_name, name, ts),
                         })),
