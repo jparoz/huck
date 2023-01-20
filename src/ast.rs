@@ -96,6 +96,8 @@ pub enum Name {
     Ident(String),
     Binop(String),
     Lambda,
+
+    Qualified(ImportSource, String),
 }
 
 impl Name {
@@ -103,6 +105,9 @@ impl Name {
         match self {
             Name::Ident(s) | Name::Binop(s) => s,
             Name::Lambda => "<lambda>",
+            Name::Qualified(source, s) => {
+                todo!("as_str can't be implemented for qualified names @Fixme: {source:?}.{s}")
+            }
         }
     }
 }
@@ -142,6 +147,13 @@ impl Lhs {
             Lhs::Binop { a, b, .. } => vec![a.clone(), b.clone()],
         }
     }
+
+    pub fn names_bound(&self) -> Vec<Name> {
+        self.args()
+            .into_iter()
+            .flat_map(|pat| pat.names_bound())
+            .collect()
+    }
 }
 
 impl Display for Lhs {
@@ -152,6 +164,8 @@ impl Display for Lhs {
                     Name::Ident(s) => write!(f, "{s}")?,
                     Name::Binop(s) => write!(f, "({s})")?,
                     Name::Lambda => unreachable!(),
+                    // @Fixme: don't use Debug
+                    Name::Qualified(source, s) => write!(f, "{source:?}.{s}")?,
                 }
                 for arg in args.iter() {
                     write!(f, " {}", arg)?;
@@ -193,7 +207,7 @@ pub enum Pattern {
 
 impl Pattern {
     /// Returns all the names which are bound by the pattern.
-    fn names_bound(&self) -> Vec<Name> {
+    pub fn names_bound(&self) -> Vec<Name> {
         match self {
             Pattern::Bind(s) => vec![Name::Ident(s.to_string())],
 
@@ -555,7 +569,34 @@ impl Display for ForeignName {
     }
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Debug)]
+/// A ForeignPath describes how to access a Lua function from Huck.
+/// It is a sum of a string to be given to `require` in Lua,
+/// and the table index to be used on the table returned from `require`,
+/// according to common Lua module practices.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+pub struct ForeignPath {
+    pub require: &'static str,
+    pub name: ForeignName,
+}
+
+impl Display for ForeignPath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, r#"require({})["{}"]"#, self.require, self.name)
+    }
+}
+
+/// An ImportSource describes where to find a name, whether it's a Huck or foreign import.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+pub enum ImportSource {
+    /// From a Huck module
+    Module(ModulePath),
+    /// From a foreign (Lua) module
+    Foreign(ForeignPath),
+    /// From e.g. a let binding
+    Local,
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub enum Numeral {
     Int(&'static str),
     Float(&'static str),

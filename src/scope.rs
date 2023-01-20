@@ -43,4 +43,12 @@ impl Scope {
             .cloned()
             .or_else(|| self.definitions.get(name).map(|(typ, _)| typ.clone()))
     }
+
+    pub fn get_path(&self, name: &Name) -> Option<ModulePath> {
+        self.imports
+            .get(name)
+            .map(|(path, _)| *path)
+            .or_else(|| self.definitions.get(name).map(|_| self.module_path))
+            .or_else(|| self.constructors.get(name).map(|_| self.module_path))
+    }
 }
