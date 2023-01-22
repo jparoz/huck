@@ -2,10 +2,10 @@ mod ast;
 mod codegen;
 mod context;
 mod error;
+mod generatable_module;
 mod log;
 mod parse;
 mod resolve;
-mod scope;
 mod types;
 
 #[allow(dead_code)]

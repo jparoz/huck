@@ -5,8 +5,8 @@ use std::time::Instant;
 
 use crate::ast::{Module, ModulePath, Name, Statement};
 use crate::error::Error as HuckError;
+use crate::generatable_module::GeneratableModule;
 use crate::parse::parse;
-use crate::scope::Scope;
 use crate::types::{ApplySub, Error as TypeError, Type};
 use crate::{codegen, log};
 
@@ -33,7 +33,7 @@ pub struct Context {
     cg: ConstraintGenerator,
 
     /// These are assumptions made about imported names,
-    /// so need to be handled at Context level rather than Scope level.
+    /// so need to be handled at Context level rather than module level.
     assumptions: BTreeMap<(ModulePath, Name), Vec<Type>>,
 }
 
@@ -55,7 +55,7 @@ impl Context {
         let modules = self.resolve(self.parsed.clone())?;
 
         // Typecheck
-        let scopes = self.typecheck(modules)?;
+        let gen_mods = self.typecheck(modules)?;
 
         // Generate code
         let mut generated = Vec::new();
@@ -63,7 +63,7 @@ impl Context {
         // @Todo @Cleanup: move this into codegen (?)
         for (module_path, file_path) in self.file_paths {
             log::trace!(log::CODEGEN, "Generating code for module {module_path}");
-            let lua = codegen::lua::generate(&scopes[&module_path])?;
+            let lua = codegen::lua::generate(&gen_mods[&module_path])?;
             generated.push((file_path, lua));
         }
 
@@ -75,7 +75,7 @@ impl Context {
     pub fn typecheck(
         &mut self,
         modules: BTreeMap<ModulePath, Module>,
-    ) -> Result<BTreeMap<ModulePath, Scope>, TypeError> {
+    ) -> Result<BTreeMap<ModulePath, GeneratableModule>, TypeError> {
         // Start the timer to measure how long typechecking takes.
         let start_time = Instant::now();
         log::info!(log::TYPECHECK, "Typechecking all modules...");
@@ -100,12 +100,12 @@ impl Context {
             }
         });
 
-        let mut scopes = BTreeMap::new();
+        let mut gen_mods = BTreeMap::new();
 
         for (module_path, module) in modules {
             log::trace!(log::TYPECHECK, "Typechecking: module {module_path};");
-            // Set the scope's module path.
-            let mut scope = Scope::new(module_path);
+            // Set the new GeneratableModule's path.
+            let mut gen_mod = GeneratableModule::new(module_path);
 
             // Generate constraints for each definition, while keeping track of inferred types
             for (name, defn) in module.definitions {
@@ -119,7 +119,7 @@ impl Context {
 
                 // @Note: guaranteed to be None,
                 // because we're iterating over a BTreeMap.
-                assert!(scope.definitions.insert(name, (typ, defn)).is_none());
+                assert!(gen_mod.definitions.insert(name, (typ, defn)).is_none());
             }
 
             // Generate constraints for each type definition
@@ -127,14 +127,14 @@ impl Context {
                 let type_defn = self.cg.generate_type_definition(&ast_type_defn);
 
                 for (constr_name, constr_type) in type_defn.constructors.iter() {
-                    scope
+                    gen_mod
                         .constructors
                         .insert(constr_name.clone(), constr_type.clone());
                 }
 
                 // @Note: guaranteed to be None,
                 // because we're iterating over a BTreeMap.
-                assert!(scope
+                assert!(gen_mod
                     .type_definitions
                     .insert(type_defn.name.clone(), type_defn)
                     .is_none());
@@ -148,7 +148,7 @@ impl Context {
                         "Inserting into scope of {module_path}: import {path} ({name})"
                     );
                     // @Todo @Checkme: name clashes?
-                    assert!(scope
+                    assert!(gen_mod
                         .imports
                         .insert(name, (path, self.file_stem(path)))
                         .is_none());
@@ -164,7 +164,7 @@ impl Context {
                          foreign import {require_string} ({lua_name} as {huck_name})"
                     );
                     // @Todo @Checkme: name clashes?
-                    assert!(scope
+                    assert!(gen_mod
                         .foreign_imports
                         .insert(
                             huck_name,
@@ -179,7 +179,7 @@ impl Context {
             }
 
             // Insert all foreign exports into the scope.
-            scope.foreign_exports.extend(module.foreign_exports);
+            gen_mod.foreign_exports.extend(module.foreign_exports);
 
             // If there is no explicit Prelude import already,
             // import everything in Prelude.
@@ -190,14 +190,14 @@ impl Context {
                     "Importing contents of Prelude into {module_path}"
                 );
                 let prelude_stem = self.file_stem(prelude_path);
-                let prelude_scope: &Scope = &scopes[&prelude_path];
-                for name in prelude_scope
+                let prelude_gm: &GeneratableModule = &gen_mods[&prelude_path];
+                for name in prelude_gm
                     .definitions
                     .keys()
-                    .chain(prelude_scope.constructors.keys())
+                    .chain(prelude_gm.constructors.keys())
                 {
                     // @Todo @Checkme @Errors @Warn: name clashes?
-                    assert!(scope
+                    assert!(gen_mod
                         .imports
                         .insert(name.clone(), (prelude_path, prelude_stem.clone()))
                         .is_none());
@@ -207,25 +207,26 @@ impl Context {
             // Polymorphically bind all top-level names.
             // If any assumptions were found to be imported,
             // their assumptions are promoted to Context level by this method.
-            self.bind_all_module_level_assumptions(&scope);
+            self.bind_all_module_level_assumptions(&gen_mod);
 
-            // Add the scope to the context.
-            assert!(scopes.insert(module_path, scope).is_none());
+            // Add the GeneratableModule to the context.
+            assert!(gen_mods.insert(module_path, gen_mod).is_none());
         }
 
         // Constrain any names which were promoted to the Context level (i.e. imported names).
-        self.bind_all_context_level_assumptions(&scopes);
+        self.bind_all_context_level_assumptions(&gen_mods);
 
         // Solve the type constraints
         let soln = self.cg.solve()?;
 
-        // @Todo: apply soln to the Scope directly, after impl ApplySub for Scope
-        // Apply the solution to each Scope.
-        for scope in scopes.values_mut() {
-            log::info!(log::TYPECHECK, "module {}:", scope.module_path);
-            for (name, (ref mut typ, _definition)) in scope.definitions.iter_mut() {
+        // @Todo: apply soln to the GeneratableModule directly,
+        // after impl ApplySub for GeneratableModule
+        // Apply the solution to each GeneratableModule.
+        for module in gen_mods.values_mut() {
+            log::info!(log::TYPECHECK, "module {}:", module.path);
+            for (name, (ref mut typ, _definition)) in module.definitions.iter_mut() {
                 typ.apply(&soln);
-                log::info!(log::TYPECHECK, "  Inferred type for {} : {}", name, typ);
+                log::info!(log::TYPECHECK, "  Inferred type for {name} : {typ}");
             }
         }
 
@@ -235,7 +236,7 @@ impl Context {
             start_time.elapsed()
         );
 
-        Ok(scopes)
+        Ok(gen_mods)
     }
 
     /// Binds all top level assumptions to the types found in their definition.
@@ -243,27 +244,27 @@ impl Context {
     /// If the name isn't defined in this module, check if it's imported;
     /// if it is, then this assumption is promoted to Context level
     /// by inserting it into the Context.
-    pub fn bind_all_module_level_assumptions(&mut self, scope: &Scope) {
+    pub fn bind_all_module_level_assumptions(&mut self, module: &GeneratableModule) {
         log::trace!(log::TYPECHECK, "Emitting constraints about assumptions:");
 
         let mut assumptions = BTreeMap::new();
         mem::swap(&mut assumptions, &mut self.cg.assumptions);
 
         for (name, assumed_types) in assumptions {
-            if let Some(typ) = scope.get_type(&name) {
+            if let Some(typ) = module.get_type(&name) {
                 // This means that it was defined in this module.
                 for assumed_type in assumed_types {
                     self.cg.implicit_instance(assumed_type, typ.clone());
                 }
             } else if let Some((_require_string, _lua_name, type_scheme)) =
-                scope.foreign_imports.get(&name)
+                module.foreign_imports.get(&name)
             {
                 // This means that the name was imported from a foreign (Lua) module;
                 // this means that the Huck author gave an explicit type signature at the import.
                 for assumed_type in assumed_types {
                     self.cg.explicit_instance(assumed_type, type_scheme.clone());
                 }
-            } else if let Some((path, _stem)) = scope.imports.get(&name) {
+            } else if let Some((path, _stem)) = module.imports.get(&name) {
                 // This means that the name was imported from another Huck module;
                 // so we need to resolve it at Context level later.
                 // We do this by pushing it into self.assumptions (i.e. the Context)
@@ -287,22 +288,25 @@ impl Context {
     // by iterating over self.assumptions and binding the names as they appear there.
     // However, this didn't catch the error where
     // an import was unused and also didn't exist in the imported module.
-    // By instead iterating over each scope's imported names,
+    // By instead iterating over each modules's imported names,
     // we ensure that all imports exist, whether they're used or not.
-    fn bind_all_context_level_assumptions(&mut self, scopes: &BTreeMap<ModulePath, Scope>) {
+    fn bind_all_context_level_assumptions(
+        &mut self,
+        modules: &BTreeMap<ModulePath, GeneratableModule>,
+    ) {
         log::trace!(
             log::TYPECHECK,
             "Emitting constraints about context-level assumptions:"
         );
 
-        for scope in scopes.values() {
-            for (import_name, (import_path, _import_stem)) in scope.imports.iter() {
+        for module in modules.values() {
+            for (import_name, (import_path, _import_stem)) in module.imports.iter() {
                 // Find the inferred type.
-                let import_scope = scopes.get(import_path).unwrap_or_else(|| {
+                let import_module = modules.get(import_path).unwrap_or_else(|| {
                     // @Errors: Scope error (nonexistent module)
                     panic!("scope error (nonexistent module): {import_path}")
                 });
-                let typ = import_scope.get_type(import_name).unwrap_or_else(|| {
+                let typ = import_module.get_type(import_name).unwrap_or_else(|| {
                     // @Errors: Scope error (nonexistent import)
                     panic!("scope error (imported name doesn't exist): {import_path}.{import_name}")
                 });

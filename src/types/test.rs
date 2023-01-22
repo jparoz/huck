@@ -1,18 +1,18 @@
 use crate::ast::{ModulePath, Name};
 use crate::context::Context;
-use crate::scope::Scope;
+use crate::generatable_module::GeneratableModule;
 use crate::types::Type;
 
-/// Typechecks the given module and returns the resulting Scope.
-fn typ_module(s: &'static str) -> Scope {
+/// Typechecks the given module and returns the resulting GeneratableModule.
+fn typ_module(s: &'static str) -> GeneratableModule {
     let mut ctx = Context::new();
     ctx.include_file(concat!(env!("CARGO_MANIFEST_DIR"), "/huck/Prelude.hk"))
         .unwrap();
     let s = Box::leak(format!("module Test; {s}").into_boxed_str());
     ctx.include_string(s).unwrap();
     let modules = ctx.resolve(ctx.parsed.clone()).unwrap();
-    let mut scopes = ctx.typecheck(modules).unwrap();
-    scopes.remove(&ModulePath("Test")).unwrap()
+    let mut gen_mods = ctx.typecheck(modules).unwrap();
+    gen_mods.remove(&ModulePath("Test")).unwrap()
 }
 
 /// Infers the type of the given definition.
@@ -135,28 +135,28 @@ fn function_add() {
 
 #[test]
 fn constructor_unary() {
-    let scope = typ_module(
+    let module = typ_module(
         r#"
             type Foo = Bar;
             val = Bar;
         "#,
     );
 
-    let val = scope.definitions.get(&Name::Ident("val")).unwrap();
+    let val = module.definitions.get(&Name::Ident("val")).unwrap();
 
     assert_eq!(val.0, Type::Concrete("Foo"))
 }
 
 #[test]
 fn constructor_unary_returned() {
-    let scope = typ_module(
+    let module = typ_module(
         r#"
             type Foo = Bar;
             val a = Bar;
         "#,
     );
 
-    let val = scope.definitions.get(&Name::Ident("val")).unwrap().clone();
+    let val = module.definitions.get(&Name::Ident("val")).unwrap().clone();
 
     assert!(matches!(val.0, Type::Arrow(_, _)));
 
@@ -171,14 +171,14 @@ fn constructor_unary_returned() {
 
 #[test]
 fn constructor_unary_argument() {
-    let scope = typ_module(
+    let module = typ_module(
         r#"
             type Foo = Bar;
             val Bar = 123;
         "#,
     );
 
-    let val = scope.definitions.get(&Name::Ident("val")).unwrap();
+    let val = module.definitions.get(&Name::Ident("val")).unwrap();
 
     assert_eq!(
         val.0,
@@ -191,21 +191,21 @@ fn constructor_unary_argument() {
 
 #[test]
 fn constructor_newtype_int() {
-    let scope = typ_module(
+    let module = typ_module(
         r#"
             type Foo = Foo Int;
             val = Foo 123;
         "#,
     );
 
-    let val = scope.definitions.get(&Name::Ident("val")).unwrap();
+    let val = module.definitions.get(&Name::Ident("val")).unwrap();
 
     assert_eq!(val.0, Type::Concrete("Foo"))
 }
 
 #[test]
 fn constructor_newtype_unwrap_int() {
-    let scope = typ_module(
+    let module = typ_module(
         r#"
             type Foo = Foo Int;
             toBeUnwrapped = Foo 123;
@@ -214,21 +214,21 @@ fn constructor_newtype_unwrap_int() {
         "#,
     );
 
-    let val = scope.definitions.get(&Name::Ident("val")).unwrap();
+    let val = module.definitions.get(&Name::Ident("val")).unwrap();
 
     assert_eq!(val.0, Type::Concrete("Int"))
 }
 
 #[test]
 fn constructor_newtype_generic_int() {
-    let scope = typ_module(
+    let module = typ_module(
         r#"
             type Foo a = Foo a;
             val = Foo 123;
         "#,
     );
 
-    let val = scope.definitions.get(&Name::Ident("val")).unwrap();
+    let val = module.definitions.get(&Name::Ident("val")).unwrap();
 
     assert_eq!(
         val.0,
@@ -241,14 +241,14 @@ fn constructor_newtype_generic_int() {
 
 #[test]
 fn constructor_newtype_generic_var() {
-    let scope = typ_module(
+    let module = typ_module(
         r#"
             type Foo a = Foo a;
             val x = Foo x;
         "#,
     );
 
-    let val = scope.definitions.get(&Name::Ident("val")).unwrap().clone();
+    let val = module.definitions.get(&Name::Ident("val")).unwrap().clone();
 
     assert!(matches!(val.0, Type::Arrow(_, _)));
 
@@ -271,7 +271,7 @@ fn constructor_newtype_generic_var() {
 
 #[test]
 fn constructor_newtype_generic_unwrap_int() {
-    let scope = typ_module(
+    let module = typ_module(
         r#"
             type Foo a = Foo a;
             toBeUnwrapped = Foo 123;
@@ -280,28 +280,28 @@ fn constructor_newtype_generic_unwrap_int() {
         "#,
     );
 
-    let val = scope.definitions.get(&Name::Ident("val")).unwrap();
+    let val = module.definitions.get(&Name::Ident("val")).unwrap();
 
     assert_eq!(val.0, Type::Concrete("Int"))
 }
 
 #[test]
 fn function_apply_to_literal() {
-    let scope = typ_module(
+    let module = typ_module(
         r#"
             foo 123 = 234;
             val = foo 1;
         "#,
     );
 
-    let val = scope.definitions.get(&Name::Ident("val")).unwrap();
+    let val = module.definitions.get(&Name::Ident("val")).unwrap();
 
     assert_eq!(val.0, Type::Concrete("Int"))
 }
 
 #[test]
 fn function_apply_to_variable() {
-    let scope = typ_module(
+    let module = typ_module(
         r#"
             foo 123 = 234;
             anInt = 3;
@@ -309,14 +309,14 @@ fn function_apply_to_variable() {
         "#,
     );
 
-    let val = scope.definitions.get(&Name::Ident("val")).unwrap();
+    let val = module.definitions.get(&Name::Ident("val")).unwrap();
 
     assert_eq!(val.0, Type::Concrete("Int"))
 }
 
 #[test]
 fn function_apply_to_variable_indirect() {
-    let scope = typ_module(
+    let module = typ_module(
         r#"
             bar 123 = 234;
             foo x = bar x;
@@ -325,7 +325,7 @@ fn function_apply_to_variable_indirect() {
         "#,
     );
 
-    let val = scope.definitions.get(&Name::Ident("val")).unwrap();
+    let val = module.definitions.get(&Name::Ident("val")).unwrap();
 
     assert_eq!(val.0, Type::Concrete("Int"))
 }

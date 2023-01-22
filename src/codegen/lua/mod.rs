@@ -2,8 +2,8 @@
 mod test;
 
 use crate::ast;
+use crate::generatable_module::GeneratableModule;
 use crate::log;
-use crate::scope::Scope;
 use crate::types::{Type, TypeDefinition};
 
 use std::collections::BTreeSet;
@@ -18,23 +18,23 @@ static UNIQUE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 const PREFIX: &str = "_HUCK";
 
-/// Generates Lua for the given Huck Scope.
-pub fn generate(scope: &Scope) -> Result<String> {
+/// Generates Lua for the given Huck module.
+pub fn generate(module: &GeneratableModule) -> Result<String> {
     let start_time = Instant::now();
 
-    let generated = CodeGenerator::new(scope).generate()?;
+    let generated = CodeGenerator::new(module).generate()?;
 
     log::trace!(
         log::CODEGEN,
         "Generated module {}:\n{}",
-        scope.module_path,
+        module.path,
         generated
     );
 
     log::info!(
         log::METRICS,
         "Generated module {}, {:?} elapsed",
-        scope.module_path,
+        module.path,
         start_time.elapsed()
     );
 
@@ -58,11 +58,11 @@ struct CodeGenerator<'a> {
     // This is the set of definitions which have already been generated.
     generated: BTreeSet<ast::Name>,
 
-    scope: &'a Scope,
+    module: &'a GeneratableModule,
 }
 
 impl<'a> CodeGenerator<'a> {
-    fn new(scope: &'a Scope) -> Self {
+    fn new(module: &'a GeneratableModule) -> Self {
         CodeGenerator {
             conditions: Vec::new(),
             bindings: Vec::new(),
@@ -71,13 +71,13 @@ impl<'a> CodeGenerator<'a> {
 
             generated: BTreeSet::new(),
 
-            scope,
+            module,
         }
     }
 
-    /// Generate Lua code for the Scope used in CodeGenerator::new.
+    /// Generate Lua code for the GeneratableModule used in CodeGenerator::new.
     /// This will generate a Lua chunk which returns a table
-    /// containing the definitions given in the Huck scope.
+    /// containing the definitions given in the Huck module.
     fn generate(mut self) -> Result<String> {
         let mut lua = String::new();
 
@@ -89,13 +89,13 @@ impl<'a> CodeGenerator<'a> {
         // so they can't refer to anything else.
 
         log::trace!(log::CODEGEN, "  Generating type definitions");
-        for (_name, type_defn) in self.scope.type_definitions.iter() {
+        for (_name, type_defn) in self.module.type_definitions.iter() {
             write!(lua, "{}", self.type_definition(type_defn)?)?;
         }
 
         // Next import all the imports.
         log::trace!(log::CODEGEN, "  Generating import statements");
-        for (name, (_path, stem)) in self.scope.imports.iter() {
+        for (name, (_path, stem)) in self.module.imports.iter() {
             writeln!(lua, r#"{PREFIX}["{name}"] = require("{stem}")["{name}"]"#)?;
 
             // Mark the import as generated.
@@ -105,7 +105,7 @@ impl<'a> CodeGenerator<'a> {
 
         // Next import all the foreign imports.
         log::trace!(log::CODEGEN, "  Generating foreign import statements");
-        for (name, (require_string, lua_name, _type_scheme)) in self.scope.foreign_imports.iter() {
+        for (name, (require_string, lua_name, _type_scheme)) in self.module.foreign_imports.iter() {
             writeln!(
                 lua,
                 r#"{PREFIX}["{name}"] = require({require_string})["{lua_name}"]"#
@@ -121,7 +121,7 @@ impl<'a> CodeGenerator<'a> {
 
         // Start by putting all definitions in the queue to be generated.
         // @Fixme: this probably doesn't need to be entirely cloned
-        let mut current_pass: Vec<_> = self.scope.definitions.clone().into_iter().collect();
+        let mut current_pass: Vec<_> = self.module.definitions.clone().into_iter().collect();
         let mut next_pass = Vec::new();
 
         loop {
@@ -198,7 +198,7 @@ impl<'a> CodeGenerator<'a> {
         }
 
         // Write out foreign exports
-        for (lua_lhs, expr) in self.scope.foreign_exports.iter() {
+        for (lua_lhs, expr) in self.module.foreign_exports.iter() {
             writeln!(lua, "{} = {}", lua_lhs, self.expr(expr)?)?;
         }
 
@@ -661,7 +661,7 @@ impl<'a> CodeGenerator<'a> {
             let mut name_string = name.as_str().to_string();
             name_string.make_ascii_lowercase();
             Ok(name_string)
-        } else if self.scope.contains(name) {
+        } else if self.module.contains(name) {
             // It's a top-level definition,
             // so we should emit e.g. _HUCK["var"]
             Ok(format!(r#"{}["{}"]"#, PREFIX, name))

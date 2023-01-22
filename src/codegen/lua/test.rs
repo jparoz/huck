@@ -27,11 +27,11 @@ pub fn transpile(huck: &'static str) -> Result<String, HuckError> {
     let modules = context.resolve(context.parsed.clone())?;
 
     // Typecheck
-    let mut scopes = context.typecheck(modules)?;
+    let mut gen_mods = context.typecheck(modules)?;
 
     // Generate code
-    let scope = scopes.remove(&ModulePath("Test")).unwrap();
-    let lua = codegen::lua::generate(&scope)?;
+    let module = gen_mods.remove(&ModulePath("Test")).unwrap();
+    let lua = codegen::lua::generate(&module)?;
 
     Ok(normalize(&lua))
 }

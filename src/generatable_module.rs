@@ -3,9 +3,15 @@ use std::collections::BTreeMap;
 use crate::ast::{Definition, Expr, ForeignName, ModulePath, Name};
 use crate::types::{Type, TypeDefinition, TypeScheme};
 
+/// This is the structure which represents a module
+/// which has been typechecked and processed
+/// to the point where it can have code generated from it.
+/// If there are any optional steps in the compilation process,
+/// they will probably take the rough shape of
+/// a function: `GeneratableModule -> GeneratableModule`.
 #[derive(Debug, Default)]
-pub struct Scope {
-    pub module_path: ModulePath,
+pub struct GeneratableModule {
+    pub path: ModulePath,
     pub definitions: BTreeMap<Name, (Type, Definition)>,
     pub type_definitions: BTreeMap<Name, TypeDefinition>,
     pub constructors: BTreeMap<Name, Type>,
@@ -22,11 +28,11 @@ pub struct Scope {
     pub foreign_exports: Vec<(&'static str, Expr)>,
 }
 
-impl Scope {
-    pub fn new(module_path: ModulePath) -> Scope {
-        Scope {
-            module_path,
-            ..Scope::default()
+impl GeneratableModule {
+    pub fn new(module_path: ModulePath) -> GeneratableModule {
+        GeneratableModule {
+            path: module_path,
+            ..GeneratableModule::default()
         }
     }
 
@@ -48,7 +54,7 @@ impl Scope {
         self.imports
             .get(name)
             .map(|(path, _)| *path)
-            .or_else(|| self.definitions.get(name).map(|_| self.module_path))
-            .or_else(|| self.constructors.get(name).map(|_| self.module_path))
+            .or_else(|| self.definitions.get(name).map(|_| self.path))
+            .or_else(|| self.constructors.get(name).map(|_| self.path))
     }
 }
