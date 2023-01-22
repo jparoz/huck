@@ -52,6 +52,10 @@ impl Context {
                         module.imports.entry(path).or_default().extend(names)
                     }
 
+                    ast::Statement::QualifiedImport(path) => {
+                        module.imports.entry(path).or_default();
+                    }
+
                     // @Todo: do some actual resolution
                     ast::Statement::ForeignImport(require_string, import_items) => module
                         .foreign_imports

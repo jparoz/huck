@@ -4,6 +4,62 @@ use crate::{
 };
 
 #[test]
+fn module_declaration() {
+    assert_eq!(
+        parse::module_declaration(r#"module Foo.Bar;"#),
+        Ok(("", ast::ModulePath("Foo.Bar")))
+    )
+}
+
+#[test]
+fn statement_import_qualified() {
+    assert_eq!(
+        parse::statement(r#"import Foo.Bar;"#),
+        Ok((
+            "",
+            ast::Statement::QualifiedImport(ast::ModulePath("Foo.Bar"))
+        ))
+    )
+}
+
+#[test]
+fn statement_import_unqualified() {
+    assert_eq!(
+        parse::statement(r#"import Foo.Bar (foo, Bar);"#),
+        Ok((
+            "",
+            ast::Statement::Import(
+                ast::ModulePath("Foo.Bar"),
+                vec![ast::Name::Ident("foo"), ast::Name::Ident("Bar")]
+            )
+        ))
+    )
+}
+
+#[test]
+fn statement_import_foreign() {
+    assert_eq!(
+        parse::statement(r#"foreign import "inspect" (inspect : forall a. a -> String);"#),
+        Ok((
+            "",
+            ast::Statement::ForeignImport(
+                r#""inspect""#,
+                vec![ast::ForeignImportItem::SameName(
+                    ast::Name::Ident("inspect"),
+                    ast::TypeScheme {
+                        typ: ast::TypeExpr::Arrow(
+                            Box::new(ast::TypeExpr::Term(ast::TypeTerm::Var("a"))),
+                            Box::new(ast::TypeExpr::Term(ast::TypeTerm::Concrete("String")))
+                        ),
+                        vars: vec!["a"]
+                    }
+                )]
+            )
+        ))
+    )
+}
+
+#[test]
 fn statement_assign_without_type() {
     // AssignmentWithoutType(Assignment<'file>),
     assert_eq!(
@@ -90,6 +146,28 @@ fn binop_plus() {
     assert_eq!(
         parse::statement(r#"val = 1 + 2;"#).unwrap(),
         parse::statement(r#"val=1+2;"#).unwrap()
+    )
+}
+
+#[test]
+fn name_qualified_lower() {
+    assert_eq!(
+        parse::name(r#"Foo.bar"#).unwrap(),
+        (
+            "",
+            ast::Name::Qualified(ast::ImportSource::Module(ast::ModulePath("Foo")), "bar")
+        )
+    )
+}
+
+#[test]
+fn name_qualified_upper() {
+    assert_eq!(
+        parse::name(r#"Foo.Bar"#).unwrap(),
+        (
+            "",
+            ast::Name::Qualified(ast::ImportSource::Module(ast::ModulePath("Foo")), "Bar")
+        )
     )
 }
 

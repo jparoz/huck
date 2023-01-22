@@ -95,6 +95,10 @@ fn statement(input: &'static str) -> IResult<&'static str, Statement> {
             ),
             |(path, names)| Statement::Import(path, names),
         ),
+        // Huck import statement (qualified i.e. empty)
+        map(delimited(reserved("import"), module_path, semi), |path| {
+            Statement::QualifiedImport(path)
+        }),
         // Foreign (Lua) import statement
         map(
             delimited(
@@ -415,6 +419,10 @@ fn upper_ident(input: &'static str) -> IResult<&'static str, &'static str> {
     )))(input)
 }
 
+fn ident(input: &'static str) -> IResult<&'static str, &'static str> {
+    alt((var, upper_ident))(input)
+}
+
 fn module_path_segment(input: &'static str) -> IResult<&'static str, &'static str> {
     recognize(nom_tuple((
         satisfy(char::is_uppercase),
@@ -424,8 +432,21 @@ fn module_path_segment(input: &'static str) -> IResult<&'static str, &'static st
 
 fn name(input: &'static str) -> IResult<&'static str, Name> {
     ws(alt((
-        map(var, Name::Ident),
-        map(upper_ident, Name::Ident),
+        map(
+            separated_pair(
+                recognize(separated_list1(
+                    tag("."),
+                    preceded(
+                        peek(nom_tuple((module_path_segment, tag("."), ident))),
+                        module_path_segment,
+                    ),
+                )),
+                tag("."),
+                ident,
+            ),
+            |(path, ident)| Name::Qualified(ImportSource::Module(ModulePath(path)), ident),
+        ),
+        map(ident, Name::Ident),
         parens(operator),
     )))(input)
 }

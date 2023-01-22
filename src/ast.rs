@@ -67,9 +67,9 @@ impl Definition {
 /// The order here is important! See [`resolve::resolve`](crate::resolve::resolve).
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum Statement {
-    // @Note: Import and ForeignImport MUST come before assignments.
+    // @Note: imports MUST come before assignments.
     Import(ModulePath, Vec<Name>),
-
+    QualifiedImport(ModulePath),
     /// Includes the quotation marks in the require string
     ForeignImport(&'static str, Vec<ForeignImportItem>),
 
