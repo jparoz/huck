@@ -424,14 +424,14 @@ fn module_path_segment(input: &'static str) -> IResult<&'static str, &'static st
 
 fn name(input: &'static str) -> IResult<&'static str, Name> {
     ws(alt((
-        map(var, |s| Name::Ident(s.to_string())),
-        map(upper_ident, |s| Name::Ident(s.to_string())),
+        map(var, Name::Ident),
+        map(upper_ident, Name::Ident),
         parens(operator),
     )))(input)
 }
 
 fn upper_name(input: &'static str) -> IResult<&'static str, Name> {
-    ws(map(upper_ident, |s| Name::Ident(s.to_string())))(input)
+    ws(map(upper_ident, Name::Ident))(input)
 }
 
 fn lua_name(input: &'static str) -> IResult<&'static str, ForeignName> {
@@ -440,7 +440,7 @@ fn lua_name(input: &'static str) -> IResult<&'static str, ForeignName> {
             satisfy(char::is_alphabetic),
             many0(satisfy(char::is_alphanumeric)),
         ))),
-        |s: &'static str| ForeignName(s.to_string()),
+        ForeignName,
     ))(input)
 }
 
@@ -529,7 +529,7 @@ fn operator(input: &'static str) -> IResult<&'static str, Name> {
             )))),
             |s| !is_reserved(s),
         ),
-        |s| Name::Binop(s.to_string()),
+        Name::Binop,
     )(input)
 }
 

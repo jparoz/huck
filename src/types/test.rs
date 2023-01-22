@@ -30,35 +30,29 @@ fn tuple_is_ordered() {
 
 #[test]
 fn literal_int() {
-    assert_eq!(typ(r#"a = 123;"#), Type::Concrete("Int".to_string()));
+    assert_eq!(typ(r#"a = 123;"#), Type::Concrete("Int"));
 }
 
 #[test]
 fn literal_float() {
-    assert_eq!(typ(r#"a = 1.23;"#), Type::Concrete("Float".to_string()));
+    assert_eq!(typ(r#"a = 1.23;"#), Type::Concrete("Float"));
 }
 
 #[test]
 fn literal_string() {
-    assert_eq!(
-        typ(r#"a = "Hello, world!";"#),
-        Type::Concrete("String".to_string())
-    );
+    assert_eq!(typ(r#"a = "Hello, world!";"#), Type::Concrete("String"));
 }
 
 #[test]
 fn literal_unit() {
-    assert_eq!(typ(r#"a = ();"#), Type::Concrete("()".to_string()));
+    assert_eq!(typ(r#"a = ();"#), Type::Concrete("()"));
 }
 
 #[test]
 fn literal_tuple_int_string() {
     assert_eq!(
         typ(r#"a = (123, "Hello, world!");"#),
-        Type::Tuple(vec![
-            Type::Concrete("Int".to_string()),
-            Type::Concrete("String".to_string())
-        ])
+        Type::Tuple(vec![Type::Concrete("Int"), Type::Concrete("String")])
     );
 }
 
@@ -66,7 +60,7 @@ fn literal_tuple_int_string() {
 fn literal_list_int() {
     assert_eq!(
         typ(r#"a = [123, 456];"#),
-        Type::List(Box::new(Type::Concrete("Int".to_string())))
+        Type::List(Box::new(Type::Concrete("Int")))
     );
 }
 
@@ -133,8 +127,8 @@ fn function_add() {
     assert_eq!(
         typ(r#"f x = x + 5;"#),
         Type::Arrow(
-            Box::new(Type::Concrete("Int".to_string())),
-            Box::new(Type::Concrete("Int".to_string()))
+            Box::new(Type::Concrete("Int")),
+            Box::new(Type::Concrete("Int"))
         )
     );
 }
@@ -148,12 +142,9 @@ fn constructor_unary() {
         "#,
     );
 
-    let val = scope
-        .definitions
-        .get(&Name::Ident("val".to_string()))
-        .unwrap();
+    let val = scope.definitions.get(&Name::Ident("val")).unwrap();
 
-    assert_eq!(val.0, Type::Concrete("Foo".to_string()),)
+    assert_eq!(val.0, Type::Concrete("Foo"))
 }
 
 #[test]
@@ -165,11 +156,7 @@ fn constructor_unary_returned() {
         "#,
     );
 
-    let val = scope
-        .definitions
-        .get(&Name::Ident("val".to_string()))
-        .unwrap()
-        .clone();
+    let val = scope.definitions.get(&Name::Ident("val")).unwrap().clone();
 
     assert!(matches!(val.0, Type::Arrow(_, _)));
 
@@ -191,16 +178,13 @@ fn constructor_unary_argument() {
         "#,
     );
 
-    let val = scope
-        .definitions
-        .get(&Name::Ident("val".to_string()))
-        .unwrap();
+    let val = scope.definitions.get(&Name::Ident("val")).unwrap();
 
     assert_eq!(
         val.0,
         Type::Arrow(
-            Box::new(Type::Concrete("Foo".to_string())),
-            Box::new(Type::Concrete("Int".to_string())),
+            Box::new(Type::Concrete("Foo")),
+            Box::new(Type::Concrete("Int")),
         ),
     )
 }
@@ -214,12 +198,9 @@ fn constructor_newtype_int() {
         "#,
     );
 
-    let val = scope
-        .definitions
-        .get(&Name::Ident("val".to_string()))
-        .unwrap();
+    let val = scope.definitions.get(&Name::Ident("val")).unwrap();
 
-    assert_eq!(val.0, Type::Concrete("Foo".to_string()),)
+    assert_eq!(val.0, Type::Concrete("Foo"))
 }
 
 #[test]
@@ -233,12 +214,9 @@ fn constructor_newtype_unwrap_int() {
         "#,
     );
 
-    let val = scope
-        .definitions
-        .get(&Name::Ident("val".to_string()))
-        .unwrap();
+    let val = scope.definitions.get(&Name::Ident("val")).unwrap();
 
-    assert_eq!(val.0, Type::Concrete("Int".to_string()))
+    assert_eq!(val.0, Type::Concrete("Int"))
 }
 
 #[test]
@@ -250,16 +228,13 @@ fn constructor_newtype_generic_int() {
         "#,
     );
 
-    let val = scope
-        .definitions
-        .get(&Name::Ident("val".to_string()))
-        .unwrap();
+    let val = scope.definitions.get(&Name::Ident("val")).unwrap();
 
     assert_eq!(
         val.0,
         Type::App(
-            Box::new(Type::Concrete("Foo".to_string())),
-            Box::new(Type::Concrete("Int".to_string()))
+            Box::new(Type::Concrete("Foo")),
+            Box::new(Type::Concrete("Int"))
         ),
     )
 }
@@ -273,11 +248,7 @@ fn constructor_newtype_generic_var() {
         "#,
     );
 
-    let val = scope
-        .definitions
-        .get(&Name::Ident("val".to_string()))
-        .unwrap()
-        .clone();
+    let val = scope.definitions.get(&Name::Ident("val")).unwrap().clone();
 
     assert!(matches!(val.0, Type::Arrow(_, _)));
 
@@ -309,12 +280,9 @@ fn constructor_newtype_generic_unwrap_int() {
         "#,
     );
 
-    let val = scope
-        .definitions
-        .get(&Name::Ident("val".to_string()))
-        .unwrap();
+    let val = scope.definitions.get(&Name::Ident("val")).unwrap();
 
-    assert_eq!(val.0, Type::Concrete("Int".to_string()))
+    assert_eq!(val.0, Type::Concrete("Int"))
 }
 
 #[test]
@@ -326,12 +294,9 @@ fn function_apply_to_literal() {
         "#,
     );
 
-    let val = scope
-        .definitions
-        .get(&Name::Ident("val".to_string()))
-        .unwrap();
+    let val = scope.definitions.get(&Name::Ident("val")).unwrap();
 
-    assert_eq!(val.0, Type::Concrete("Int".to_string()))
+    assert_eq!(val.0, Type::Concrete("Int"))
 }
 
 #[test]
@@ -344,12 +309,9 @@ fn function_apply_to_variable() {
         "#,
     );
 
-    let val = scope
-        .definitions
-        .get(&Name::Ident("val".to_string()))
-        .unwrap();
+    let val = scope.definitions.get(&Name::Ident("val")).unwrap();
 
-    assert_eq!(val.0, Type::Concrete("Int".to_string()))
+    assert_eq!(val.0, Type::Concrete("Int"))
 }
 
 #[test]
@@ -363,10 +325,7 @@ fn function_apply_to_variable_indirect() {
         "#,
     );
 
-    let val = scope
-        .definitions
-        .get(&Name::Ident("val".to_string()))
-        .unwrap();
+    let val = scope.definitions.get(&Name::Ident("val")).unwrap();
 
-    assert_eq!(val.0, Type::Concrete("Int".to_string()))
+    assert_eq!(val.0, Type::Concrete("Int"))
 }

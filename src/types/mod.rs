@@ -17,7 +17,7 @@ use error::Error as TypeError;
 #[derive(PartialEq, Eq, Clone, Hash, Debug)]
 pub enum Type {
     Var(TypeVar),
-    Concrete(String),
+    Concrete(&'static str),
     List(Box<Type>),
     Tuple(Vec<Type>),
 
@@ -146,7 +146,7 @@ impl Display for TypeScheme {
 #[derive(Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub enum TypeVar {
     Generated(usize),
-    Explicit(String),
+    Explicit(&'static str),
 }
 
 impl Display for TypeVar {

@@ -59,7 +59,7 @@ impl Context {
                         .or_default()
                         .extend(import_items.into_iter().map(|item| match item {
                             ast::ForeignImportItem::SameName(name, ts) => {
-                                (ast::ForeignName(name.as_str().to_string()), name, ts)
+                                (ast::ForeignName(name.as_str()), name, ts)
                             }
                             ast::ForeignImportItem::Rename(lua_name, name, ts) => {
                                 (lua_name, name, ts)

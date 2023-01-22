@@ -92,16 +92,15 @@ pub type Assignment = (Lhs, Expr);
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub enum Name {
-    // @Todo @Cleanup: change to &'static str
-    Ident(String),
-    Binop(String),
+    Ident(&'static str),
+    Binop(&'static str),
     Lambda,
 
-    Qualified(ImportSource, String),
+    Qualified(ImportSource, &'static str),
 }
 
 impl Name {
-    pub fn as_str(&self) -> &str {
+    pub fn as_str(&self) -> &'static str {
         match self {
             Name::Ident(s) | Name::Binop(s) => s,
             Name::Lambda => "<lambda>",
@@ -209,7 +208,7 @@ impl Pattern {
     /// Returns all the names which are bound by the pattern.
     pub fn names_bound(&self) -> Vec<Name> {
         match self {
-            Pattern::Bind(s) => vec![Name::Ident(s.to_string())],
+            Pattern::Bind(s) => vec![Name::Ident(s)],
 
             Pattern::Destructure { args: pats, .. }
             | Pattern::Tuple(pats)
@@ -561,7 +560,7 @@ pub enum ForeignImportItem {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
-pub struct ForeignName(pub String);
+pub struct ForeignName(pub &'static str);
 
 impl Display for ForeignName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

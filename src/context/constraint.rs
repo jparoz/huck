@@ -155,7 +155,7 @@ impl ConstraintGenerator {
         match pat {
             Pattern::Bind(s) => {
                 let beta = self.fresh();
-                self.bind_assumptions_mono(&Name::Ident(s.to_string()), &beta);
+                self.bind_assumptions_mono(&Name::Ident(s), &beta);
                 beta
             }
 
@@ -174,10 +174,10 @@ impl ConstraintGenerator {
                 Type::Tuple(pats.iter().map(|pat| self.bind_pattern(pat)).collect())
             }
 
-            Pattern::Numeral(Numeral::Int(_)) => Type::Concrete("Int".to_string()),
-            Pattern::Numeral(Numeral::Float(_)) => Type::Concrete("Float".to_string()),
-            Pattern::String(_) => Type::Concrete("String".to_string()),
-            Pattern::Unit => Type::Concrete("()".to_string()),
+            Pattern::Numeral(Numeral::Int(_)) => Type::Concrete("Int"),
+            Pattern::Numeral(Numeral::Float(_)) => Type::Concrete("Float"),
+            Pattern::String(_) => Type::Concrete("String"),
+            Pattern::Unit => Type::Concrete("()"),
 
             Pattern::Binop { operator, lhs, rhs } => {
                 let beta = self.fresh();
@@ -189,7 +189,7 @@ impl ConstraintGenerator {
                 // @Prelude @Hack-ish: These probably shouldn't be hard-coded like this.
                 let s = name.as_str();
                 if s == "True" || s == "False" {
-                    let typ = Type::Concrete("Bool".to_string());
+                    let typ = Type::Concrete("Bool");
                     self.assume(name.clone(), typ.clone());
                     typ
                 } else {
@@ -353,10 +353,10 @@ impl ConstraintGenerator {
 
     pub fn generate_expr(&mut self, expr: &Expr) -> Type {
         match expr {
-            Expr::Term(Term::Numeral(Numeral::Int(_))) => Type::Concrete("Int".to_string()),
-            Expr::Term(Term::Numeral(Numeral::Float(_))) => Type::Concrete("Float".to_string()),
-            Expr::Term(Term::String(_)) => Type::Concrete("String".to_string()),
-            Expr::Term(Term::Unit) => Type::Concrete("()".to_string()),
+            Expr::Term(Term::Numeral(Numeral::Int(_))) => Type::Concrete("Int"),
+            Expr::Term(Term::Numeral(Numeral::Float(_))) => Type::Concrete("Float"),
+            Expr::Term(Term::String(_)) => Type::Concrete("String"),
+            Expr::Term(Term::Unit) => Type::Concrete("()"),
 
             Expr::Term(Term::Parens(e)) => self.generate_expr(e),
             Expr::Term(Term::List(es)) => {
@@ -446,10 +446,7 @@ impl ConstraintGenerator {
                 // by avoiding elevating any types to compiler status
                 // (see Int, Float);
                 // so perhaps it's fine to just add Bool to that list.
-                self.constrain(Constraint::Equality(
-                    cond_type,
-                    Type::Concrete("Bool".to_string()),
-                ));
+                self.constrain(Constraint::Equality(cond_type, Type::Concrete("Bool")));
                 self.constrain(Constraint::Equality(then_type.clone(), else_type));
 
                 then_type
@@ -509,10 +506,7 @@ impl ConstraintGenerator {
                 res
             }
 
-            Expr::Lua(_) => Type::App(
-                Box::new(Type::Concrete("IO".to_string())),
-                Box::new(self.fresh()),
-            ),
+            Expr::Lua(_) => Type::App(Box::new(Type::Concrete("IO")), Box::new(self.fresh())),
 
             Expr::UnsafeLua(_) => self.fresh(),
         }
@@ -521,11 +515,7 @@ impl ConstraintGenerator {
     // Type-level generation methods
 
     pub fn generate_type_scheme(&mut self, input: &ast::TypeScheme) -> TypeScheme {
-        let vars: TypeVarSet = input
-            .vars
-            .iter()
-            .map(|v| TypeVar::Explicit(v.to_string()))
-            .collect();
+        let vars: TypeVarSet = input.vars.iter().map(|v| TypeVar::Explicit(v)).collect();
 
         let typ = self.generate_type_expr(&input.typ);
 
@@ -541,12 +531,12 @@ impl ConstraintGenerator {
 
         // We'll build these structures by iterating over the type arguments.
         let mut vars = TypeVarSet::empty();
-        let mut typ = Type::Concrete(name.to_string());
+        let mut typ = Type::Concrete(name.as_str());
 
         for s in vars_s.iter() {
             // The final returned type of the constructor needs to reflect this type argument;
             // so we mark that here.
-            let var = TypeVar::Explicit(s.to_string());
+            let var = TypeVar::Explicit(s);
             vars.insert(var.clone());
             typ = Type::App(Box::new(typ), Box::new(Type::Var(var)));
         }
@@ -593,10 +583,10 @@ impl ConstraintGenerator {
 
     pub fn generate_type_term(&mut self, input: &ast::TypeTerm) -> Type {
         match input {
-            ast::TypeTerm::Concrete(s) => Type::Concrete(s.to_string()),
-            ast::TypeTerm::Unit => Type::Concrete("()".to_string()),
+            ast::TypeTerm::Concrete(s) => Type::Concrete(s),
+            ast::TypeTerm::Unit => Type::Concrete("()"),
 
-            ast::TypeTerm::Var(v) => Type::Var(TypeVar::Explicit(v.to_string())),
+            ast::TypeTerm::Var(v) => Type::Var(TypeVar::Explicit(v)),
 
             ast::TypeTerm::Parens(e) => self.generate_type_expr(e),
             ast::TypeTerm::List(e) => Type::List(Box::new(self.generate_type_expr(e))),
