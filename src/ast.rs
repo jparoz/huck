@@ -568,33 +568,6 @@ impl Display for ForeignName {
     }
 }
 
-/// A ForeignPath describes how to access a Lua function from Huck.
-/// It is a sum of a string to be given to `require` in Lua,
-/// and the table index to be used on the table returned from `require`,
-/// according to common Lua module practices.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub struct ForeignPath {
-    pub require: &'static str,
-    pub name: ForeignName,
-}
-
-impl Display for ForeignPath {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, r#"require({})["{}"]"#, self.require, self.name)
-    }
-}
-
-/// An ImportSource describes where to find a name, whether it's a Huck or foreign import.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub enum ImportSource {
-    /// From a Huck module
-    Module(ModulePath),
-    /// From a foreign (Lua) module
-    Foreign(ForeignPath),
-    /// From e.g. a let binding
-    Local,
-}
-
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub enum Numeral {
     Int(&'static str),

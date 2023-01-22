@@ -1,10 +1,37 @@
 use std::collections::BTreeMap;
 use std::time::Instant;
 
-use crate::ast;
+use crate::ast::{self};
 use crate::context::Context;
 use crate::log;
 use crate::parse::precedence::{ApplyPrecedence, Precedence};
+
+/// A `ResolvedName` is a unique token, used in the compiler to uniquely identify a value.
+/// After name resolution:
+/// all names have been confirmed to exist,
+/// and all references to a function have the same `ResolvedName`,
+/// no matter where the references appear.
+pub struct ResolvedName {
+    source: ImportSource,
+    ident: &'static str,
+}
+
+/// An `ImportSource` describes where to find an identifier, whether it's a Huck or foreign import.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+pub enum ImportSource {
+    /// From a Huck module
+    Module(ast::ModulePath),
+    /// From a foreign (Lua) module
+    Foreign {
+        /// Includes the quotation marks
+        require: &'static str,
+        foreign_name: ast::ForeignName,
+    },
+    /// From e.g. a let binding
+    /// Contains a unique ID,
+    /// so that we can tell apart identically-named but different `ResolvedName`s.
+    Local(usize),
+}
 
 impl Context {
     pub fn resolve(
