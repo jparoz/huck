@@ -96,7 +96,7 @@ pub enum Name {
     Binop(&'static str),
     Lambda,
 
-    Qualified(ImportSource, &'static str),
+    Qualified(ModulePath, &'static str),
 }
 
 impl Name {

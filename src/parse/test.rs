@@ -153,10 +153,7 @@ fn binop_plus() {
 fn name_qualified_lower() {
     assert_eq!(
         parse::name(r#"Foo.bar"#).unwrap(),
-        (
-            "",
-            ast::Name::Qualified(ast::ImportSource::Module(ast::ModulePath("Foo")), "bar")
-        )
+        ("", ast::Name::Qualified(ast::ModulePath("Foo"), "bar"))
     )
 }
 
@@ -164,10 +161,7 @@ fn name_qualified_lower() {
 fn name_qualified_upper() {
     assert_eq!(
         parse::name(r#"Foo.Bar"#).unwrap(),
-        (
-            "",
-            ast::Name::Qualified(ast::ImportSource::Module(ast::ModulePath("Foo")), "Bar")
-        )
+        ("", ast::Name::Qualified(ast::ModulePath("Foo"), "Bar"))
     )
 }
 

@@ -444,7 +444,7 @@ fn name(input: &'static str) -> IResult<&'static str, Name> {
                 tag("."),
                 ident,
             ),
-            |(path, ident)| Name::Qualified(ImportSource::Module(ModulePath(path)), ident),
+            |(path, ident)| Name::Qualified(ModulePath(path), ident),
         ),
         map(ident, Name::Ident),
         parens(operator),
