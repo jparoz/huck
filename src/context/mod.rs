@@ -8,7 +8,7 @@ use crate::error::Error as HuckError;
 use crate::generatable_module::GeneratableModule;
 use crate::parse::parse;
 use crate::types::{ApplySub, Error as TypeError, Type};
-use crate::{codegen, log};
+use crate::{codegen, log, resolve};
 
 mod constraint;
 use constraint::ConstraintGenerator;
@@ -75,7 +75,7 @@ impl Context {
     pub fn typecheck(
         &mut self,
         modules: BTreeMap<ModulePath, Module>,
-    ) -> Result<BTreeMap<ModulePath, GeneratableModule>, TypeError> {
+    ) -> Result<BTreeMap<ModulePath, GeneratableModule>, HuckError> {
         // Start the timer to measure how long typechecking takes.
         let start_time = Instant::now();
         log::info!(log::TYPECHECK, "Typechecking all modules...");
@@ -207,14 +207,14 @@ impl Context {
             // Polymorphically bind all top-level names.
             // If any assumptions were found to be imported,
             // their assumptions are promoted to Context level by this method.
-            self.bind_all_module_level_assumptions(&gen_mod);
+            self.bind_all_module_level_assumptions(&gen_mod)?;
 
             // Add the GeneratableModule to the context.
             assert!(gen_mods.insert(module_path, gen_mod).is_none());
         }
 
         // Constrain any names which were promoted to the Context level (i.e. imported names).
-        self.bind_all_context_level_assumptions(&gen_mods);
+        self.bind_all_context_level_assumptions(&gen_mods)?;
 
         // Solve the type constraints
         let soln = self.cg.solve()?;
@@ -244,7 +244,10 @@ impl Context {
     /// If the name isn't defined in this module, check if it's imported;
     /// if it is, then this assumption is promoted to Context level
     /// by inserting it into the Context.
-    pub fn bind_all_module_level_assumptions(&mut self, module: &GeneratableModule) {
+    pub fn bind_all_module_level_assumptions(
+        &mut self,
+        module: &GeneratableModule,
+    ) -> Result<(), HuckError> {
         log::trace!(log::TYPECHECK, "Emitting constraints about assumptions:");
 
         let mut assumptions = BTreeMap::new();
@@ -275,10 +278,11 @@ impl Context {
             } else {
                 // If there is no inferred type for the name (i.e. it's not in scope),
                 // then it's a scope error.
-                // @Errors: Scope error
-                panic!("scope error: {name}");
+                return Err(resolve::Error::NotInScope(module.path, name).into());
             }
         }
+
+        Ok(())
     }
 
     /// Binds all context-level assumptions (i.e. from imported names).
@@ -293,7 +297,7 @@ impl Context {
     fn bind_all_context_level_assumptions(
         &mut self,
         modules: &BTreeMap<ModulePath, GeneratableModule>,
-    ) {
+    ) -> Result<(), HuckError> {
         log::trace!(
             log::TYPECHECK,
             "Emitting constraints about context-level assumptions:"
@@ -302,14 +306,15 @@ impl Context {
         for module in modules.values() {
             for (import_name, (import_path, _import_stem)) in module.imports.iter() {
                 // Find the inferred type.
-                let import_module = modules.get(import_path).unwrap_or_else(|| {
-                    // @Errors: Scope error (nonexistent module)
-                    panic!("scope error (nonexistent module): {import_path}")
-                });
-                let typ = import_module.get_type(import_name).unwrap_or_else(|| {
-                    // @Errors: Scope error (nonexistent import)
-                    panic!("scope error (imported name doesn't exist): {import_path}.{import_name}")
-                });
+                let import_module = modules.get(import_path).ok_or_else(|| {
+                    HuckError::from(resolve::Error::NonexistentModule(*import_path))
+                })?;
+                let typ = import_module.get_type(import_name).ok_or_else(|| {
+                    HuckError::from(resolve::Error::NonexistentImport(
+                        *import_path,
+                        import_name.clone(),
+                    ))
+                })?;
 
                 // If there are any assumptions about the variable, bind them.
                 if let Some(assumed_types) =
@@ -330,6 +335,8 @@ impl Context {
                 }
             }
         }
+
+        Ok(())
     }
 
     /// Adds the given file to the Context.

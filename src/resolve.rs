@@ -1,10 +1,9 @@
 use std::collections::BTreeMap;
 use std::time::Instant;
 
-use crate::ast::{self};
 use crate::context::Context;
-use crate::log;
 use crate::parse::precedence::{ApplyPrecedence, Precedence};
+use crate::{ast, log};
 
 /// A `ResolvedName` is a unique token, used in the compiler to uniquely identify a value.
 /// After name resolution:
@@ -197,6 +196,15 @@ impl Context {
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    #[error("Identifier not in scope (module {0}): {1}")]
+    NotInScope(ast::ModulePath, ast::Name),
+
+    #[error("Module `{0}` doesn't exist")]
+    NonexistentModule(ast::ModulePath),
+
+    #[error("Identifier `{1}` doesn't exist in module `{0}`")]
+    NonexistentImport(ast::ModulePath, ast::Name),
+
     // @Cleanup @Errors: this shouldn't use Debug printing, but should print the source.
     #[error("Multiple precedence declarations found for `{0}`:\n    {1:?}\n    {2:?}")]
     MultiplePrecs(ast::Name, Precedence, Precedence),
