@@ -74,35 +74,26 @@ impl Context {
     // @Cleanup: not pub (? maybe needed in tests)
     pub fn typecheck(
         &mut self,
-        modules: BTreeMap<ModulePath, Module>,
+        mut modules: BTreeMap<ModulePath, Module>,
     ) -> Result<BTreeMap<ModulePath, GeneratableModule>, HuckError> {
         // Start the timer to measure how long typechecking takes.
         let start_time = Instant::now();
         log::info!(log::TYPECHECK, "Typechecking all modules...");
 
-        // Clone the modules into a Vec.
-        // @Todo @Cleanup @Checkme: do we need this? maybe not after refactoring Context::compile
-        let mut modules = modules
-            .iter()
-            .map(|(p, m)| (*p, m.clone()))
-            .collect::<Vec<(ModulePath, Module)>>();
-
-        // Sort the modules so that the prelude is typechecked first.
+        // Ensure the prelude is typechecked first.
         // Has to be done in this order
         // so that the implicit Prelude import statement
         // can be imported into other modules.
         let prelude_path = ModulePath("Prelude");
-        modules.sort_by(|(a, _), (_b, _)| {
-            if a == &prelude_path {
-                std::cmp::Ordering::Less
-            } else {
-                std::cmp::Ordering::Greater
-            }
-        });
+        let prelude = modules
+            .remove(&prelude_path)
+            .into_iter()
+            .map(|m| (prelude_path, m));
 
         let mut gen_mods = BTreeMap::new();
 
-        for (module_path, module) in modules {
+        // for (module_path, module) in modules {
+        for (module_path, module) in prelude.chain(modules.into_iter()) {
             log::trace!(log::TYPECHECK, "Typechecking: module {module_path};");
             // Set the new GeneratableModule's path.
             let mut gen_mod = GeneratableModule::new(module_path);

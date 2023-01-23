@@ -62,7 +62,7 @@ impl Debug for Constraint {
 }
 
 #[derive(Debug, Default)]
-pub struct ConstraintGenerator {
+pub(super) struct ConstraintGenerator {
     constraints: Vec<Constraint>,
 
     /// All the currently assumed types of name uses.
