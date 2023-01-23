@@ -10,7 +10,7 @@ fn typ_module(s: &'static str) -> GeneratableModule {
         .unwrap();
     let s = Box::leak(format!("module Test; {s}").into_boxed_str());
     ctx.include_string(s).unwrap();
-    let modules = ctx.resolve(ctx.parsed.clone()).unwrap();
+    let modules = ctx.post_parse(ctx.parsed.clone()).unwrap();
     let mut gen_mods = ctx.typecheck(modules).unwrap();
     gen_mods.remove(&ModulePath("Test")).unwrap()
 }

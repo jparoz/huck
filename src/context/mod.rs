@@ -50,9 +50,12 @@ impl Context {
     pub fn compile(mut self) -> Result<Vec<(PathBuf, String)>, HuckError> {
         // @Todo @Cleanup: Move lots of the state stored on Context to be variables here.
 
-        // Resolve names
+        // Post-parse processing
         // @XXX @Todo: don't clone
-        let modules = self.resolve(self.parsed.clone())?;
+        let modules = self.post_parse(self.parsed.clone())?;
+
+        // Resolve names
+        // @Todo
 
         // Typecheck
         let gen_mods = self.typecheck(modules)?;

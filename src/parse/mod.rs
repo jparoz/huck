@@ -17,6 +17,8 @@ use crate::{ast::*, log};
 pub mod precedence;
 use precedence::{Associativity, Precedence};
 
+pub mod post;
+
 #[cfg(test)]
 mod test;
 

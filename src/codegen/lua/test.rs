@@ -24,7 +24,7 @@ pub fn transpile(huck: &'static str) -> Result<String, HuckError> {
     context.include_string(huck)?;
 
     // Resolve
-    let modules = context.resolve(context.parsed.clone())?;
+    let modules = context.post_parse(context.parsed.clone())?;
 
     // Typecheck
     let mut gen_mods = context.typecheck(modules)?;
