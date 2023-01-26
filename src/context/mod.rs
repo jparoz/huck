@@ -78,6 +78,11 @@ impl Context {
             resolved_modules.insert(path, resolved_module);
         }
 
+        // @Todo: check that qualified names were used properly
+        // (i.e. check the `assumptions` field on each `Scope`)
+        // Something like this should be the error (or maybe a new special variant):
+        // Err(Error::NonexistentImport(path, UnresolvedName::Ident(ident)))
+
         // Typecheck
         let gen_mods = self.typecheck(resolved_modules)?;
 

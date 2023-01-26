@@ -63,46 +63,48 @@ impl Display for Source {
     }
 }
 
-/// @Nocommit: document this
+/// A `Scope` records which names are defined in a given scope.
 #[derive(Debug)]
-struct Scope<'a> {
-    // @Todo @Cleanup: do we really need this?
-    module: &'a ast::Module<UnresolvedName>,
+struct Scope {
+    /// The path of the module which the `Scope` represents.
+    module_path: ast::ModulePath,
 
-    /// Value-level
+    /// Value-level names which are in scope.
     names: BTreeMap<UnresolvedName, Vec<Source>>,
 
-    /// Type-level
+    /// Type-level names which are in scope.
     type_names: BTreeMap<UnresolvedName, Vec<Source>>,
+
+    /// This field records assumptions made that names will exist in external modules.
+    /// See [`resolve_name`] for more information.
+    assumptions: Vec<ResolvedName>,
+
+    /// This field records assumptions made that names will exist in external modules.
+    /// See [`resolve_type_name`] for more information.
+    type_assumptions: Vec<ResolvedName>,
 }
 
-impl<'a> Scope<'a> {
+impl Scope {
     /// Makes a new Scope, including builtin names.
-    fn new(module: &'a ast::Module<UnresolvedName>) -> Self {
+    fn new(module_path: ast::ModulePath) -> Self {
         let names = BTreeMap::new();
 
-        let mut type_names: BTreeMap<UnresolvedName, Vec<_>> = BTreeMap::new();
-        type_names
-            .entry(UnresolvedName::Ident("Int"))
-            .or_default()
-            .push(Source::Builtin);
-        type_names
-            .entry(UnresolvedName::Ident("Float"))
-            .or_default()
-            .push(Source::Builtin);
-        type_names
-            .entry(UnresolvedName::Ident("String"))
-            .or_default()
-            .push(Source::Builtin);
-        type_names
-            .entry(UnresolvedName::Ident("Bool"))
-            .or_default()
-            .push(Source::Builtin);
+        let mut type_names: BTreeMap<UnresolvedName, Vec<_>> = BTreeMap::from([
+            (UnresolvedName::Ident("Int"), vec![Source::Builtin]),
+            (UnresolvedName::Ident("Float"), vec![Source::Builtin]),
+            (UnresolvedName::Ident("String"), vec![Source::Builtin]),
+            (UnresolvedName::Ident("Bool"), vec![Source::Builtin]),
+        ]);
+
+        let assumptions = Vec::new();
+        let type_assumptions = Vec::new();
 
         Scope {
-            module,
+            module_path,
             names,
             type_names,
+            assumptions,
+            type_assumptions,
         }
     }
 
@@ -217,7 +219,7 @@ impl Context {
         // This is the new module we'll be building as we resolve names.
         let mut resolved_module: ast::Module<ResolvedName> = ast::Module::new(module.path);
 
-        let mut scope = Scope::new(&module);
+        let mut scope = Scope::new(module.path);
 
         // Add all the top-level definitions (including type constructors) to the scope
         let defns_iter = module.definitions.keys();
@@ -382,13 +384,21 @@ impl Context {
         log::trace!(log::RESOLVE, "  Attempting to resolve name `{name}`");
         match name {
             UnresolvedName::Qualified(path, ident) => {
-                // @Todo: Check that the ident exists in the path
-                // // @Fixme @Errors: this should probably have its own Error variant
-                // Err(Error::NonexistentImport(path, UnresolvedName::Ident(ident)))
-                Ok(ResolvedName {
+                let resolved_name = ResolvedName {
                     source: Source::Module(path),
                     ident,
-                })
+                };
+
+                // @Note:
+                // Here we need to check that the name actually exists in the module,
+                // e.g. check that in `Foo.bar`, module `Foo` defined a name `bar`.
+                // However, because we don't have the information at hand,
+                // we'll just defer that check until the end of the resolve step,
+                // when we've resolved all the rest of the names in all modules.
+                // This `assumptions` entry is to mark that we still need to do this check.
+                scope.assumptions.push(resolved_name);
+
+                Ok(resolved_name)
             }
             unres_name => scope
                 .names
@@ -402,7 +412,48 @@ impl Context {
                     log::trace!(log::RESOLVE, "  Resolved name `{resolved}`");
                     resolved
                 })
-                .ok_or(Error::NotInScope(scope.module.path, unres_name)),
+                .ok_or(Error::NotInScope(scope.module_path, unres_name)),
+        }
+    }
+
+    // @Cleanup: @DRY with above
+    fn resolve_type_name(
+        &mut self,
+        scope: &mut Scope,
+        name: UnresolvedName,
+    ) -> Result<ResolvedName, Error> {
+        log::trace!(log::RESOLVE, "  Attempting to resolve name `{name}`");
+        match name {
+            UnresolvedName::Qualified(path, ident) => {
+                let resolved_name = ResolvedName {
+                    source: Source::Module(path),
+                    ident,
+                };
+
+                // @Note:
+                // Here we need to check that the name actually exists in the module,
+                // e.g. check that in `Foo.bar`, module `Foo` defined a name `bar`.
+                // However, because we don't have the information at hand,
+                // we'll just defer that check until the end of the resolve step,
+                // when we've resolved all the rest of the names in all modules.
+                // This `assumptions` entry is to mark that we still need to do this check.
+                scope.type_assumptions.push(resolved_name);
+
+                Ok(resolved_name)
+            }
+            unres_name => scope
+                .type_names
+                .get(&unres_name)
+                .and_then(|v| v.last())
+                .map(|source| {
+                    let resolved = ResolvedName {
+                        source: *source,
+                        ident: unres_name.ident(),
+                    };
+                    log::trace!(log::RESOLVE, "  Resolved name `{resolved}`");
+                    resolved
+                })
+                .ok_or(Error::NotInScope(scope.module_path, unres_name)),
         }
     }
 
@@ -857,38 +908,6 @@ impl Context {
             }
 
             ast::TypeTerm::Unit => Ok(ast::TypeTerm::Unit),
-        }
-    }
-
-    fn resolve_type_name(
-        &mut self,
-        scope: &mut Scope,
-        name: UnresolvedName,
-    ) -> Result<ResolvedName, Error> {
-        log::trace!(log::RESOLVE, "Attempting to resolve type name `{name}`");
-        match name {
-            UnresolvedName::Qualified(path, ident) => {
-                // @Todo: Check that the ident exists in the path
-                // // @Fixme @Errors: this should probably have its own Error variant
-                // Err(Error::NonexistentImport(path, UnresolvedName::Ident(ident)))
-                Ok(ResolvedName {
-                    source: Source::Module(path),
-                    ident,
-                })
-            }
-            unres_name => scope
-                .type_names
-                .get(&unres_name)
-                .and_then(|v| v.last())
-                .map(|source| {
-                    let resolved = ResolvedName {
-                        source: *source,
-                        ident: unres_name.ident(),
-                    };
-                    log::trace!(log::RESOLVE, "Resolved type name `{resolved}`");
-                    resolved
-                })
-                .ok_or(Error::NotInScope(scope.module.path, unres_name)),
         }
     }
 }
