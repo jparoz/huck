@@ -137,77 +137,12 @@ impl Resolver {
 
     fn resolve_name(&mut self, name: UnresolvedName) -> Result<ResolvedName, Error> {
         log::trace!(log::RESOLVE, "  Attempting to resolve name `{name}`");
-        match name {
-            UnresolvedName::Qualified(path, ident) => {
-                let resolved_name = ResolvedName {
-                    source: Source::Module(path),
-                    ident,
-                };
-
-                // @Note:
-                // Here we need to check that the name actually exists in the module,
-                // e.g. check that in `Foo.bar`, module `Foo` defined a name `bar`.
-                // However, because we don't have the information at hand,
-                // we'll just defer that check until the end of the resolve step,
-                // when we've resolved all the rest of the names in all modules.
-                // This `assumptions` entry is to mark that we still need to do this check.
-                self.scope.assumptions.push(resolved_name);
-
-                Ok(resolved_name)
-            }
-            unres_name => self
-                .scope
-                .names
-                .get(&unres_name)
-                .and_then(|v| v.last())
-                .map(|source| {
-                    let resolved = ResolvedName {
-                        source: *source,
-                        ident: unres_name.ident(),
-                    };
-                    log::trace!(log::RESOLVE, "  Resolved name `{resolved}`");
-                    resolved
-                })
-                .ok_or(Error::NotInScope(self.module_path, unres_name)),
-        }
+        self.scope.resolve_name(name, self.module_path)
     }
 
-    // @Cleanup: @DRY with above
     fn resolve_type_name(&mut self, name: UnresolvedName) -> Result<ResolvedName, Error> {
-        log::trace!(log::RESOLVE, "  Attempting to resolve name `{name}`");
-        match name {
-            UnresolvedName::Qualified(path, ident) => {
-                let resolved_name = ResolvedName {
-                    source: Source::Module(path),
-                    ident,
-                };
-
-                // @Note:
-                // Here we need to check that the name actually exists in the module,
-                // e.g. check that in `Foo.bar`, module `Foo` defined a name `bar`.
-                // However, because we don't have the information at hand,
-                // we'll just defer that check until the end of the resolve step,
-                // when we've resolved all the rest of the names in all modules.
-                // This `assumptions` entry is to mark that we still need to do this check.
-                self.type_scope.assumptions.push(resolved_name);
-
-                Ok(resolved_name)
-            }
-            unres_name => self
-                .type_scope
-                .names
-                .get(&unres_name)
-                .and_then(|v| v.last())
-                .map(|source| {
-                    let resolved = ResolvedName {
-                        source: *source,
-                        ident: unres_name.ident(),
-                    };
-                    log::trace!(log::RESOLVE, "  Resolved name `{resolved}`");
-                    resolved
-                })
-                .ok_or(Error::NotInScope(self.module_path, unres_name)),
-        }
+        log::trace!(log::RESOLVE, "  Attempting to resolve type name `{name}`");
+        self.type_scope.resolve_name(name, self.module_path)
     }
 
     fn resolve_definition(
@@ -680,6 +615,50 @@ impl Scope {
             popped_source,
             "Internal compiler error: unbound the wrong variable"
         );
+    }
+
+    /// Does the work for resolving a name in this scope.
+    /// `module_path` is just used for error messages.
+    ///
+    /// See also [`Resolver::resolve_name`] and [`Resolver::resolve_type_name`].
+    fn resolve_name(
+        &mut self,
+        name: UnresolvedName,
+        module_path: ast::ModulePath,
+    ) -> Result<ResolvedName, Error> {
+        match name {
+            UnresolvedName::Qualified(path, ident) => {
+                let resolved = ResolvedName {
+                    source: Source::Module(path),
+                    ident,
+                };
+
+                // @Note:
+                // Here we need to check that the name actually exists in the module,
+                // e.g. check that in `Foo.bar`, module `Foo` defined a name `bar`.
+                // However, because we don't have the information at hand,
+                // we'll just defer that check until the end of the resolve step,
+                // when we've resolved all the rest of the names in all modules.
+                // This `assumptions` entry is to mark that we still need to do this check.
+                self.assumptions.push(resolved);
+                log::trace!(log::RESOLVE, "  Assumed name `{resolved}`");
+
+                Ok(resolved)
+            }
+            unres_name => self
+                .names
+                .get(&unres_name)
+                .and_then(|v| v.last())
+                .map(|source| {
+                    let resolved = ResolvedName {
+                        source: *source,
+                        ident: unres_name.ident(),
+                    };
+                    log::trace!(log::RESOLVE, "  Resolved name `{resolved}`");
+                    resolved
+                })
+                .ok_or(Error::NotInScope(module_path, unres_name)),
+        }
     }
 }
 
