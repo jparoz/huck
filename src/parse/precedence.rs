@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
-use crate::ast::{Assignment, Definition, Expr, Lhs, Name, Pattern, Term};
+use crate::ast::{Assignment, Definition, Expr, Lhs, Pattern, Term, UnresolvedName};
+use crate::resolve::ResolvedName;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub struct Precedence(pub Associativity, pub u8);
@@ -13,17 +14,17 @@ pub enum Associativity {
 }
 
 pub trait ApplyPrecedence {
-    fn apply(&mut self, precs: &BTreeMap<Name, Precedence>);
+    fn apply(&mut self, precs: &BTreeMap<ResolvedName, Precedence>);
 }
 
-impl ApplyPrecedence for Definition {
-    fn apply(&mut self, precs: &BTreeMap<Name, Precedence>) {
+impl ApplyPrecedence for Definition<ResolvedName> {
+    fn apply(&mut self, precs: &BTreeMap<ResolvedName, Precedence>) {
         self.assignments.iter_mut().for_each(|a| a.apply(precs));
     }
 }
 
-impl ApplyPrecedence for Assignment {
-    fn apply(&mut self, precs: &BTreeMap<Name, Precedence>) {
+impl ApplyPrecedence for Assignment<ResolvedName> {
+    fn apply(&mut self, precs: &BTreeMap<ResolvedName, Precedence>) {
         // LHS
         self.0.apply(precs);
         // RHS
@@ -31,8 +32,8 @@ impl ApplyPrecedence for Assignment {
     }
 }
 
-impl ApplyPrecedence for Lhs {
-    fn apply(&mut self, precs: &BTreeMap<Name, Precedence>) {
+impl ApplyPrecedence for Lhs<ResolvedName> {
+    fn apply(&mut self, precs: &BTreeMap<ResolvedName, Precedence>) {
         match self {
             Lhs::Func { args, .. } | Lhs::Lambda { args } => {
                 for arg in args {
@@ -47,8 +48,8 @@ impl ApplyPrecedence for Lhs {
     }
 }
 
-impl ApplyPrecedence for Pattern {
-    fn apply(&mut self, precs: &BTreeMap<Name, Precedence>) {
+impl ApplyPrecedence for Pattern<ResolvedName> {
+    fn apply(&mut self, precs: &BTreeMap<ResolvedName, Precedence>) {
         match self {
             Pattern::List(args) => {
                 for arg in args {
@@ -108,8 +109,8 @@ impl ApplyPrecedence for Pattern {
     }
 }
 
-impl ApplyPrecedence for Expr {
-    fn apply(&mut self, precs: &BTreeMap<Name, Precedence>) {
+impl ApplyPrecedence for Expr<ResolvedName> {
+    fn apply(&mut self, precs: &BTreeMap<ResolvedName, Precedence>) {
         match self {
             Expr::Binop {
                 operator: ref mut l_op,

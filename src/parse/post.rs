@@ -10,20 +10,17 @@ impl Context {
     /// and turns it into a more coherent data structure.
     pub fn post_parse(
         &mut self,
-        parsed: BTreeMap<ast::ModulePath, Vec<ast::Statement>>,
+        parsed: BTreeMap<ast::ModulePath, Vec<ast::Statement<ast::UnresolvedName>>>,
         // @Cleanup: not resolve::Error
         // @Cleanup: not ast::Module (?)
-    ) -> Result<BTreeMap<ast::ModulePath, ast::Module>, resolve::Error> {
+    ) -> Result<BTreeMap<ast::ModulePath, ast::Module<ast::UnresolvedName>>, resolve::Error> {
         let mut modules = BTreeMap::new();
 
         for (path, mut statements) in parsed {
             // Start the timer to measure how long resolution takes.
             let start_time = Instant::now();
 
-            let mut module = ast::Module {
-                path,
-                ..ast::Module::default()
-            };
+            let mut module = ast::Module::new(path);
 
             let mut precs = BTreeMap::new();
 
@@ -63,7 +60,7 @@ impl Context {
                         .or_default()
                         .extend(import_items.into_iter().map(|item| match item {
                             ast::ForeignImportItem::SameName(name, ts) => {
-                                (ast::ForeignName(name.as_str()), name, ts)
+                                (ast::ForeignName(name), ast::UnresolvedName::Ident(name), ts)
                             }
                             ast::ForeignImportItem::Rename(lua_name, name, ts) => {
                                 (lua_name, name, ts)
@@ -71,11 +68,11 @@ impl Context {
                         })),
 
                     ast::Statement::Precedence(name, prec) => {
-                        precs.insert(name.clone(), prec);
+                        precs.insert(name, prec);
                         // If there was already a precedence for this name, that's an error.
                         if let Some(previous_prec) = module
                             .definitions
-                            .entry(name.clone())
+                            .entry(name)
                             .or_default()
                             .precedence
                             .replace(prec)
@@ -88,11 +85,12 @@ impl Context {
                         // Modify this assignment to take precedence statements into account.
                         // @Note: we've already processed all the precedence statements,
                         //        because of the sorted processing order.
-                        assign.apply(&precs);
+                        // assign.apply(&precs);
+                        // @Nocommit: put the above somewhere else
 
                         module
                             .definitions
-                            .entry(assign.0.name().clone())
+                            .entry(*assign.0.name())
                             .or_default()
                             .assignments
                             .push(assign);
@@ -102,17 +100,15 @@ impl Context {
                         // Modify this assignment to take precedence statements into account.
                         // @Note: we've already processed all the precedence statements,
                         //        because of the sorted processing order.
-                        assign.apply(&precs);
+                        // assign.apply(&precs);
+                        // @Nocommit: put the above somewhere else
 
-                        let defn = module
-                            .definitions
-                            .entry(assign.0.name().clone())
-                            .or_default();
+                        let defn = module.definitions.entry(*assign.0.name()).or_default();
 
                         // If there was already an explicit for this name, that's an error.
                         if let Some(previous_ts) = defn.explicit_type.replace(ts.clone()) {
                             return Err(resolve::Error::MultipleTypes(
-                                assign.0.name().clone(),
+                                *assign.0.name(),
                                 // @Cleanup: don't have this dodgy whitespace
                                 format!("\n    {:?}\n    {:?}", ts, previous_ts),
                             ));
@@ -127,7 +123,7 @@ impl Context {
                         // If there was already an explicit for this name, that's an error.
                         if let Some(previous_ts) = module
                             .definitions
-                            .entry(name.clone())
+                            .entry(name)
                             .or_default()
                             .explicit_type
                             .replace(ts.clone())
@@ -141,9 +137,8 @@ impl Context {
                     }
 
                     ast::Statement::TypeDefinition(type_defn) => {
-                        if let Some(first_defn) = module
-                            .type_definitions
-                            .insert(type_defn.name.clone(), type_defn)
+                        if let Some(first_defn) =
+                            module.type_definitions.insert(type_defn.name, type_defn)
                         {
                             return Err(resolve::Error::MultipleTypeDefinitions(first_defn.name));
                         }

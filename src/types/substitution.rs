@@ -106,7 +106,7 @@ impl ApplySub for Type {
                 t.apply(sub);
             }),
 
-            Type::Concrete(_) => (),
+            Type::Concrete(_) | Type::Primitive(_) => (),
         }
     }
 }

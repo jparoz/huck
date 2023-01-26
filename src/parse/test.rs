@@ -30,7 +30,10 @@ fn statement_import_unqualified() {
             "",
             ast::Statement::Import(
                 ast::ModulePath("Foo.Bar"),
-                vec![ast::Name::Ident("foo"), ast::Name::Ident("Bar")]
+                vec![
+                    ast::UnresolvedName::Ident("foo"),
+                    ast::UnresolvedName::Ident("Bar")
+                ]
             )
         ))
     )
@@ -45,7 +48,7 @@ fn statement_import_foreign() {
             ast::Statement::ForeignImport(
                 r#""inspect""#,
                 vec![ast::ForeignImportItem::SameName(
-                    ast::Name::Ident("inspect"),
+                    ast::UnresolvedName::Ident("inspect"),
                     ast::TypeScheme {
                         typ: ast::TypeExpr::Arrow(
                             Box::new(ast::TypeExpr::Term(ast::TypeTerm::Var("a"))),
@@ -66,7 +69,7 @@ fn statement_assign_without_type() {
         parse::statement("a = 123;").unwrap().1,
         ast::Statement::AssignmentWithoutType((
             ast::Lhs::Func {
-                name: ast::Name::Ident("a"),
+                name: ast::UnresolvedName::Ident("a"),
                 args: vec![]
             },
             ast::Expr::Term(ast::Term::Numeral(ast::Numeral::Int("123")))
@@ -86,7 +89,7 @@ fn statement_assign_with_type() {
             },
             (
                 ast::Lhs::Func {
-                    name: ast::Name::Ident("a"),
+                    name: ast::UnresolvedName::Ident("a"),
                     args: vec![]
                 },
                 ast::Expr::Term(ast::Term::Numeral(ast::Numeral::Int("123")))
@@ -101,7 +104,7 @@ fn statement_type_annotation() {
     assert_eq!(
         parse::statement("a: Int;").unwrap().1,
         ast::Statement::TypeAnnotation(
-            ast::Name::Ident("a"),
+            ast::UnresolvedName::Ident("a"),
             ast::TypeScheme {
                 vars: vec![],
                 typ: ast::TypeExpr::Term(ast::TypeTerm::Concrete("Int"))
@@ -116,7 +119,7 @@ fn statement_precedence() {
     assert_eq!(
         parse::statement("infixl 5 >>;").unwrap().1,
         ast::Statement::Precedence(
-            ast::Name::Binop(">>"),
+            ast::UnresolvedName::Binop(">>"),
             parse::precedence::Precedence(parse::precedence::Associativity::Left, 5)
         )
     );
@@ -128,12 +131,12 @@ fn statement_type_definition() {
     assert_eq!(
         parse::statement("type Foo = Bar | Baz Int;").unwrap().1,
         ast::Statement::TypeDefinition(ast::TypeDefinition {
-            name: ast::Name::Ident("Foo"),
+            name: ast::UnresolvedName::Ident("Foo"),
             vars: vec![],
             constructors: vec![
-                (ast::Name::Ident("Bar"), vec![]),
+                (ast::UnresolvedName::Ident("Bar"), vec![]),
                 (
-                    ast::Name::Ident("Baz"),
+                    ast::UnresolvedName::Ident("Baz"),
                     vec![ast::TypeTerm::Concrete("Int")]
                 ),
             ]
@@ -153,7 +156,10 @@ fn binop_plus() {
 fn name_qualified_lower() {
     assert_eq!(
         parse::name(r#"Foo.bar"#).unwrap(),
-        ("", ast::Name::Qualified(ast::ModulePath("Foo"), "bar"))
+        (
+            "",
+            ast::UnresolvedName::Qualified(ast::ModulePath("Foo"), "bar")
+        )
     )
 }
 
@@ -161,14 +167,17 @@ fn name_qualified_lower() {
 fn name_qualified_upper() {
     assert_eq!(
         parse::name(r#"Foo.Bar"#).unwrap(),
-        ("", ast::Name::Qualified(ast::ModulePath("Foo"), "Bar"))
+        (
+            "",
+            ast::UnresolvedName::Qualified(ast::ModulePath("Foo"), "Bar")
+        )
     )
 }
 
 #[test]
 fn unit() {
     assert_eq!(parse::statement(r#"unit = ();"#).unwrap().1, {
-        let name = ast::Name::Ident("unit");
+        let name = ast::UnresolvedName::Ident("unit");
         Statement::AssignmentWithoutType((
             ast::Lhs::Func { name, args: vec![] },
             ast::Expr::Term(ast::Term::Unit),
@@ -179,14 +188,16 @@ fn unit() {
 #[test]
 fn apply_to_unit() {
     assert_eq!(parse::statement(r#"applyToUnit f = f ();"#).unwrap().1, {
-        let name = ast::Name::Ident("applyToUnit");
+        let name = ast::UnresolvedName::Ident("applyToUnit");
         Statement::AssignmentWithoutType((
             ast::Lhs::Func {
                 name,
                 args: vec![ast::Pattern::Bind("f")],
             },
             ast::Expr::App {
-                func: Box::new(ast::Expr::Term(ast::Term::Name(ast::Name::Ident("f")))),
+                func: Box::new(ast::Expr::Term(ast::Term::Name(
+                    ast::UnresolvedName::Ident("f"),
+                ))),
                 argument: Box::new(ast::Expr::Term(ast::Term::Unit)),
             },
         ))
@@ -206,14 +217,16 @@ fn case() {
         .unwrap()
         .1,
         {
-            let name = ast::Name::Ident("foo");
+            let name = ast::UnresolvedName::Ident("foo");
             Statement::AssignmentWithoutType((
                 ast::Lhs::Func {
                     name,
                     args: vec![ast::Pattern::Bind("x")],
                 },
                 ast::Expr::Case {
-                    expr: Box::new(ast::Expr::Term(ast::Term::Name(ast::Name::Ident("x")))),
+                    expr: Box::new(ast::Expr::Term(ast::Term::Name(
+                        ast::UnresolvedName::Ident("x"),
+                    ))),
                     arms: vec![
                         (
                             ast::Pattern::Numeral(ast::Numeral::Int("1")),

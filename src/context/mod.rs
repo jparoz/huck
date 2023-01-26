@@ -3,10 +3,11 @@ use std::mem;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use crate::ast::{Module, ModulePath, Name, Statement};
+use crate::ast::{Module, ModulePath, Statement, UnresolvedName};
 use crate::error::Error as HuckError;
 use crate::generatable_module::GeneratableModule;
 use crate::parse::parse;
+use crate::resolve::ResolvedName;
 use crate::types::{ApplySub, Error as TypeError, Type};
 use crate::{codegen, log, resolve};
 
@@ -27,14 +28,15 @@ pub struct Context {
     pub file_paths: BTreeMap<ModulePath, PathBuf>,
 
     /// The freshly parsed statement lists for each module.
-    pub parsed: BTreeMap<ModulePath, Vec<Statement>>,
+    pub parsed: BTreeMap<ModulePath, Vec<Statement<UnresolvedName>>>,
 
     /// The constraint generator.
     cg: ConstraintGenerator,
 
-    /// These are assumptions made about imported names,
+    /// These are type assumptions made about imported names,
     /// so need to be handled at Context level rather than module level.
-    assumptions: BTreeMap<(ModulePath, Name), Vec<Type>>,
+    // @Todo @Cleanup: change this to use ResolvedName
+    assumptions: BTreeMap<(ModulePath, ResolvedName), Vec<Type>>,
 }
 
 impl Context {
@@ -52,13 +54,32 @@ impl Context {
 
         // Post-parse processing
         // @XXX @Todo: don't clone
-        let modules = self.post_parse(self.parsed.clone())?;
+        let mut modules = self.post_parse(self.parsed.clone())?;
 
         // Resolve names
-        // @Todo
+        let mut resolved_modules = BTreeMap::new();
+
+        // Start with the prelude
+        let prelude_path = ModulePath("Prelude");
+        if let Some(unresolved_prelude) = modules.remove(&prelude_path) {
+            let resolved_prelude = self.resolve(unresolved_prelude)?;
+            resolved_modules.insert(prelude_path, resolved_prelude);
+        }
+
+        // @Todo: pass the prelude scope into resolve for the other modules,
+        // so it can be automatically inserted into scope.
+        // Or change the function signature of resolve to accept a &mut Scope,
+        // instead of making a new one each time.
+
+        // @Todo: Make all the `resolve_*` methods into methods on Scope
+
+        for (path, module) in modules {
+            let resolved_module = self.resolve(module)?;
+            resolved_modules.insert(path, resolved_module);
+        }
 
         // Typecheck
-        let gen_mods = self.typecheck(modules)?;
+        let gen_mods = self.typecheck(resolved_modules)?;
 
         // Generate code
         let mut generated = Vec::new();
@@ -77,7 +98,7 @@ impl Context {
     // @Cleanup: not pub (? maybe needed in tests)
     pub fn typecheck(
         &mut self,
-        mut modules: BTreeMap<ModulePath, Module>,
+        mut modules: BTreeMap<ModulePath, Module<ResolvedName>>,
     ) -> Result<BTreeMap<ModulePath, GeneratableModule>, HuckError> {
         // Start the timer to measure how long typechecking takes.
         let start_time = Instant::now();
@@ -123,14 +144,14 @@ impl Context {
                 for (constr_name, constr_type) in type_defn.constructors.iter() {
                     gen_mod
                         .constructors
-                        .insert(constr_name.clone(), constr_type.clone());
+                        .insert(*constr_name, constr_type.clone());
                 }
 
                 // @Note: guaranteed to be None,
                 // because we're iterating over a BTreeMap.
                 assert!(gen_mod
                     .type_definitions
-                    .insert(type_defn.name.clone(), type_defn)
+                    .insert(type_defn.name, type_defn)
                     .is_none());
             }
 
@@ -193,7 +214,7 @@ impl Context {
                     // @Todo @Checkme @Errors @Warn: name clashes?
                     assert!(gen_mod
                         .imports
-                        .insert(name.clone(), (prelude_path, prelude_stem.clone()))
+                        .insert(*name, (prelude_path, prelude_stem.clone()))
                         .is_none());
                 }
             }
@@ -270,9 +291,10 @@ impl Context {
                     .or_default()
                     .extend(assumed_types);
             } else {
-                // If there is no inferred type for the name (i.e. it's not in scope),
-                // then it's a scope error.
-                return Err(resolve::Error::NotInScope(module.path, name).into());
+                // // If there is no inferred type for the name (i.e. it's not in scope),
+                // // then it's a scope error.
+                // return Err(resolve::Error::NotInScope(module.path, name).into());
+                todo!() // @Fixme @XXX @Todo @Nocommit
             }
         }
 
@@ -304,18 +326,18 @@ impl Context {
                     HuckError::from(resolve::Error::NonexistentModule(*import_path))
                 })?;
                 let typ = import_module.get_type(import_name).ok_or_else(|| {
-                    HuckError::from(resolve::Error::NonexistentImport(
-                        *import_path,
-                        import_name.clone(),
-                    ))
+                    HuckError::from(
+                        // @Fixme @XXX @Todo @Nocommit
+                        resolve::Error::NonexistentImport(
+                            *import_path,
+                            // *import_name,
+                            UnresolvedName::Ident("FAKE"),
+                        ),
+                    )
                 })?;
 
                 // If there are any assumptions about the variable, bind them.
-                if let Some(assumed_types) =
-                    // @Checkme: do we need to clone?
-                    self
-                        .assumptions
-                        .remove(&(*import_path, import_name.clone()))
+                if let Some(assumed_types) = self.assumptions.remove(&(*import_path, *import_name))
                 {
                     // Constrain that the assumed types are instances of the inferred type.
                     for assumed_type in assumed_types {

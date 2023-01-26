@@ -22,7 +22,7 @@ pub mod post;
 #[cfg(test)]
 mod test;
 
-pub fn parse(input: &'static str) -> Result<(ModulePath, Vec<Statement>), Error> {
+pub fn parse(input: &'static str) -> Result<(ModulePath, Vec<Statement<UnresolvedName>>), Error> {
     // Start the timer to measure how long parsing takes.
     let start_time = Instant::now();
 
@@ -56,7 +56,7 @@ fn module_path(input: &'static str) -> IResult<&'static str, ModulePath> {
     )(input)
 }
 
-fn statement(input: &'static str) -> IResult<&'static str, Statement> {
+fn statement(input: &'static str) -> IResult<&'static str, Statement<UnresolvedName>> {
     alt((
         // Assignment with inline type annotation
         map(assign_with_type, |(ts, assign)| {
@@ -123,11 +123,12 @@ fn statement(input: &'static str) -> IResult<&'static str, Statement> {
     ))(input)
 }
 
-fn foreign_import_item(input: &'static str) -> IResult<&'static str, ForeignImportItem> {
+fn foreign_import_item(
+    input: &'static str,
+) -> IResult<&'static str, ForeignImportItem<UnresolvedName>> {
     alt((
         map(
-            // @Todo @Checkme: should this be name, or ws(var)?
-            separated_pair(name, reserved_op(":"), type_scheme),
+            separated_pair(ws(var), reserved_op(":"), type_scheme),
             |(name, ts)| ForeignImportItem::SameName(name, ts),
         ),
         map(
@@ -143,7 +144,9 @@ fn foreign_import_item(input: &'static str) -> IResult<&'static str, ForeignImpo
     ))(input)
 }
 
-fn assign_with_type(input: &'static str) -> IResult<&'static str, (TypeScheme, Assignment)> {
+fn assign_with_type(
+    input: &'static str,
+) -> IResult<&'static str, (TypeScheme<UnresolvedName>, Assignment<UnresolvedName>)> {
     terminated(
         map(
             nom_tuple((lhs, reserved_op(":"), type_scheme, reserved_op("="), expr)),
@@ -153,11 +156,11 @@ fn assign_with_type(input: &'static str) -> IResult<&'static str, (TypeScheme, A
     )(input)
 }
 
-fn assign(input: &'static str) -> IResult<&'static str, Assignment> {
+fn assign(input: &'static str) -> IResult<&'static str, Assignment<UnresolvedName>> {
     terminated(separated_pair(lhs, reserved_op("="), expr), semi)(input)
 }
 
-fn prec(input: &'static str) -> IResult<&'static str, (Name, Precedence)> {
+fn prec(input: &'static str) -> IResult<&'static str, (UnresolvedName, Precedence)> {
     map(
         terminated(nom_tuple((associativity, ws(nom_u8), operator)), semi),
         |(assoc, prec, op)| (op, Precedence(assoc, prec)),
@@ -172,7 +175,7 @@ fn associativity(input: &'static str) -> IResult<&'static str, Associativity> {
     ))(input)
 }
 
-fn lhs(input: &'static str) -> IResult<&'static str, Lhs> {
+fn lhs(input: &'static str) -> IResult<&'static str, Lhs<UnresolvedName>> {
     alt((
         map(nom_tuple((pattern, operator, pattern)), |(a, op, b)| {
             Lhs::Binop { a, op, b }
@@ -183,9 +186,9 @@ fn lhs(input: &'static str) -> IResult<&'static str, Lhs> {
     ))(input)
 }
 
-fn pattern(input: &'static str) -> IResult<&'static str, Pattern> {
+fn pattern(input: &'static str) -> IResult<&'static str, Pattern<UnresolvedName>> {
     alt((
-        map(ws(var), Pattern::Bind),
+        map(ws(var), |v| Pattern::Bind(UnresolvedName::Ident(v))),
         map(list(pattern), Pattern::List),
         map(tuple(pattern), Pattern::Tuple),
         map(numeral, Pattern::Numeral),
@@ -201,7 +204,7 @@ fn pattern(input: &'static str) -> IResult<&'static str, Pattern> {
     ))(input)
 }
 
-fn pattern_binop(input: &'static str) -> IResult<&'static str, Pattern> {
+fn pattern_binop(input: &'static str) -> IResult<&'static str, Pattern<UnresolvedName>> {
     map(
         nom_tuple((pattern, operator, alt((pattern_binop, pattern)))),
         |(lhs, operator, rhs)| Pattern::Binop {
@@ -212,11 +215,11 @@ fn pattern_binop(input: &'static str) -> IResult<&'static str, Pattern> {
     )(input)
 }
 
-fn expr(input: &'static str) -> IResult<&'static str, Expr> {
+fn expr(input: &'static str) -> IResult<&'static str, Expr<UnresolvedName>> {
     alt((binop, app, let_in, if_then_else, case, lambda, lua_expr))(input)
 }
 
-fn type_scheme(input: &'static str) -> IResult<&'static str, TypeScheme> {
+fn type_scheme(input: &'static str) -> IResult<&'static str, TypeScheme<UnresolvedName>> {
     map(
         nom_tuple((
             opt(preceded(
@@ -236,7 +239,7 @@ fn type_scheme(input: &'static str) -> IResult<&'static str, TypeScheme> {
     )(input)
 }
 
-fn type_expr(input: &'static str) -> IResult<&'static str, TypeExpr> {
+fn type_expr(input: &'static str) -> IResult<&'static str, TypeExpr<UnresolvedName>> {
     alt((
         // @Future @TypeBinops: type-level binops
         // Can possibly just modify the below line to use type_operator instead of reserved_op("->")
@@ -248,7 +251,7 @@ fn type_expr(input: &'static str) -> IResult<&'static str, TypeExpr> {
     ))(input)
 }
 
-fn type_app(input: &'static str) -> IResult<&'static str, TypeExpr> {
+fn type_app(input: &'static str) -> IResult<&'static str, TypeExpr<UnresolvedName>> {
     map(many1(type_term), |ts| {
         ts.into_iter()
             .map(TypeExpr::Term)
@@ -257,9 +260,11 @@ fn type_app(input: &'static str) -> IResult<&'static str, TypeExpr> {
     })(input)
 }
 
-fn type_term(input: &'static str) -> IResult<&'static str, TypeTerm> {
+fn type_term(input: &'static str) -> IResult<&'static str, TypeTerm<UnresolvedName>> {
     alt((
-        map(ws(upper_ident), TypeTerm::Concrete),
+        map(ws(upper_ident), |s| {
+            TypeTerm::Concrete(UnresolvedName::Ident(s))
+        }),
         map(ws(var), TypeTerm::Var),
         map(delimited(ws(tag("[")), type_expr, ws(tag("]"))), |t| {
             TypeTerm::List(Box::new(t))
@@ -270,7 +275,7 @@ fn type_term(input: &'static str) -> IResult<&'static str, TypeTerm> {
     ))(input)
 }
 
-fn binop(input: &'static str) -> IResult<&'static str, Expr> {
+fn binop(input: &'static str) -> IResult<&'static str, Expr<UnresolvedName>> {
     map(nom_tuple((app, operator, expr)), |(lhs, operator, rhs)| {
         Expr::Binop {
             operator,
@@ -280,7 +285,7 @@ fn binop(input: &'static str) -> IResult<&'static str, Expr> {
     })(input)
 }
 
-fn app(input: &'static str) -> IResult<&'static str, Expr> {
+fn app(input: &'static str) -> IResult<&'static str, Expr<UnresolvedName>> {
     map(many1(term), |ts| {
         ts.into_iter()
             .map(Expr::Term)
@@ -292,7 +297,7 @@ fn app(input: &'static str) -> IResult<&'static str, Expr> {
     })(input)
 }
 
-fn let_in(input: &'static str) -> IResult<&'static str, Expr> {
+fn let_in(input: &'static str) -> IResult<&'static str, Expr<UnresolvedName>> {
     map(
         nom_tuple((
             reserved("let"),
@@ -302,12 +307,10 @@ fn let_in(input: &'static str) -> IResult<&'static str, Expr> {
             expr,
         )),
         |(_, assigns, _, _, in_expr)| {
-            let mut local_env: BTreeMap<Name, Vec<Assignment>> = BTreeMap::new();
+            let mut local_env: BTreeMap<UnresolvedName, Vec<Assignment<UnresolvedName>>> =
+                BTreeMap::new();
             for (lhs, expr) in assigns {
-                local_env
-                    .entry(lhs.name().clone())
-                    .or_default()
-                    .push((lhs, expr));
+                local_env.entry(*lhs.name()).or_default().push((lhs, expr));
             }
             Expr::Let {
                 definitions: local_env,
@@ -317,7 +320,7 @@ fn let_in(input: &'static str) -> IResult<&'static str, Expr> {
     )(input)
 }
 
-fn if_then_else(input: &'static str) -> IResult<&'static str, Expr> {
+fn if_then_else(input: &'static str) -> IResult<&'static str, Expr<UnresolvedName>> {
     map(
         nom_tuple((
             reserved("if"),
@@ -335,7 +338,7 @@ fn if_then_else(input: &'static str) -> IResult<&'static str, Expr> {
     )(input)
 }
 
-fn case(input: &'static str) -> IResult<&'static str, Expr> {
+fn case(input: &'static str) -> IResult<&'static str, Expr<UnresolvedName>> {
     map(
         nom_tuple((
             reserved("case"),
@@ -354,11 +357,13 @@ fn case(input: &'static str) -> IResult<&'static str, Expr> {
     )(input)
 }
 
-fn case_arm(input: &'static str) -> IResult<&'static str, (Pattern, Expr)> {
+fn case_arm(
+    input: &'static str,
+) -> IResult<&'static str, (Pattern<UnresolvedName>, Expr<UnresolvedName>)> {
     separated_pair(pattern, reserved_op("->"), expr)(input)
 }
 
-fn lambda(input: &'static str) -> IResult<&'static str, Expr> {
+fn lambda(input: &'static str) -> IResult<&'static str, Expr<UnresolvedName>> {
     map(
         nom_tuple((reserved_op("\\"), many1(pattern), reserved_op("->"), expr)),
         |(_, args, _, rhs)| Expr::Lambda {
@@ -368,7 +373,7 @@ fn lambda(input: &'static str) -> IResult<&'static str, Expr> {
     )(input)
 }
 
-fn lua_expr(input: &'static str) -> IResult<&'static str, Expr> {
+fn lua_expr(input: &'static str) -> IResult<&'static str, Expr<UnresolvedName>> {
     fn nested_braces(input: &'static str) -> IResult<&'static str, &'static str> {
         delimited(
             tag("{"),
@@ -392,7 +397,7 @@ fn lua_expr(input: &'static str) -> IResult<&'static str, Expr> {
     ))(input)
 }
 
-fn term(input: &'static str) -> IResult<&'static str, Term> {
+fn term(input: &'static str) -> IResult<&'static str, Term<UnresolvedName>> {
     alt((
         map(numeral, Term::Numeral),
         map(string, Term::String),
@@ -432,7 +437,7 @@ fn module_path_segment(input: &'static str) -> IResult<&'static str, &'static st
     )))(input)
 }
 
-fn name(input: &'static str) -> IResult<&'static str, Name> {
+fn name(input: &'static str) -> IResult<&'static str, UnresolvedName> {
     ws(alt((
         map(
             separated_pair(
@@ -446,15 +451,15 @@ fn name(input: &'static str) -> IResult<&'static str, Name> {
                 tag("."),
                 ident,
             ),
-            |(path, ident)| Name::Qualified(ModulePath(path), ident),
+            |(path, ident)| UnresolvedName::Qualified(ModulePath(path), ident),
         ),
-        map(ident, Name::Ident),
+        map(ident, UnresolvedName::Ident),
         parens(operator),
     )))(input)
 }
 
-fn upper_name(input: &'static str) -> IResult<&'static str, Name> {
-    ws(map(upper_ident, Name::Ident))(input)
+fn upper_name(input: &'static str) -> IResult<&'static str, UnresolvedName> {
+    ws(map(upper_ident, UnresolvedName::Ident))(input)
 }
 
 fn lua_name(input: &'static str) -> IResult<&'static str, ForeignName> {
@@ -470,12 +475,16 @@ fn lua_name(input: &'static str) -> IResult<&'static str, ForeignName> {
 /// Parses one term in a type constructor definition. e.g. in the following:
 ///     type Foo = Bar | Baz Int;
 /// `constructor_definition` would parse either "Bar" or "Baz Int".
-fn constructor_definition(input: &'static str) -> IResult<&'static str, ConstructorDefinition> {
+fn constructor_definition(
+    input: &'static str,
+) -> IResult<&'static str, ConstructorDefinition<UnresolvedName>> {
     // @Future: type constructor binops
     nom_tuple((upper_name, many0(type_term)))(input)
 }
 
-fn constructor_lhs(input: &'static str) -> IResult<&'static str, (Name, Vec<&'static str>)> {
+fn constructor_lhs(
+    input: &'static str,
+) -> IResult<&'static str, (UnresolvedName, Vec<&'static str>)> {
     nom_tuple((upper_name, many0(ws(var))))(input)
 }
 
@@ -543,7 +552,7 @@ where
     )
 }
 
-fn operator(input: &'static str) -> IResult<&'static str, Name> {
+fn operator(input: &'static str) -> IResult<&'static str, UnresolvedName> {
     map(
         verify(
             ws(recognize(alt((
@@ -552,7 +561,7 @@ fn operator(input: &'static str) -> IResult<&'static str, Name> {
             )))),
             |s| !is_reserved(s),
         ),
-        Name::Binop,
+        UnresolvedName::Binop,
     )(input)
 }
 

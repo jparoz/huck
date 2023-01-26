@@ -4,6 +4,7 @@ mod test;
 use crate::ast;
 use crate::generatable_module::GeneratableModule;
 use crate::log;
+use crate::resolve::ResolvedName;
 use crate::types::{Type, TypeDefinition};
 
 use std::collections::BTreeSet;
@@ -56,7 +57,7 @@ struct CodeGenerator<'a> {
     return_entries: String,
 
     // This is the set of definitions which have already been generated.
-    generated: BTreeSet<ast::Name>,
+    generated: BTreeSet<ResolvedName>,
 
     module: &'a GeneratableModule,
 }
@@ -100,7 +101,7 @@ impl<'a> CodeGenerator<'a> {
 
             // Mark the import as generated.
             // @Checkme: name clashes? Maybe already caught this?
-            assert!(self.generated.insert(name.clone()));
+            assert!(self.generated.insert(*name));
         }
 
         // Next import all the foreign imports.
@@ -113,7 +114,7 @@ impl<'a> CodeGenerator<'a> {
 
             // Mark the foreign import as generated.
             // @Checkme: name clashes? Maybe already caught this?
-            assert!(self.generated.insert(name.clone()));
+            assert!(self.generated.insert(*name));
         }
 
         // Next, we can generate all the definitions.
@@ -183,11 +184,9 @@ impl<'a> CodeGenerator<'a> {
                 return Err(CodegenError::CyclicDependency(
                     next_pass
                         .iter()
-                        .map(|t| {
-                            // @Fixme @Errors: filter out entries which depend on the cycle,
-                            // but are not part of the cycle themselves.
-                            t.0.clone()
-                        })
+                        // @Fixme @Errors: filter out entries which depend on the cycle,
+                        // but are not part of the cycle themselves.
+                        .map(|t| t.0)
                         .collect(),
                 ));
             }
@@ -214,7 +213,11 @@ impl<'a> CodeGenerator<'a> {
     /// This has to be generated from the Vec<Assignment>,
     /// because in the case of multiple definitions,
     /// we have to generate a Lua 'switch' statement.
-    fn definition(&mut self, name: &ast::Name, defn: &ast::Definition) -> Result<String> {
+    fn definition(
+        &mut self,
+        name: &ResolvedName,
+        defn: &ast::Definition<ResolvedName>,
+    ) -> Result<String> {
         let mut lua = String::new();
 
         // Write the definition to the `lua` string.
@@ -228,12 +231,12 @@ impl<'a> CodeGenerator<'a> {
         )?;
 
         // Mark this definition as generated.
-        self.generated.insert(name.clone());
+        self.generated.insert(*name);
 
         Ok(lua)
     }
 
-    fn expr(&mut self, expr: &ast::Expr) -> Result<String> {
+    fn expr(&mut self, expr: &ast::Expr<ResolvedName>) -> Result<String> {
         match expr {
             ast::Expr::Term(term) => self.term(term),
             ast::Expr::App { func, argument } => {
@@ -296,7 +299,7 @@ impl<'a> CodeGenerator<'a> {
         }
     }
 
-    fn term(&mut self, term: &ast::Term) -> Result<String> {
+    fn term(&mut self, term: &ast::Term<ResolvedName>) -> Result<String> {
         match term {
             ast::Term::Numeral(num) => match num {
                 ast::Numeral::Int(s) | ast::Numeral::Float(s) => Ok(s.to_string()),
@@ -332,7 +335,11 @@ impl<'a> CodeGenerator<'a> {
         }
     }
 
-    fn case(&mut self, expr: &ast::Expr, arms: &Vec<(ast::Pattern, ast::Expr)>) -> Result<String> {
+    fn case(
+        &mut self,
+        expr: &ast::Expr<ResolvedName>,
+        arms: &Vec<(ast::Pattern<ResolvedName>, ast::Expr<ResolvedName>)>,
+    ) -> Result<String> {
         let mut lua = String::new();
 
         let mut has_any_conditions = false;
@@ -399,7 +406,10 @@ impl<'a> CodeGenerator<'a> {
         Ok(lua)
     }
 
-    fn curried_function(&mut self, assignments: &Vec<(ast::Lhs, ast::Expr)>) -> Result<String> {
+    fn curried_function(
+        &mut self,
+        assignments: &Vec<(ast::Lhs<ResolvedName>, ast::Expr<ResolvedName>)>,
+    ) -> Result<String> {
         assert!(!assignments.is_empty());
 
         let arg_count = assignments[0].0.arg_count();
@@ -502,7 +512,11 @@ impl<'a> CodeGenerator<'a> {
 
     /// Generates code for a pattern match.
     /// Note: This only modified `self.conditions` and `self.bindings`.
-    fn pattern_match(&mut self, pat: &ast::Pattern, lua_arg_name: &str) -> Result<()> {
+    fn pattern_match(
+        &mut self,
+        pat: &ast::Pattern<ResolvedName>,
+        lua_arg_name: &str,
+    ) -> Result<()> {
         // This function takes a Lua argument name,
         // e.g. _HUCK_0, _HUCK_12[3], _HUCK_3[13][334] or whatever.
         // This is to allow nested pattern matches.
@@ -569,17 +583,17 @@ impl<'a> CodeGenerator<'a> {
 
             // @Hardcode @Hack-ish @Prelude
             ast::Pattern::UnaryConstructor(name)
-                if name.as_str() == "True" || name.as_str() == "False" =>
+                if name.ident == "True" || name.ident == "False" =>
             {
-                let mut name_string = name.as_str().to_string();
+                let mut name_string = name.ident.to_string();
                 name_string.make_ascii_lowercase();
                 self.conditions
                     .push(format!(r#"{} == {}"#, lua_arg_name, name_string));
             }
 
             ast::Pattern::UnaryConstructor(name) => {
-                assert!(matches!(name, ast::Name::Ident(_)));
                 // Check that it's the right variant
+                // assert!(matches!(name, ResolvedName::Ident(_))); @Nocommit
                 self.conditions.push(format!(
                     r#"getmetatable({}).__variant == "{}""#,
                     lua_arg_name, name
@@ -608,14 +622,14 @@ impl<'a> CodeGenerator<'a> {
             )?;
 
             // Mark this constructor as generated.
-            self.generated.insert(name.clone());
+            self.generated.insert(*name);
         }
 
         Ok(lua)
     }
 
     /// Generates code for a constructor.
-    fn constructor(&mut self, name: &ast::Name, mut constr_type: &Type) -> Result<String> {
+    fn constructor(&mut self, name: &ResolvedName, mut constr_type: &Type) -> Result<String> {
         // @Errors: maybe we should do some runtime type checking in Lua?
 
         let mut ids = Vec::new();
@@ -655,10 +669,10 @@ impl<'a> CodeGenerator<'a> {
         Ok(lua)
     }
 
-    fn reference(&mut self, name: &ast::Name) -> Result<String> {
+    fn reference(&mut self, name: &ResolvedName) -> Result<String> {
         // @Hack @Prelude
-        if name.as_str() == "True" || name.as_str() == "False" {
-            let mut name_string = name.as_str().to_string();
+        if name.ident == "True" || name.ident == "False" {
+            let mut name_string = name.ident.to_string();
             name_string.make_ascii_lowercase();
             Ok(name_string)
         } else if self.module.contains(name) {
@@ -668,7 +682,7 @@ impl<'a> CodeGenerator<'a> {
         } else {
             // It's a locally-bound definition,
             // so we should emit e.g. var
-            Ok(lua_safe(name.as_str()))
+            Ok(lua_safe(name))
         }
     }
 
@@ -687,10 +701,10 @@ impl<'a> CodeGenerator<'a> {
 /// Returns a Lua-safe version of a Huck identifier.
 ///
 /// Guaranteed to return the same string each time it's called with the same argument.
-fn lua_safe(s: &str) -> String {
+fn lua_safe(name: &ResolvedName) -> String {
     let mut output = String::new();
 
-    for c in s.chars() {
+    for c in format!("{name}").chars() {
         match c {
             '=' => output.push_str("_EQUALS"),
             '+' => output.push_str("_PLUS"),

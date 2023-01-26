@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{self, Display};
 
-use crate::ast;
+use crate::resolve::ResolvedName;
 
 mod error;
 mod substitution;
@@ -14,10 +14,12 @@ pub use substitution::{ApplySub, Substitution};
 
 use error::Error as TypeError;
 
-#[derive(PartialEq, Eq, Clone, Hash, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Type {
     Var(TypeVar),
-    Concrete(&'static str),
+    Concrete(ResolvedName),
+    Primitive(Primitive),
+
     List(Box<Type>),
     Tuple(Vec<Type>),
 
@@ -32,7 +34,7 @@ pub enum Type {
 impl Type {
     pub fn free_vars(&self) -> TypeVarSet {
         match self {
-            Type::Concrete(_) => TypeVarSet::empty(),
+            Type::Concrete(_) | Type::Primitive(_) => TypeVarSet::empty(),
 
             Type::Var(var) => TypeVarSet::single(var.clone()),
             Type::Arrow(a, b) | Type::App(a, b) => a.free_vars().union(&b.free_vars()),
@@ -98,6 +100,13 @@ impl Display for Type {
             Type::Var(var) => write!(f, "{}", var),
             Type::Concrete(s) => write!(f, "{}", s),
 
+            Type::Primitive(Primitive::Int) => write!(f, "Int"),
+            Type::Primitive(Primitive::Float) => write!(f, "Float"),
+            Type::Primitive(Primitive::String) => write!(f, "String"),
+            Type::Primitive(Primitive::Bool) => write!(f, "Bool"),
+            Type::Primitive(Primitive::Unit) => write!(f, "()"),
+            Type::Primitive(Primitive::IO) => write!(f, "IO"),
+
             // @Future @CST: be smarter about when to include brackets
             Type::Arrow(a, b) => write!(f, "({} -> {})", a, b),
 
@@ -116,6 +125,17 @@ impl Display for Type {
             ),
         }
     }
+}
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub enum Primitive {
+    Int,
+    Float,
+    String,
+    Bool,
+    Unit,
+
+    IO,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -143,7 +163,7 @@ impl Display for TypeScheme {
     }
 }
 
-#[derive(Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub enum TypeVar {
     Generated(usize),
     Explicit(&'static str),
@@ -243,7 +263,7 @@ impl Display for TypeVarSet {
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct TypeDefinition {
     /// The name of the type defined in this TypeDefinition.
-    pub name: ast::Name,
+    pub name: ResolvedName,
 
     /// The type variables introduced in the left-hand-side of the definition.
     pub vars: TypeVarSet,
@@ -253,5 +273,5 @@ pub struct TypeDefinition {
 
     /// A Vec of the constructors introduced in the right-hand-side of the definition,
     /// along with their types.
-    pub constructors: BTreeMap<ast::Name, Type>,
+    pub constructors: BTreeMap<ResolvedName, Type>,
 }

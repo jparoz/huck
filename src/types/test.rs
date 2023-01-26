@@ -1,4 +1,4 @@
-use crate::ast::{ModulePath, Name};
+use crate::ast::{ModulePath, UnresolvedName};
 use crate::context::Context;
 use crate::generatable_module::GeneratableModule;
 use crate::types::Type;
@@ -142,7 +142,10 @@ fn constructor_unary() {
         "#,
     );
 
-    let val = module.definitions.get(&Name::Ident("val")).unwrap();
+    let val = module
+        .definitions
+        .get(&UnresolvedName::Ident("val"))
+        .unwrap();
 
     assert_eq!(val.0, Type::Concrete("Foo"))
 }
@@ -156,7 +159,11 @@ fn constructor_unary_returned() {
         "#,
     );
 
-    let val = module.definitions.get(&Name::Ident("val")).unwrap().clone();
+    let val = module
+        .definitions
+        .get(&UnresolvedName::Ident("val"))
+        .unwrap()
+        .clone();
 
     assert!(matches!(val.0, Type::Arrow(_, _)));
 
@@ -178,7 +185,10 @@ fn constructor_unary_argument() {
         "#,
     );
 
-    let val = module.definitions.get(&Name::Ident("val")).unwrap();
+    let val = module
+        .definitions
+        .get(&UnresolvedName::Ident("val"))
+        .unwrap();
 
     assert_eq!(
         val.0,
@@ -198,7 +208,10 @@ fn constructor_newtype_int() {
         "#,
     );
 
-    let val = module.definitions.get(&Name::Ident("val")).unwrap();
+    let val = module
+        .definitions
+        .get(&UnresolvedName::Ident("val"))
+        .unwrap();
 
     assert_eq!(val.0, Type::Concrete("Foo"))
 }
@@ -214,7 +227,10 @@ fn constructor_newtype_unwrap_int() {
         "#,
     );
 
-    let val = module.definitions.get(&Name::Ident("val")).unwrap();
+    let val = module
+        .definitions
+        .get(&UnresolvedName::Ident("val"))
+        .unwrap();
 
     assert_eq!(val.0, Type::Concrete("Int"))
 }
@@ -228,7 +244,10 @@ fn constructor_newtype_generic_int() {
         "#,
     );
 
-    let val = module.definitions.get(&Name::Ident("val")).unwrap();
+    let val = module
+        .definitions
+        .get(&UnresolvedName::Ident("val"))
+        .unwrap();
 
     assert_eq!(
         val.0,
@@ -248,7 +267,11 @@ fn constructor_newtype_generic_var() {
         "#,
     );
 
-    let val = module.definitions.get(&Name::Ident("val")).unwrap().clone();
+    let val = module
+        .definitions
+        .get(&UnresolvedName::Ident("val"))
+        .unwrap()
+        .clone();
 
     assert!(matches!(val.0, Type::Arrow(_, _)));
 
@@ -280,7 +303,10 @@ fn constructor_newtype_generic_unwrap_int() {
         "#,
     );
 
-    let val = module.definitions.get(&Name::Ident("val")).unwrap();
+    let val = module
+        .definitions
+        .get(&UnresolvedName::Ident("val"))
+        .unwrap();
 
     assert_eq!(val.0, Type::Concrete("Int"))
 }
@@ -294,7 +320,10 @@ fn function_apply_to_literal() {
         "#,
     );
 
-    let val = module.definitions.get(&Name::Ident("val")).unwrap();
+    let val = module
+        .definitions
+        .get(&UnresolvedName::Ident("val"))
+        .unwrap();
 
     assert_eq!(val.0, Type::Concrete("Int"))
 }
@@ -309,7 +338,10 @@ fn function_apply_to_variable() {
         "#,
     );
 
-    let val = module.definitions.get(&Name::Ident("val")).unwrap();
+    let val = module
+        .definitions
+        .get(&UnresolvedName::Ident("val"))
+        .unwrap();
 
     assert_eq!(val.0, Type::Concrete("Int"))
 }
@@ -325,7 +357,10 @@ fn function_apply_to_variable_indirect() {
         "#,
     );
 
-    let val = module.definitions.get(&Name::Ident("val")).unwrap();
+    let val = module
+        .definitions
+        .get(&UnresolvedName::Ident("val"))
+        .unwrap();
 
     assert_eq!(val.0, Type::Concrete("Int"))
 }

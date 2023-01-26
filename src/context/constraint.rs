@@ -2,10 +2,11 @@ use std::collections::{BTreeMap, VecDeque};
 use std::fmt::{self, Debug, Write};
 use std::iter;
 
-use crate::ast::{self, Assignment, Definition, Expr, Lhs, Name, Numeral, Pattern, Term};
+use crate::ast::{self, Assignment, Definition, Expr, Lhs, Numeral, Pattern, Term, UnresolvedName};
 use crate::log;
+use crate::resolve::{ResolvedName, Source};
 use crate::types::{
-    self, ApplySub, Substitution, Type, TypeDefinition, TypeScheme, TypeVar, TypeVarSet,
+    self, ApplySub, Primitive, Substitution, Type, TypeDefinition, TypeScheme, TypeVar, TypeVarSet,
 };
 
 pub trait ActiveVars {
@@ -66,7 +67,7 @@ pub(super) struct ConstraintGenerator {
     constraints: Vec<Constraint>,
 
     /// All the currently assumed types of name uses.
-    pub(super) assumptions: BTreeMap<Name, Vec<Type>>,
+    pub(super) assumptions: BTreeMap<ResolvedName, Vec<Type>>,
 
     m_stack: Vec<TypeVar>,
 }
@@ -85,7 +86,7 @@ impl ConstraintGenerator {
         Type::Var(self.fresh_var())
     }
 
-    fn assume(&mut self, name: Name, typ: Type) {
+    fn assume(&mut self, name: ResolvedName, typ: Type) {
         log::trace!(log::TYPECHECK, "Assuming type: {} : {}", name, typ);
         self.assumptions
             .entry(name)
@@ -136,7 +137,7 @@ impl ConstraintGenerator {
     }
 
     /// Returns the type of the whole pattern item, as well as emitting constraints for sub-items.
-    fn bind_pattern(&mut self, pat: &Pattern) -> Type {
+    fn bind_pattern(&mut self, pat: &Pattern<ResolvedName>) -> Type {
         macro_rules! bind_function_args {
             ($cons_type:expr, $iter:expr) => {
                 $iter.fold($cons_type, |acc, arg| {
@@ -153,9 +154,9 @@ impl ConstraintGenerator {
         }
 
         match pat {
-            Pattern::Bind(s) => {
+            Pattern::Bind(name) => {
                 let beta = self.fresh();
-                self.bind_assumptions_mono(&Name::Ident(s), &beta);
+                self.bind_assumptions_mono(name, &beta);
                 beta
             }
 
@@ -174,40 +175,39 @@ impl ConstraintGenerator {
                 Type::Tuple(pats.iter().map(|pat| self.bind_pattern(pat)).collect())
             }
 
-            Pattern::Numeral(Numeral::Int(_)) => Type::Concrete("Int"),
-            Pattern::Numeral(Numeral::Float(_)) => Type::Concrete("Float"),
-            Pattern::String(_) => Type::Concrete("String"),
-            Pattern::Unit => Type::Concrete("()"),
+            Pattern::Numeral(Numeral::Int(_)) => Type::Primitive(Primitive::Int),
+            Pattern::Numeral(Numeral::Float(_)) => Type::Primitive(Primitive::Float),
+            Pattern::String(_) => Type::Primitive(Primitive::String),
+            Pattern::Unit => Type::Primitive(Primitive::Unit),
 
             Pattern::Binop { operator, lhs, rhs } => {
                 let beta = self.fresh();
-                self.assume(operator.clone(), beta.clone());
+                self.assume(*operator, beta.clone());
                 bind_function_args!(beta, iter::once(lhs).chain(iter::once(rhs)))
             }
 
             Pattern::UnaryConstructor(name) => {
                 // @Prelude @Hack-ish: These probably shouldn't be hard-coded like this.
-                let s = name.as_str();
-                if s == "True" || s == "False" {
-                    let typ = Type::Concrete("Bool");
-                    self.assume(name.clone(), typ.clone());
+                if name.ident == "True" || name.ident == "False" {
+                    let typ = Type::Primitive(Primitive::Bool);
+                    self.assume(*name, typ.clone());
                     typ
                 } else {
                     let beta = self.fresh();
-                    self.assume(name.clone(), beta.clone());
+                    self.assume(*name, beta.clone());
                     beta
                 }
             }
             Pattern::Destructure { constructor, args } => {
                 let beta = self.fresh();
-                self.assume(constructor.clone(), beta.clone());
+                self.assume(*constructor, beta.clone());
                 bind_function_args!(beta, args.iter())
             }
         }
     }
 
     /// Binds (monomorphically) any assumptions about the given name to the given type.
-    fn bind_assumptions_mono(&mut self, name: &Name, typ: &Type) {
+    fn bind_assumptions_mono(&mut self, name: &ResolvedName, typ: &Type) {
         if let Some(assumptions) = self.assumptions.remove(name) {
             for assumed in assumptions {
                 self.constrain(Constraint::Equality(assumed, typ.clone()));
@@ -217,7 +217,7 @@ impl ConstraintGenerator {
     }
 
     /// Binds (polymorphically) any assumptions about the given name to the given type.
-    fn bind_assumptions_poly(&mut self, name: &Name, typ: &Type) {
+    fn bind_assumptions_poly(&mut self, name: &ResolvedName, typ: &Type) {
         if let Some(assumptions) = self.assumptions.remove(name) {
             for assumed in assumptions {
                 self.constrain(Constraint::ImplicitInstance(
@@ -306,7 +306,7 @@ impl ConstraintGenerator {
 
     // Generation methods
 
-    pub fn generate_definition(&mut self, definition: &Definition) -> Type {
+    pub fn generate_definition(&mut self, definition: &Definition<ResolvedName>) -> Type {
         // Typecheck each assignment in the definition.
         let mut typs: Vec<Type> = definition
             .assignments
@@ -326,7 +326,7 @@ impl ConstraintGenerator {
         self.equate_all(typs)
     }
 
-    pub fn generate_assignment(&mut self, assign: &Assignment) -> Type {
+    pub fn generate_assignment(&mut self, assign: &Assignment<ResolvedName>) -> Type {
         let (lhs, expr) = assign;
 
         match lhs {
@@ -351,12 +351,12 @@ impl ConstraintGenerator {
         }
     }
 
-    pub fn generate_expr(&mut self, expr: &Expr) -> Type {
+    pub fn generate_expr(&mut self, expr: &Expr<ResolvedName>) -> Type {
         match expr {
-            Expr::Term(Term::Numeral(Numeral::Int(_))) => Type::Concrete("Int"),
-            Expr::Term(Term::Numeral(Numeral::Float(_))) => Type::Concrete("Float"),
-            Expr::Term(Term::String(_)) => Type::Concrete("String"),
-            Expr::Term(Term::Unit) => Type::Concrete("()"),
+            Expr::Term(Term::Numeral(Numeral::Int(_))) => Type::Primitive(Primitive::Int),
+            Expr::Term(Term::Numeral(Numeral::Float(_))) => Type::Primitive(Primitive::Float),
+            Expr::Term(Term::String(_)) => Type::Primitive(Primitive::String),
+            Expr::Term(Term::Unit) => Type::Primitive(Primitive::Unit),
 
             Expr::Term(Term::Parens(e)) => self.generate_expr(e),
             Expr::Term(Term::List(es)) => {
@@ -373,7 +373,7 @@ impl ConstraintGenerator {
 
             Expr::Term(Term::Name(name)) => {
                 let typ = self.fresh();
-                self.assume(name.clone(), typ.clone());
+                self.assume(*name, typ.clone());
                 typ
             }
 
@@ -391,7 +391,7 @@ impl ConstraintGenerator {
             }
             Expr::Binop { operator, lhs, rhs } => {
                 let t1 = self.fresh();
-                self.assume(operator.clone(), t1.clone());
+                self.assume(*operator, t1.clone());
                 let t2 = self.generate_expr(lhs);
                 let t3 = self.generate_expr(rhs);
                 let beta1 = self.fresh();
@@ -446,7 +446,10 @@ impl ConstraintGenerator {
                 // by avoiding elevating any types to compiler status
                 // (see Int, Float);
                 // so perhaps it's fine to just add Bool to that list.
-                self.constrain(Constraint::Equality(cond_type, Type::Concrete("Bool")));
+                self.constrain(Constraint::Equality(
+                    cond_type,
+                    Type::Primitive(Primitive::Bool),
+                ));
                 self.constrain(Constraint::Equality(then_type.clone(), else_type));
 
                 then_type
@@ -506,7 +509,10 @@ impl ConstraintGenerator {
                 res
             }
 
-            Expr::Lua(_) => Type::App(Box::new(Type::Concrete("IO")), Box::new(self.fresh())),
+            Expr::Lua(_) => Type::App(
+                Box::new(Type::Primitive(Primitive::IO)),
+                Box::new(self.fresh()),
+            ),
 
             Expr::UnsafeLua(_) => self.fresh(),
         }
@@ -514,7 +520,7 @@ impl ConstraintGenerator {
 
     // Type-level generation methods
 
-    pub fn generate_type_scheme(&mut self, input: &ast::TypeScheme) -> TypeScheme {
+    pub fn generate_type_scheme(&mut self, input: &ast::TypeScheme<ResolvedName>) -> TypeScheme {
         let vars: TypeVarSet = input.vars.iter().map(|v| TypeVar::Explicit(v)).collect();
 
         let typ = self.generate_type_expr(&input.typ);
@@ -522,7 +528,10 @@ impl ConstraintGenerator {
         TypeScheme { vars, typ }
     }
 
-    pub fn generate_type_definition(&mut self, type_defn: &ast::TypeDefinition) -> TypeDefinition {
+    pub fn generate_type_definition(
+        &mut self,
+        type_defn: &ast::TypeDefinition<ResolvedName>,
+    ) -> TypeDefinition {
         let ast::TypeDefinition {
             name,
             vars: vars_s,
@@ -531,7 +540,7 @@ impl ConstraintGenerator {
 
         // We'll build these structures by iterating over the type arguments.
         let mut vars = TypeVarSet::empty();
-        let mut typ = Type::Concrete(name.as_str());
+        let mut typ = Type::Concrete(*name);
 
         for s in vars_s.iter() {
             // The final returned type of the constructor needs to reflect this type argument;
@@ -556,18 +565,18 @@ impl ConstraintGenerator {
             self.bind_assumptions_poly(constr_name, &constr_type);
 
             // @Errors @Checkme: no name conflicts
-            constructors.insert(constr_name.clone(), constr_type);
+            constructors.insert(*constr_name, constr_type);
         }
 
         TypeDefinition {
-            name: name.clone(),
+            name: *name,
             vars,
             typ,
             constructors,
         }
     }
 
-    pub fn generate_type_expr(&mut self, input: &ast::TypeExpr) -> Type {
+    pub fn generate_type_expr(&mut self, input: &ast::TypeExpr<ResolvedName>) -> Type {
         match input {
             ast::TypeExpr::Term(term) => self.generate_type_term(term),
             ast::TypeExpr::App(f, x) => Type::App(
@@ -581,10 +590,31 @@ impl ConstraintGenerator {
         }
     }
 
-    pub fn generate_type_term(&mut self, input: &ast::TypeTerm) -> Type {
+    pub fn generate_type_term(&mut self, input: &ast::TypeTerm<ResolvedName>) -> Type {
         match input {
-            ast::TypeTerm::Concrete(s) => Type::Concrete(s),
-            ast::TypeTerm::Unit => Type::Concrete("()"),
+            ast::TypeTerm::Concrete(ResolvedName {
+                source: Source::Builtin,
+                ident: "Int",
+            }) => Type::Primitive(Primitive::Int),
+
+            ast::TypeTerm::Concrete(ResolvedName {
+                source: Source::Builtin,
+                ident: "Float",
+            }) => Type::Primitive(Primitive::Float),
+
+            ast::TypeTerm::Concrete(ResolvedName {
+                source: Source::Builtin,
+                ident: "String",
+            }) => Type::Primitive(Primitive::String),
+
+            ast::TypeTerm::Concrete(ResolvedName {
+                source: Source::Builtin,
+                ident: "Bool",
+            }) => Type::Primitive(Primitive::Bool),
+
+            ast::TypeTerm::Unit => Type::Primitive(Primitive::Unit),
+
+            ast::TypeTerm::Concrete(s) => Type::Concrete(*s),
 
             ast::TypeTerm::Var(v) => Type::Var(TypeVar::Explicit(v)),
 

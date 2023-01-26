@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fmt::{self, Display};
 
 use crate::parse::precedence::Precedence;
@@ -8,26 +8,32 @@ use crate::parse::precedence::Precedence;
 /// by using the parsed precedence rules to reshape the AST,
 /// and collecting statements referring to the same function
 /// into a single Definition struct for each function name.
-#[derive(Debug, PartialEq, Eq, Clone, Default)]
-pub struct Module {
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Module<Name> {
     pub path: ModulePath,
-    pub definitions: BTreeMap<Name, Definition>,
-    pub type_definitions: BTreeMap<Name, TypeDefinition>,
+    pub definitions: BTreeMap<Name, Definition<Name>>,
+    pub type_definitions: BTreeMap<Name, TypeDefinition<Name>>,
     pub imports: BTreeMap<ModulePath, Vec<Name>>,
-    pub foreign_imports: BTreeMap<&'static str, Vec<(ForeignName, Name, TypeScheme)>>,
-    pub foreign_exports: Vec<(&'static str, Expr)>,
+    pub foreign_imports: BTreeMap<&'static str, Vec<(ForeignName, Name, TypeScheme<Name>)>>,
+    pub foreign_exports: Vec<(&'static str, Expr<Name>)>,
+}
+
+impl<Name> Module<Name> {
+    pub fn new(path: ModulePath) -> Self {
+        Self {
+            path,
+            definitions: BTreeMap::new(),
+            type_definitions: BTreeMap::new(),
+            imports: BTreeMap::new(),
+            foreign_imports: BTreeMap::new(),
+            foreign_exports: Vec::new(),
+        }
+    }
 }
 
 /// A ModulePath is a path to a Huck module, as defined within that module.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ModulePath(pub &'static str);
-
-// @Cleanup @Todo @DeleteMe
-impl Default for ModulePath {
-    fn default() -> Self {
-        ModulePath("Main")
-    }
-}
 
 impl Display for ModulePath {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -40,99 +46,110 @@ impl Display for ModulePath {
 /// This includes any case definitions (Assignments),
 /// explicit type declarations,
 /// or precedence declarations.
-#[derive(Debug, PartialEq, Eq, Clone, Default)]
-pub struct Definition {
-    pub assignments: Vec<Assignment>,
-    pub explicit_type: Option<TypeScheme>,
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Definition<Name> {
+    pub assignments: Vec<Assignment<Name>>,
+    pub explicit_type: Option<TypeScheme<Name>>,
     pub precedence: Option<Precedence>,
-
-    dependencies: Option<BTreeSet<Name>>,
 }
 
-impl Definition {
-    pub fn dependencies(&mut self) -> &BTreeSet<Name> {
-        self.dependencies.get_or_insert_with(|| {
-            let mut deps = BTreeSet::new();
-
-            for (_lhs, expr) in self.assignments.iter() {
-                expr.dependencies(&mut deps);
-            }
-
-            deps
-        })
+impl<Name> Default for Definition<Name> {
+    fn default() -> Self {
+        Self {
+            assignments: Vec::new(),
+            explicit_type: None,
+            precedence: None,
+        }
     }
 }
 
 /// A Statement is a sum type for any of the top-level Huck constructs.
 /// The order here is important! See [`resolve::resolve`](crate::resolve::resolve).
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub enum Statement {
+pub enum Statement<Name> {
     // @Note: imports MUST come before assignments.
     Import(ModulePath, Vec<Name>),
     QualifiedImport(ModulePath),
     /// Includes the quotation marks in the require string
-    ForeignImport(&'static str, Vec<ForeignImportItem>),
+    ForeignImport(&'static str, Vec<ForeignImportItem<Name>>),
 
     // @Note: Precedence MUST come before assignments.
     Precedence(Name, Precedence),
 
-    AssignmentWithType(TypeScheme, Assignment),
-    AssignmentWithoutType(Assignment),
-    TypeAnnotation(Name, TypeScheme),
-    TypeDefinition(TypeDefinition),
+    AssignmentWithType(TypeScheme<Name>, Assignment<Name>),
+    AssignmentWithoutType(Assignment<Name>),
+    TypeAnnotation(Name, TypeScheme<Name>),
+    TypeDefinition(TypeDefinition<Name>),
 
     /// The str is taken straight from the source
     /// and dumped into the output Lua
     /// without any sort of validation.
     /// See [`parse::statement`](crate::parse::statement).
-    ForeignExport(&'static str, Expr),
+    ForeignExport(&'static str, Expr<Name>),
 }
 
-pub type Assignment = (Lhs, Expr);
+pub type Assignment<Name> = (Lhs<Name>, Expr<Name>);
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
-pub enum Name {
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
+pub enum UnresolvedName {
     Ident(&'static str),
+
+    // @Todo @Cleanup: remove this (?)
     Binop(&'static str),
-    Lambda,
 
     Qualified(ModulePath, &'static str),
 }
 
-impl Name {
-    pub fn as_str(&self) -> &'static str {
+impl UnresolvedName {
+    /// If it's an `Ident` or `Binop`, returns the inner `&'static str`.
+    /// If it's a `Qualified` name, returns only the `ident` part (not the path!)
+    pub fn ident(&self) -> &'static str {
         match self {
-            Name::Ident(s) | Name::Binop(s) => s,
-            Name::Lambda => "<lambda>",
-            Name::Qualified(source, s) => {
-                todo!("as_str can't be implemented for qualified names @Fixme: {source:?}.{s}")
+            UnresolvedName::Qualified(_, s)
+            | UnresolvedName::Ident(s)
+            | UnresolvedName::Binop(s) => s,
+        }
+    }
+}
+
+impl Display for UnresolvedName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            UnresolvedName::Ident(s) | UnresolvedName::Binop(s) => write!(f, "{s}"),
+            UnresolvedName::Qualified(path, s) => write!(f, "{path}.{s}"),
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
+pub enum Lhs<Name> {
+    Func {
+        name: Name,
+        args: Vec<Pattern<Name>>,
+    },
+    Binop {
+        a: Pattern<Name>,
+        op: Name,
+        b: Pattern<Name>,
+    },
+    Lambda {
+        args: Vec<Pattern<Name>>,
+    },
+}
+
+impl<Name> Lhs<Name> {
+    pub fn name(&self) -> &Name {
+        match self {
+            Lhs::Func { name, .. } => name,
+            Lhs::Binop { op, .. } => op,
+            Lhs::Lambda { .. } => {
+                unimplemented!();
             }
         }
     }
 }
 
-impl Display for Name {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.as_str())
-    }
-}
-
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
-pub enum Lhs {
-    Func { name: Name, args: Vec<Pattern> },
-    Binop { a: Pattern, op: Name, b: Pattern },
-    Lambda { args: Vec<Pattern> },
-}
-
-impl Lhs {
-    pub fn name(&self) -> &Name {
-        match self {
-            Lhs::Func { name, .. } => name,
-            Lhs::Binop { op, .. } => op,
-            Lhs::Lambda { .. } => &Name::Lambda,
-        }
-    }
-
+impl<Name: Copy> Lhs<Name> {
     pub fn arg_count(&self) -> usize {
         match self {
             Lhs::Func { args, .. } | Lhs::Lambda { args } => args.len(),
@@ -140,7 +157,7 @@ impl Lhs {
         }
     }
 
-    pub fn args(&self) -> Vec<Pattern> {
+    pub fn args(&self) -> Vec<Pattern<Name>> {
         match self {
             Lhs::Func { args, .. } | Lhs::Lambda { args } => args.clone(),
             Lhs::Binop { a, b, .. } => vec![a.clone(), b.clone()],
@@ -155,19 +172,21 @@ impl Lhs {
     }
 }
 
-impl Display for Lhs {
+impl<Name: Display> Display for Lhs<Name> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Lhs::Func { name, args } => {
-                match name {
-                    Name::Ident(s) => write!(f, "{s}")?,
-                    Name::Binop(s) => write!(f, "({s})")?,
-                    Name::Lambda => unreachable!(),
-                    // @Fixme: don't use Debug
-                    Name::Qualified(source, s) => write!(f, "{source:?}.{s}")?,
-                }
+                // // @Nocommit: put this somewhere like impl Display for UnresolvedName
+                // match name {
+                //     UnresolvedName::Ident(s) => write!(f, "{s}")?,
+                //     UnresolvedName::Binop(s) => write!(f, "({s})")?,
+                //     UnresolvedName::Lambda => unreachable!(),
+                //     // @Fixme: don't use Debug
+                //     UnresolvedName::Qualified(source, s) => write!(f, "{source:?}.{s}")?,
+                // }
+                write!(f, "{name}")?;
                 for arg in args.iter() {
-                    write!(f, " {}", arg)?;
+                    write!(f, " {arg}")?;
                 }
                 Ok(())
             }
@@ -185,30 +204,30 @@ impl Display for Lhs {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
-pub enum Pattern {
-    Bind(&'static str),
-    List(Vec<Pattern>),
-    Tuple(Vec<Pattern>),
+pub enum Pattern<Name> {
+    Bind(Name),
+    List(Vec<Pattern<Name>>),
+    Tuple(Vec<Pattern<Name>>),
     Numeral(Numeral),
     String(&'static str),
     Binop {
         operator: Name,
-        lhs: Box<Pattern>,
-        rhs: Box<Pattern>,
+        lhs: Box<Pattern<Name>>,
+        rhs: Box<Pattern<Name>>,
     },
     UnaryConstructor(Name),
     Unit,
     Destructure {
         constructor: Name,
-        args: Vec<Pattern>,
+        args: Vec<Pattern<Name>>,
     },
 }
 
-impl Pattern {
+impl<Name: Copy> Pattern<Name> {
     /// Returns all the names which are bound by the pattern.
     pub fn names_bound(&self) -> Vec<Name> {
         match self {
-            Pattern::Bind(s) => vec![Name::Ident(s)],
+            Pattern::Bind(name) => vec![*name],
 
             Pattern::Destructure { args: pats, .. }
             | Pattern::Tuple(pats)
@@ -228,7 +247,7 @@ impl Pattern {
     }
 }
 
-impl Display for Pattern {
+impl<Name: Display> Display for Pattern<Name> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use Pattern::*;
         match self {
@@ -269,35 +288,35 @@ impl Display for Pattern {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
-pub enum Expr {
-    Term(Term),
+pub enum Expr<Name> {
+    Term(Term<Name>),
     App {
-        func: Box<Expr>,
-        argument: Box<Expr>,
+        func: Box<Expr<Name>>,
+        argument: Box<Expr<Name>>,
     },
     Binop {
         operator: Name,
-        lhs: Box<Expr>,
-        rhs: Box<Expr>,
+        lhs: Box<Expr<Name>>,
+        rhs: Box<Expr<Name>>,
     },
     Let {
-        definitions: BTreeMap<Name, Vec<Assignment>>,
-        in_expr: Box<Expr>,
+        definitions: BTreeMap<Name, Vec<Assignment<Name>>>,
+        in_expr: Box<Expr<Name>>,
     },
     // @Todo: test this
     If {
-        cond: Box<Expr>,
-        then_expr: Box<Expr>,
-        else_expr: Box<Expr>,
+        cond: Box<Expr<Name>>,
+        then_expr: Box<Expr<Name>>,
+        else_expr: Box<Expr<Name>>,
     },
     // @Todo: test this
     Case {
-        expr: Box<Expr>,
-        arms: Vec<(Pattern, Expr)>,
+        expr: Box<Expr<Name>>,
+        arms: Vec<(Pattern<Name>, Expr<Name>)>,
     },
     Lambda {
-        lhs: Lhs,
-        rhs: Box<Expr>,
+        lhs: Lhs<Name>,
+        rhs: Box<Expr<Name>>,
     },
     // @Todo: test this
     Lua(&'static str),
@@ -305,111 +324,7 @@ pub enum Expr {
     UnsafeLua(&'static str),
 }
 
-impl Expr {
-    pub fn dependencies(&self, deps: &mut BTreeSet<Name>) {
-        match self {
-            Expr::Term(Term::List(es)) | Expr::Term(Term::Tuple(es)) => {
-                es.iter().for_each(|e| e.dependencies(deps));
-            }
-            Expr::Term(Term::Name(name)) => {
-                deps.insert(name.clone());
-            }
-            Expr::Term(Term::Parens(e)) => e.dependencies(deps),
-            Expr::Term(_) => (),
-
-            Expr::App { func, argument } => {
-                func.dependencies(deps);
-                argument.dependencies(deps);
-            }
-
-            Expr::Binop { operator, lhs, rhs } => {
-                deps.insert(operator.clone());
-                lhs.dependencies(deps);
-                rhs.dependencies(deps);
-            }
-
-            Expr::Let {
-                definitions,
-                in_expr,
-            } => {
-                let mut sub_deps = BTreeSet::new();
-
-                in_expr.dependencies(&mut sub_deps);
-
-                // Remove variables bound in the definitions
-                for name in definitions.keys() {
-                    // @Note: if .remove() returns false,
-                    // the definition isn't referenced in the in_expr;
-                    // therefore it's dead code.
-                    // Maybe emit a warning about this.
-                    sub_deps.remove(name);
-                }
-
-                deps.extend(sub_deps);
-            }
-
-            Expr::If {
-                cond,
-                then_expr,
-                else_expr,
-            } => {
-                cond.dependencies(deps);
-                then_expr.dependencies(deps);
-                else_expr.dependencies(deps);
-            }
-
-            Expr::Case { expr, arms } => {
-                // Always include the dependencies of the scrutinised expression.
-                expr.dependencies(deps);
-
-                for (arm_pat, arm_expr) in arms {
-                    let mut sub_deps = BTreeSet::new();
-                    arm_expr.dependencies(&mut sub_deps);
-
-                    // Remove variables bound in the arm pattern
-                    for name in arm_pat.names_bound() {
-                        sub_deps.remove(&name);
-                    }
-
-                    deps.extend(sub_deps);
-                }
-            }
-
-            Expr::Lambda { lhs, rhs } => {
-                assert!(matches!(lhs, Lhs::Lambda { .. }));
-
-                let args = match lhs {
-                    Lhs::Lambda { args } => args,
-                    _ => unreachable!(),
-                };
-
-                let mut sub_deps = BTreeSet::new();
-
-                rhs.dependencies(&mut sub_deps);
-
-                // Remove variables bound in the lambda LHS
-                for pat in args.iter() {
-                    for name in pat.names_bound() {
-                        // @Note: if .remove() returns false,
-                        // the definition isn't referenced in the in_expr;
-                        // therefore it's dead code.
-                        // Maybe emit a warning about this.
-                        sub_deps.remove(&name);
-                    }
-                }
-
-                deps.extend(sub_deps);
-            }
-
-            // Lua inline expressions can't depend on Huck values,
-            // or at least we can't (i.e. won't) check inside Lua for dependencies;
-            // so we do nothing.
-            Expr::Lua(_) | Expr::UnsafeLua(_) => (),
-        }
-    }
-}
-
-impl Display for Expr {
+impl<Name: Display + Copy> Display for Expr<Name> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use Expr::*;
         match self {
@@ -473,17 +388,17 @@ impl Display for Expr {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
-pub enum Term {
+pub enum Term<Name> {
     Numeral(Numeral),
     String(&'static str),
-    List(Vec<Expr>),
+    List(Vec<Expr<Name>>),
     Name(Name),
-    Parens(Box<Expr>),
-    Tuple(Vec<Expr>),
+    Parens(Box<Expr<Name>>),
+    Tuple(Vec<Expr<Name>>),
     Unit,
 }
 
-impl Display for Term {
+impl<Name: Display + Copy> Display for Term<Name> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use Term::*;
         match self {
@@ -520,46 +435,49 @@ impl Display for Term {
 /// This represents an explicitly-written type scheme, i.e. the RHS of a `:`.
 /// e.g. in `id : forall a. a;` the TypeScheme represents `forall a. a`.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
-pub struct TypeScheme {
-    pub vars: Vec<&'static str>, // @Checkme: &str, or maybe Name?
-    pub typ: TypeExpr,
+pub struct TypeScheme<Name> {
+    pub vars: Vec<&'static str>,
+    pub typ: TypeExpr<Name>,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
-pub enum TypeExpr {
-    Term(TypeTerm),
-    App(Box<TypeExpr>, Box<TypeExpr>),
-    Arrow(Box<TypeExpr>, Box<TypeExpr>),
+pub enum TypeExpr<Name> {
+    Term(TypeTerm<Name>),
+    App(Box<TypeExpr<Name>>, Box<TypeExpr<Name>>),
+    Arrow(Box<TypeExpr<Name>>, Box<TypeExpr<Name>>),
     // @Future @TypeBinops: type-level binops
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
-pub enum TypeTerm {
-    Concrete(&'static str),
+pub enum TypeTerm<Name> {
+    Concrete(Name),
     Var(&'static str),
-    Parens(Box<TypeExpr>),
-    List(Box<TypeExpr>),
-    Tuple(Vec<TypeExpr>),
+    Parens(Box<TypeExpr<Name>>),
+    List(Box<TypeExpr<Name>>),
+    Tuple(Vec<TypeExpr<Name>>),
     Unit,
 }
 
 /// Parsed representation of a new type definition (e.g. `type Foo = Bar;`).
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub struct TypeDefinition {
+pub struct TypeDefinition<Name> {
     pub name: Name,
     pub vars: Vec<&'static str>,
-    pub constructors: Vec<ConstructorDefinition>,
+    pub constructors: Vec<ConstructorDefinition<Name>>,
 }
 
-pub type ConstructorDefinition = (Name, Vec<TypeTerm>);
+pub type ConstructorDefinition<Name> = (Name, Vec<TypeTerm<Name>>);
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub enum ForeignImportItem {
-    SameName(Name, TypeScheme),
-    Rename(ForeignName, Name, TypeScheme),
+pub enum ForeignImportItem<Name> {
+    // @Note: &'static str,
+    // because it's guaranteed to be an ident-legal name
+    // (i.e. parsed by parse::var)
+    SameName(&'static str, TypeScheme<Name>),
+    Rename(ForeignName, UnresolvedName, TypeScheme<Name>),
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub struct ForeignName(pub &'static str);
 
 impl Display for ForeignName {
