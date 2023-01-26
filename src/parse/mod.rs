@@ -669,4 +669,16 @@ pub enum Error {
     // @Todo @Errors: convert this into a parse error which exposes the underlying cause from Nom
     #[error("Leftover input: {0}")]
     Leftover(String),
+
+    // @Cleanup @Errors: this shouldn't use Debug printing, but should print the source.
+    #[error("Multiple precedence declarations found for `{0}`:\n    {1:?}\n    {2:?}")]
+    MultiplePrecs(UnresolvedName, Precedence, Precedence),
+
+    // @Cleanup @Errors: this shouldn't use Debug printing, but should print the source.
+    #[error("Multiple explicit type annotations found for `{0}`:{1}")]
+    MultipleTypes(UnresolvedName, String),
+
+    // @Cleanup @Errors: this should print the source locations of the two definitions
+    #[error("Multiple type definitions with the same name ({0})")]
+    MultipleTypeDefinitions(UnresolvedName),
 }

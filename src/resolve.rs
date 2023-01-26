@@ -5,7 +5,6 @@ use std::time::Instant;
 
 use crate::ast::UnresolvedName;
 use crate::context::Context;
-use crate::parse::precedence::Precedence;
 use crate::{ast, log};
 
 /// A `ResolvedName` is a unique token, used in the compiler to uniquely identify a value.
@@ -1035,16 +1034,4 @@ pub enum Error {
 
     #[error("Identifier `{1}` doesn't exist in module `{0}`")]
     NonexistentImport(ast::ModulePath, UnresolvedName),
-
-    // @Cleanup @Errors: this shouldn't use Debug printing, but should print the source.
-    #[error("Multiple precedence declarations found for `{0}`:\n    {1:?}\n    {2:?}")]
-    MultiplePrecs(UnresolvedName, Precedence, Precedence),
-
-    // @Cleanup @Errors: this shouldn't use Debug printing, but should print the source.
-    #[error("Multiple explicit type annotations found for `{0}`:{1}")]
-    MultipleTypes(UnresolvedName, String),
-
-    // @Cleanup @Errors: this should print the source locations of the two definitions
-    #[error("Multiple type definitions with the same name ({0})")]
-    MultipleTypeDefinitions(UnresolvedName),
 }

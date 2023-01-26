@@ -2,8 +2,7 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 
 use crate::context::Context;
-use crate::parse::precedence::ApplyPrecedence;
-use crate::{ast, log, resolve};
+use crate::{ast, log};
 
 impl Context {
     /// Takes the `Vec<Statement>` from parsing
@@ -11,9 +10,8 @@ impl Context {
     pub fn post_parse(
         &mut self,
         parsed: BTreeMap<ast::ModulePath, Vec<ast::Statement<ast::UnresolvedName>>>,
-        // @Cleanup: not resolve::Error
-        // @Cleanup: not ast::Module (?)
-    ) -> Result<BTreeMap<ast::ModulePath, ast::Module<ast::UnresolvedName>>, resolve::Error> {
+        // @Cleanup: not ast::Module (move to a new Rust mod called something like `module`)
+    ) -> Result<BTreeMap<ast::ModulePath, ast::Module<ast::UnresolvedName>>, super::Error> {
         let mut modules = BTreeMap::new();
 
         for (path, mut statements) in parsed {
@@ -77,17 +75,11 @@ impl Context {
                             .precedence
                             .replace(prec)
                         {
-                            return Err(resolve::Error::MultiplePrecs(name, prec, previous_prec));
+                            return Err(super::Error::MultiplePrecs(name, prec, previous_prec));
                         }
                     }
 
-                    ast::Statement::AssignmentWithoutType(mut assign) => {
-                        // Modify this assignment to take precedence statements into account.
-                        // @Note: we've already processed all the precedence statements,
-                        //        because of the sorted processing order.
-                        // assign.apply(&precs);
-                        // @Nocommit: put the above somewhere else
-
+                    ast::Statement::AssignmentWithoutType(assign) => {
                         module
                             .definitions
                             .entry(*assign.0.name())
@@ -96,18 +88,12 @@ impl Context {
                             .push(assign);
                     }
 
-                    ast::Statement::AssignmentWithType(ts, mut assign) => {
-                        // Modify this assignment to take precedence statements into account.
-                        // @Note: we've already processed all the precedence statements,
-                        //        because of the sorted processing order.
-                        // assign.apply(&precs);
-                        // @Nocommit: put the above somewhere else
-
+                    ast::Statement::AssignmentWithType(ts, assign) => {
                         let defn = module.definitions.entry(*assign.0.name()).or_default();
 
                         // If there was already an explicit for this name, that's an error.
                         if let Some(previous_ts) = defn.explicit_type.replace(ts.clone()) {
-                            return Err(resolve::Error::MultipleTypes(
+                            return Err(super::Error::MultipleTypes(
                                 *assign.0.name(),
                                 // @Cleanup: don't have this dodgy whitespace
                                 format!("\n    {:?}\n    {:?}", ts, previous_ts),
@@ -128,7 +114,7 @@ impl Context {
                             .explicit_type
                             .replace(ts.clone())
                         {
-                            return Err(resolve::Error::MultipleTypes(
+                            return Err(super::Error::MultipleTypes(
                                 name,
                                 // @Cleanup @Errors: don't have this dodgy whitespace
                                 format!("\n    {:?}\n    {:?}", ts, previous_ts),
@@ -140,7 +126,7 @@ impl Context {
                         if let Some(first_defn) =
                             module.type_definitions.insert(type_defn.name, type_defn)
                         {
-                            return Err(resolve::Error::MultipleTypeDefinitions(first_defn.name));
+                            return Err(super::Error::MultipleTypeDefinitions(first_defn.name));
                         }
                     }
 
