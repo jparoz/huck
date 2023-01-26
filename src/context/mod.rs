@@ -83,6 +83,8 @@ impl Context {
         // Something like this should be the error (or maybe a new special variant):
         // Err(Error::NonexistentImport(path, UnresolvedName::Ident(ident)))
 
+        // @Todo: apply operator precedence
+
         // Typecheck
         let gen_mods = self.typecheck(resolved_modules)?;
 
