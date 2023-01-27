@@ -1,7 +1,6 @@
 use crate::codegen;
 use crate::context::Context;
 use crate::error::Error as HuckError;
-use crate::module::ModulePath;
 use crate::utils::normalize;
 
 /// Takes some Huck and turns it into Lua, doing every step in between.
