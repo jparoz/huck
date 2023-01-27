@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
-use std::mem;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
+use std::{iter, mem};
 
 use crate::ast::{ForeignImportItem, Statement};
 use crate::error::Error as HuckError;
@@ -81,7 +81,17 @@ impl Context {
         // Check that any qualified names used actually exist.
         resolver.check_assumptions(&resolved_modules)?;
 
-        // @Todo: apply operator precedence
+        // Apply operator precedences
+        let mut precs = BTreeMap::new();
+        for module in resolved_modules.values() {
+            for (name, defn) in module.definitions.iter() {
+                precs.extend(iter::repeat(name).zip(defn.precedence.iter()));
+            }
+        }
+
+        for module in resolved_modules.values_mut() {
+            module.apply(&precs);
+        }
 
         // Typecheck
         let gen_mods = self.typecheck(resolved_modules)?;

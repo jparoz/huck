@@ -1,10 +1,31 @@
+//! This module handles the rearranging required of the AST to correct for operator precedences.
+//! Until we have parsed each module and resolved names,
+//! we don't know what the declared precedence of each operator is.
+//! So we need to do our "best effort" when parsing
+//! (which amounts to parsing everything as equally left-associative);
+//! and then later on in compilation
+//! we modify the AST to reflect the precedences which we have learned.
+
 use std::collections::BTreeMap;
 
 use crate::ast::{Assignment, Definition, Expr, Lhs, Pattern, Term};
+use crate::module::Module;
 use crate::name::ResolvedName;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
-pub struct Precedence(pub Associativity, pub u8);
+pub struct Precedence {
+    pub associativity: Associativity,
+    pub priority: u8,
+}
+
+impl Default for Precedence {
+    fn default() -> Self {
+        Precedence {
+            associativity: Associativity::Left,
+            priority: 9,
+        }
+    }
+}
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub enum Associativity {
@@ -15,6 +36,14 @@ pub enum Associativity {
 
 pub trait ApplyPrecedence {
     fn apply(&mut self, precs: &BTreeMap<ResolvedName, Precedence>);
+}
+
+impl ApplyPrecedence for Module<ResolvedName> {
+    fn apply(&mut self, precs: &BTreeMap<ResolvedName, Precedence>) {
+        for defn in self.definitions.values_mut() {
+            defn.apply(precs);
+        }
+    }
 }
 
 impl ApplyPrecedence for Definition<ResolvedName> {
@@ -71,16 +100,12 @@ impl ApplyPrecedence for Pattern<ResolvedName> {
                     b.apply(precs);
                     c.apply(precs);
 
-                    let Precedence(l_assoc, l_pri) = precs
-                        .get(l_op)
-                        .unwrap_or(&Precedence(Associativity::Left, 9));
-                    let Precedence(r_assoc, r_pri) = precs
-                        .get(r_op)
-                        .unwrap_or(&Precedence(Associativity::Left, 9));
+                    let l = precs.get(l_op).cloned().unwrap_or_default();
+                    let r = precs.get(r_op).cloned().unwrap_or_default();
 
-                    if l_pri == r_pri
-                        && *l_assoc == Associativity::None
-                        && *r_assoc == Associativity::None
+                    if l.priority == r.priority
+                        && l.associativity == Associativity::None
+                        && r.associativity == Associativity::None
                     {
                         // @Errors: throw a proper parse error
                         panic!(
@@ -88,7 +113,7 @@ impl ApplyPrecedence for Pattern<ResolvedName> {
                         );
                     }
 
-                    if l_pri >= r_pri && *l_assoc == Associativity::Left {
+                    if l.priority >= r.priority && l.associativity == Associativity::Left {
                         // Change from right-assoc to left-assoc
                         std::mem::swap(l_op, r_op);
 
@@ -128,16 +153,12 @@ impl ApplyPrecedence for Expr<ResolvedName> {
                     c.apply(precs);
 
                     // @Note: this default is borrowed from Haskell; think about the right value
-                    let Precedence(l_assoc, l_pri) = precs
-                        .get(l_op)
-                        .unwrap_or(&Precedence(Associativity::Left, 9));
-                    let Precedence(r_assoc, r_pri) = precs
-                        .get(r_op)
-                        .unwrap_or(&Precedence(Associativity::Left, 9));
+                    let l = precs.get(l_op).cloned().unwrap_or_default();
+                    let r = precs.get(r_op).cloned().unwrap_or_default();
 
-                    if l_pri == r_pri
-                        && *l_assoc == Associativity::None
-                        && *r_assoc == Associativity::None
+                    if l.priority == r.priority
+                        && l.associativity == Associativity::None
+                        && r.associativity == Associativity::None
                     {
                         // @Errors: throw a proper parse error
                         panic!(
@@ -145,7 +166,7 @@ impl ApplyPrecedence for Expr<ResolvedName> {
                         );
                     }
 
-                    if l_pri >= r_pri && *l_assoc == Associativity::Left {
+                    if l.priority >= r.priority && l.associativity == Associativity::Left {
                         // Change from right-assoc to left-assoc
                         std::mem::swap(l_op, r_op);
 

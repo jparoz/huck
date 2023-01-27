@@ -118,7 +118,10 @@ fn statement_precedence() {
         parse::statement("infixl 5 >>;").unwrap().1,
         Statement::Precedence(
             UnresolvedName::Binop(">>"),
-            Precedence(Associativity::Left, 5)
+            Precedence {
+                associativity: Associativity::Left,
+                priority: 5
+            }
         )
     );
 }

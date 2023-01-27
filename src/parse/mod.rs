@@ -163,7 +163,15 @@ fn assign(input: &'static str) -> IResult<&'static str, Assignment<UnresolvedNam
 fn prec(input: &'static str) -> IResult<&'static str, (UnresolvedName, Precedence)> {
     map(
         terminated(nom_tuple((associativity, ws(nom_u8), operator)), semi),
-        |(assoc, prec, op)| (op, Precedence(assoc, prec)),
+        |(associativity, priority, op)| {
+            (
+                op,
+                Precedence {
+                    associativity,
+                    priority,
+                },
+            )
+        },
     )(input)
 }
 
