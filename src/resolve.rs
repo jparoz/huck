@@ -123,15 +123,6 @@ impl Resolver {
         let start_time = Instant::now();
         log::trace!(log::RESOLVE, "Resolving module {}", module.path);
 
-        // @Note @Performance:
-        // Throughout this function,
-        // we don't use the originating module by value.
-        // That is, the way it's currently written,
-        // we really might as well use &Module.
-        // This is because we have a reference to the module in the Scope.
-        // Just easier for now, rather than trying to update in place;
-        // but would be better to do it in place.
-
         // This is the new module we'll be building as we resolve names.
         let mut resolved_module: ast::Module<ResolvedName> = ast::Module::new(module.path);
 
@@ -162,9 +153,8 @@ impl Resolver {
             self.bind_type(Binding::module(module.path, *type_name));
         }
 
-        // Add all the imports to the as well as resolving the names.
-        // @Cleanup: don't clone
-        for (path, names) in module.imports.clone() {
+        // Add all the imports to the scope as well as resolving the names.
+        for (path, names) in module.imports {
             for name in names {
                 log::trace!(
                     log::RESOLVE,
@@ -196,9 +186,8 @@ impl Resolver {
             }
         }
 
-        // Add all the foreign imports to the as well as resolving the names.
-        // @Cleanup: don't clone
-        for (require, items) in module.foreign_imports.clone() {
+        // Add all the foreign imports to the scope as well as resolving the names.
+        for (require, items) in module.foreign_imports {
             for ast::ForeignImportItem(foreign_name, name, ts) in items {
                 log::trace!(
                     log::RESOLVE,
@@ -248,8 +237,7 @@ impl Resolver {
         );
 
         // Resolve definitions
-        // @Cleanup: don't clone
-        for (unres_name, unres_defn) in module.definitions.clone() {
+        for (unres_name, unres_defn) in module.definitions {
             log::trace!(log::RESOLVE, "Resolving definition for `{unres_name}`");
             let res_name = self.resolve_name(unres_name)?;
             let res_defn = self.resolve_definition(unres_defn)?;
@@ -262,8 +250,7 @@ impl Resolver {
         }
 
         // Resolve type definitions
-        // @Cleanup: don't clone
-        for (unres_name, unres_type_defn) in module.type_definitions.clone() {
+        for (unres_name, unres_type_defn) in module.type_definitions {
             log::trace!(log::RESOLVE, "Resolving type definition for `{unres_name}`");
             let res_name = self.resolve_type_name(unres_name)?;
             let res_type_defn = self.resolve_type_definition(unres_type_defn)?;
@@ -276,8 +263,7 @@ impl Resolver {
         }
 
         // Resolve foreign exports
-        // @Cleanup: don't clone
-        for (lua_lhs, unres_expr) in module.foreign_exports.clone() {
+        for (lua_lhs, unres_expr) in module.foreign_exports {
             log::trace!(log::RESOLVE, "Resolving foreign export `{lua_lhs}`");
             let res_expr = self.resolve_expr(unres_expr)?;
             resolved_module.foreign_exports.push((lua_lhs, res_expr));
