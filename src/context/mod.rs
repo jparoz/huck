@@ -8,7 +8,7 @@ use crate::error::Error as HuckError;
 use crate::generatable_module::GeneratableModule;
 use crate::parse::parse;
 use crate::resolve::ResolvedName;
-use crate::types::{ApplySub, Error as TypeError, Type};
+use crate::types::{self, ApplySub, Error as TypeError, Type};
 use crate::{codegen, log, resolve};
 
 mod constraint;
@@ -58,11 +58,12 @@ impl Context {
 
         // Resolve names
         let mut resolved_modules = BTreeMap::new();
+        let mut resolver = resolve::Resolver::new();
 
         // Start with the prelude
         let prelude_path = ModulePath("Prelude");
         if let Some(unresolved_prelude) = modules.remove(&prelude_path) {
-            let resolved_prelude = self.resolve(unresolved_prelude)?;
+            let resolved_prelude = resolver.resolve(unresolved_prelude)?;
             resolved_modules.insert(prelude_path, resolved_prelude);
         }
 
@@ -71,10 +72,16 @@ impl Context {
         // Or change the function signature of resolve to accept a &mut Scope,
         // instead of making a new one each time.
 
-        // @Todo: Make all the `resolve_*` methods into methods on Scope
-
         for (path, module) in modules {
-            let resolved_module = self.resolve(module)?;
+            // @Note: `resolver` now has builtin and Prelude names in scope.
+            // If we clone it for each module,
+            // we don't need to worry about cross-pollution between modules
+            // (except Prelude which is intentional).
+            // Possibly we should do this in a more hygenic way,
+            // so that we don't have to just clone the `Resolver` each time.
+            let mut resolver = resolver.clone();
+
+            let resolved_module = resolver.resolve(module)?;
             resolved_modules.insert(path, resolved_module);
         }
 
@@ -297,11 +304,19 @@ impl Context {
                     .entry((*path, name))
                     .or_default()
                     .extend(assumed_types);
+            } else if name.source == resolve::Source::Builtin {
+                // @Cleanup: @DRY with Pattern::UnaryConstructor branch
+                // in ConstraintGenerator::bind_pattern
+
+                // This means that it's a compiler builtin.
+                match name.ident {
+                    "True" | "False" => assumed_types
+                        .into_iter()
+                        .for_each(|t| self.cg.equate(t, Type::Primitive(types::Primitive::Bool))),
+                    _ => unreachable!("missing a compiler builtin type"),
+                }
             } else {
-                // // If there is no inferred type for the name (i.e. it's not in scope),
-                // // then it's a scope error.
-                // return Err(resolve::Error::NotInScope(module.path, name).into());
-                todo!() // @Fixme @XXX @Todo @Nocommit
+                unreachable!("name should be properly resolved by now: {name}")
             }
         }
 

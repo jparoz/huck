@@ -40,12 +40,6 @@ negate : Int -> Int;
 negate n = unsafe lua { -n };
 
 
-(* Boolean type *)
-(* @Todo: This should have some more heavy-duty builtin thing *)
-(* type Bool = True | False; *)
-
-type Foo = Bar;
-
 (* Boolean operators *)
 
 (&&) : Bool -> Bool -> Bool;

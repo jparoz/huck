@@ -18,6 +18,16 @@ pub struct ResolvedName {
     pub ident: &'static str,
 }
 
+impl ResolvedName {
+    pub fn is_builtin(&self) -> bool {
+        self.source == Source::Builtin
+    }
+
+    pub fn is_local(&self) -> bool {
+        matches!(self.source, Source::Local(..))
+    }
+}
+
 impl Display for ResolvedName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}.{}", self.source, self.ident)
@@ -68,8 +78,8 @@ impl Display for Source {
 /// `type Foo a = Bar a Int;`
 /// In this example, `Foo`, `a`, and `Int` are all type-level names;
 /// `Bar` is a value-level name.
-#[derive(Debug)]
-struct Resolver {
+#[derive(Clone)]
+pub struct Resolver {
     /// The path of the module which the `Scope` represents.
     module_path: ast::ModulePath,
 
@@ -82,23 +92,209 @@ struct Resolver {
 
 impl Resolver {
     /// Makes a new `Resolver`, including builtin names in the relevant scopes.
-    fn new(module_path: ast::ModulePath) -> Self {
-        let scope = Scope::default();
+    pub fn new() -> Self {
+        let scope = Scope {
+            names: BTreeMap::from([
+                (UnresolvedName::Ident("True"), vec![Source::Builtin]),
+                (UnresolvedName::Ident("False"), vec![Source::Builtin]),
+            ]),
+            ..Scope::default()
+        };
+
         let type_scope = Scope {
             names: BTreeMap::from([
                 (UnresolvedName::Ident("Int"), vec![Source::Builtin]),
                 (UnresolvedName::Ident("Float"), vec![Source::Builtin]),
                 (UnresolvedName::Ident("String"), vec![Source::Builtin]),
                 (UnresolvedName::Ident("Bool"), vec![Source::Builtin]),
+                (UnresolvedName::Ident("IO"), vec![Source::Builtin]),
             ]),
             ..Scope::default()
         };
 
         Resolver {
-            module_path,
+            // @XXX @Fixme: use an Option or something
+            module_path: ast::ModulePath("XXX"),
             scope,
             type_scope,
         }
+    }
+
+    pub fn resolve(
+        &mut self,
+        module: ast::Module<UnresolvedName>,
+    ) -> Result<ast::Module<ResolvedName>, Error> {
+        let start_time = Instant::now();
+        log::trace!(log::RESOLVE, "Resolving module {}", module.path);
+
+        // @Note @Performance:
+        // Throughout this function,
+        // we don't use the originating module by value.
+        // That is, the way it's currently written,
+        // we really might as well use &Module.
+        // This is because we have a reference to the module in the Scope.
+        // Just easier for now, rather than trying to update in place;
+        // but would be better to do it in place.
+
+        // This is the new module we'll be building as we resolve names.
+        let mut resolved_module: ast::Module<ResolvedName> = ast::Module::new(module.path);
+
+        // Set the current module path.
+        self.module_path = module.path;
+
+        // Add all the top-level definitions (including type constructors) to the scope
+        let defns_iter = module.definitions.keys();
+        let constrs_iter = module
+            .type_definitions
+            .values()
+            .flat_map(|td| td.constructors.iter())
+            .map(|(name, _term)| name);
+
+        for name in defns_iter.chain(constrs_iter) {
+            log::trace!(log::RESOLVE, "Adding `{name}` to the top-level scope");
+            // @Todo @Checkme @Errors: can we collide here? if so, we should check that first.
+            self.bind(Binding::module(module.path, *name));
+        }
+
+        // Add all the type names to the scope
+        for type_name in module.type_definitions.keys() {
+            log::trace!(
+                log::RESOLVE,
+                "Adding `{type_name}` to the top-level type scope"
+            );
+            // @Todo @Checkme @Errors: can we collide here? if so, we should check that first.
+            self.bind_type(Binding::module(module.path, *type_name));
+        }
+
+        // Add all the imports to the as well as resolving the names.
+        // @Cleanup: don't clone
+        for (path, names) in module.imports.clone() {
+            for name in names {
+                log::trace!(
+                    log::RESOLVE,
+                    "Importing `{path}.{name}` to the top-level scope"
+                );
+
+                // Check that it's the right type of name.
+                // @Todo @Errors: this should throw an error
+                // (that is, if this is reachable; maybe it's already a parse error.
+                // Actually, this should definitely be a parse error.)
+                assert!(matches!(
+                    name,
+                    UnresolvedName::Ident(_) | UnresolvedName::Binop(_)
+                ));
+
+                // Replicate into the new module, resolving the import's name.
+                resolved_module
+                    .imports
+                    .entry(path)
+                    .or_default()
+                    .push(ResolvedName {
+                        source: Source::Module(path),
+                        ident: name.ident(),
+                    });
+
+                // Insert it into the scope
+                // @Todo @Checkme @Errors: can we collide here? if so, we should check that first.
+                self.bind(Binding::module(path, name));
+            }
+        }
+
+        // Add all the foreign imports to the as well as resolving the names.
+        // @Cleanup: don't clone
+        for (require, tuples) in module.foreign_imports.clone() {
+            for (foreign_name, name, ts) in tuples {
+                log::trace!(
+                    log::RESOLVE,
+                    "Importing `require({require})[\"{foreign_name}\"]` \
+                    to the top-level scope as {name}"
+                );
+
+                // Check that it's the right type of name.
+                // @Todo @Errors: this should throw an error
+                // (that is, if this is reachable; maybe it's already a parse error.
+                // Actually, this should definitely be a parse error.)
+                assert!(matches!(
+                    name,
+                    UnresolvedName::Ident(_) | UnresolvedName::Binop(_)
+                ));
+
+                let source = Source::Foreign {
+                    require,
+                    foreign_name,
+                };
+
+                // Replicate into the new module, resolving the import's name.
+                resolved_module
+                    .foreign_imports
+                    .entry(require)
+                    .or_default()
+                    .push((
+                        foreign_name,
+                        ResolvedName {
+                            source,
+                            ident: name.ident(),
+                        },
+                        self.resolve_type_scheme(ts.clone())?,
+                    ));
+
+                // Insert it into the scope
+                // @Todo @Checkme @Errors: can we collide here? if so, we should check that first.
+                self.bind(Binding::foreign(require, foreign_name, name));
+            }
+        }
+
+        // Now we have all the top-level names in scope,
+        // we're good to go with the rest of the module.
+        log::trace!(
+            log::RESOLVE,
+            "Finished building now resolving the rest of the module."
+        );
+
+        // Resolve definitions
+        // @Cleanup: don't clone
+        for (unres_name, unres_defn) in module.definitions.clone() {
+            log::trace!(log::RESOLVE, "Resolving definition for `{unres_name}`");
+            let res_name = self.resolve_name(unres_name)?;
+            let res_defn = self.resolve_definition(unres_defn)?;
+
+            // @Note: can't have clashes because we're iterating a BTreeMap
+            assert!(resolved_module
+                .definitions
+                .insert(res_name, res_defn)
+                .is_none());
+        }
+
+        // Resolve type definitions
+        // @Cleanup: don't clone
+        for (unres_name, unres_type_defn) in module.type_definitions.clone() {
+            log::trace!(log::RESOLVE, "Resolving type definition for `{unres_name}`");
+            let res_name = self.resolve_type_name(unres_name)?;
+            let res_type_defn = self.resolve_type_definition(unres_type_defn)?;
+
+            // @Note: can't have clashes because we're iterating a BTreeMap
+            assert!(resolved_module
+                .type_definitions
+                .insert(res_name, res_type_defn)
+                .is_none());
+        }
+
+        // Resolve foreign exports
+        // @Cleanup: don't clone
+        for (lua_lhs, unres_expr) in module.foreign_exports.clone() {
+            log::trace!(log::RESOLVE, "Resolving foreign export `{lua_lhs}`");
+            let res_expr = self.resolve_expr(unres_expr)?;
+            resolved_module.foreign_exports.push((lua_lhs, res_expr));
+        }
+
+        log::info!(
+            log::METRICS,
+            "Resolved module {}, {:?} elapsed",
+            module.path,
+            start_time.elapsed()
+        );
+
+        Ok(resolved_module)
     }
 
     /// Adds the given `Binding` to the value scope.
@@ -589,8 +785,33 @@ impl Resolver {
     }
 }
 
+impl fmt::Debug for Resolver {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Resolver (current module {}):", self.module_path)?;
+        for (name, sources) in self.scope.names.iter() {
+            if sources.is_empty() {
+                // writeln!(f, "  {name}: \t\t[no longer in scope]")?;
+            } else {
+                // @Todo: something better here
+                writeln!(f, "  {name}: \t{sources:?}")?;
+            }
+        }
+
+        for (name, sources) in self.type_scope.names.iter() {
+            if sources.is_empty() {
+                // writeln!(f, "  {name}: \t\t[no longer in scope]")?;
+            } else {
+                // @Todo: something better here
+                writeln!(f, "  type {name}: \t{sources:?}")?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
 /// A `Scope` records which names are defined in a given scope.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 struct Scope {
     /// Names which are in scope.
     names: BTreeMap<UnresolvedName, Vec<Source>>,
@@ -705,184 +926,6 @@ impl From<Binding> for ResolvedName {
 impl From<ResolvedName> for Binding {
     fn from(name: ResolvedName) -> Self {
         Binding(name.source, UnresolvedName::Ident(name.ident))
-    }
-}
-
-impl Context {
-    pub fn resolve(
-        &mut self,
-        module: ast::Module<UnresolvedName>,
-    ) -> Result<ast::Module<ResolvedName>, Error> {
-        let start_time = Instant::now();
-        log::trace!(log::RESOLVE, "Resolving module {}", module.path);
-
-        // @Note @Performance:
-        // Throughout this function,
-        // we don't use the originating module by value.
-        // That is, the way it's currently written,
-        // we really might as well use &Module.
-        // This is because we have a reference to the module in the Scope.
-        // Just easier for now, rather than trying to update in place;
-        // but would be better to do it in place.
-
-        // This is the new module we'll be building as we resolve names.
-        let mut resolved_module: ast::Module<ResolvedName> = ast::Module::new(module.path);
-
-        let mut resolver = Resolver::new(module.path);
-
-        // Add all the top-level definitions (including type constructors) to the scope
-        let defns_iter = module.definitions.keys();
-        let constrs_iter = module
-            .type_definitions
-            .values()
-            .flat_map(|td| td.constructors.iter())
-            .map(|(name, _term)| name);
-
-        for name in defns_iter.chain(constrs_iter) {
-            log::trace!(log::RESOLVE, "Adding `{name}` to the top-level scope");
-            // @Todo @Checkme @Errors: can we collide here? if so, we should check that first.
-            resolver.bind(Binding::module(module.path, *name));
-        }
-
-        // Add all the type names to the scope
-        for type_name in module.type_definitions.keys() {
-            log::trace!(
-                log::RESOLVE,
-                "Adding `{type_name}` to the top-level type scope"
-            );
-            // @Todo @Checkme @Errors: can we collide here? if so, we should check that first.
-            resolver.bind_type(Binding::module(module.path, *type_name));
-        }
-
-        // Add all the imports to the as well as resolving the names.
-        // @Cleanup: don't clone
-        for (path, names) in module.imports.clone() {
-            for name in names {
-                log::trace!(
-                    log::RESOLVE,
-                    "Importing `{path}.{name}` to the top-level scope"
-                );
-
-                // Check that it's the right type of name.
-                // @Todo @Errors: this should throw an error
-                // (that is, if this is reachable; maybe it's already a parse error.
-                // Actually, this should definitely be a parse error.)
-                assert!(matches!(
-                    name,
-                    UnresolvedName::Ident(_) | UnresolvedName::Binop(_)
-                ));
-
-                // Replicate into the new module, resolving the import's name.
-                resolved_module
-                    .imports
-                    .entry(path)
-                    .or_default()
-                    .push(ResolvedName {
-                        source: Source::Module(path),
-                        ident: name.ident(),
-                    });
-
-                // Insert it into the scope
-                // @Todo @Checkme @Errors: can we collide here? if so, we should check that first.
-                resolver.bind(Binding::module(path, name));
-            }
-        }
-
-        // Add all the foreign imports to the as well as resolving the names.
-        // @Cleanup: don't clone
-        for (require, tuples) in module.foreign_imports.clone() {
-            for (foreign_name, name, ts) in tuples {
-                log::trace!(
-                    log::RESOLVE,
-                    "Importing `require({require})[\"{foreign_name}\"]` \
-                    to the top-level scope as {name}"
-                );
-
-                // Check that it's the right type of name.
-                // @Todo @Errors: this should throw an error
-                // (that is, if this is reachable; maybe it's already a parse error.
-                // Actually, this should definitely be a parse error.)
-                assert!(matches!(
-                    name,
-                    UnresolvedName::Ident(_) | UnresolvedName::Binop(_)
-                ));
-
-                let source = Source::Foreign {
-                    require,
-                    foreign_name,
-                };
-
-                // Replicate into the new module, resolving the import's name.
-                resolved_module
-                    .foreign_imports
-                    .entry(require)
-                    .or_default()
-                    .push((
-                        foreign_name,
-                        ResolvedName {
-                            source,
-                            ident: name.ident(),
-                        },
-                        resolver.resolve_type_scheme(ts.clone())?,
-                    ));
-
-                // Insert it into the scope
-                // @Todo @Checkme @Errors: can we collide here? if so, we should check that first.
-                resolver.bind(Binding::foreign(require, foreign_name, name));
-            }
-        }
-
-        // Now we have all the top-level names in scope,
-        // we're good to go with the rest of the module.
-        log::trace!(
-            log::RESOLVE,
-            "Finished building now resolving the rest of the module."
-        );
-
-        // Resolve definitions
-        // @Cleanup: don't clone
-        for (unres_name, unres_defn) in module.definitions.clone() {
-            log::trace!(log::RESOLVE, "Resolving definition for `{unres_name}`");
-            let res_name = resolver.resolve_name(unres_name)?;
-            let res_defn = resolver.resolve_definition(unres_defn)?;
-
-            // @Note: can't have clashes because we're iterating a BTreeMap
-            assert!(resolved_module
-                .definitions
-                .insert(res_name, res_defn)
-                .is_none());
-        }
-
-        // Resolve type definitions
-        // @Cleanup: don't clone
-        for (unres_name, unres_type_defn) in module.type_definitions.clone() {
-            log::trace!(log::RESOLVE, "Resolving type definition for `{unres_name}`");
-            let res_name = resolver.resolve_type_name(unres_name)?;
-            let res_type_defn = resolver.resolve_type_definition(unres_type_defn)?;
-
-            // @Note: can't have clashes because we're iterating a BTreeMap
-            assert!(resolved_module
-                .type_definitions
-                .insert(res_name, res_type_defn)
-                .is_none());
-        }
-
-        // Resolve foreign exports
-        // @Cleanup: don't clone
-        for (lua_lhs, unres_expr) in module.foreign_exports.clone() {
-            log::trace!(log::RESOLVE, "Resolving foreign export `{lua_lhs}`");
-            let res_expr = resolver.resolve_expr(unres_expr)?;
-            resolved_module.foreign_exports.push((lua_lhs, res_expr));
-        }
-
-        log::info!(
-            log::METRICS,
-            "Resolved module {}, {:?} elapsed",
-            module.path,
-            start_time.elapsed()
-        );
-
-        Ok(resolved_module)
     }
 }
 

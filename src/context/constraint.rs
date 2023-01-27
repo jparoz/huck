@@ -99,6 +99,10 @@ impl ConstraintGenerator {
         self.constraints.push(constraint);
     }
 
+    pub fn equate(&mut self, a: Type, b: Type) {
+        self.constrain(Constraint::Equality(a, b));
+    }
+
     pub fn implicit_instance(&mut self, a: Type, b: Type) {
         self.constrain(Constraint::ImplicitInstance(
             a,
@@ -187,8 +191,9 @@ impl ConstraintGenerator {
             }
 
             Pattern::UnaryConstructor(name) => {
-                // @Prelude @Hack-ish: These probably shouldn't be hard-coded like this.
-                if name.ident == "True" || name.ident == "False" {
+                // @Cleanup: is this the only place this can go?
+                if name.source == Source::Builtin && (name.ident == "True" || name.ident == "False")
+                {
                     let typ = Type::Primitive(Primitive::Bool);
                     self.assume(*name, typ.clone());
                     typ
