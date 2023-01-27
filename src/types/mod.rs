@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{self, Display};
 
-use crate::resolve::ResolvedName;
+use crate::name::ResolvedName;
 
 mod error;
 mod substitution;

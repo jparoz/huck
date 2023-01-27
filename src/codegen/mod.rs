@@ -11,5 +11,5 @@ pub enum Error {
     // @Errors: properly print the Vec
     // @Fixme: currently the Vec contains extra names (see its generation site), hence "within".
     #[error("Cyclic dependency detected within the following definitions: {0:?}")]
-    CyclicDependency(Vec<crate::resolve::ResolvedName>),
+    CyclicDependency(Vec<crate::name::ResolvedName>),
 }

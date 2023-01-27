@@ -2,10 +2,9 @@
 mod test;
 
 use crate::generatable_module::GeneratableModule;
-use crate::log;
-use crate::resolve::ResolvedName;
+use crate::name::{ResolvedName, Source};
 use crate::types::{Type, TypeDefinition};
-use crate::{ast, resolve};
+use crate::{ast, log};
 
 use std::collections::BTreeSet;
 use std::fmt::Write;
@@ -132,7 +131,7 @@ impl<'a> CodeGenerator<'a> {
                 let has_all_deps = defn
                     .dependencies()
                     .iter()
-                    .filter(|n| n.source == resolve::Source::Module(self.module.path))
+                    .filter(|n| n.source == Source::Module(self.module.path))
                     .all(|n| self.generated.contains(n));
 
                 if has_any_args || has_all_deps {
@@ -650,13 +649,13 @@ impl<'a> CodeGenerator<'a> {
 
     fn reference(&mut self, name: &ResolvedName) -> Result<String> {
         match name.source {
-            resolve::Source::Module(path) if path == self.module.path => {
+            Source::Module(path) if path == self.module.path => {
                 // It's a top-level definition from this module,
                 // so we should emit e.g. _HUCK["var"]
                 Ok(format!(r#"{}["{}"]"#, PREFIX, name.ident))
             }
 
-            resolve::Source::Module(path) => {
+            Source::Module(path) => {
                 // It's a top-level definition from a different module,
                 // so we should emit e.g. require("Bar")["var"]
                 //
@@ -664,7 +663,7 @@ impl<'a> CodeGenerator<'a> {
                 Ok(format!(r#"require("{}")["{}"]"#, path, name.ident))
             }
 
-            resolve::Source::Foreign {
+            Source::Foreign {
                 require,
                 foreign_name,
             } => {
@@ -672,13 +671,13 @@ impl<'a> CodeGenerator<'a> {
                 Ok(format!(r#"require({require})["{foreign_name}"]"#))
             }
 
-            resolve::Source::Local(_id) => {
+            Source::Local(_id) => {
                 // It's a locally-bound definition,
                 // so we should emit e.g. var
                 Ok(lua_local(name.ident))
             }
 
-            resolve::Source::Builtin => {
+            Source::Builtin => {
                 // At the moment, these are the only builtin values.
                 assert!(matches!(name.ident, "True" | "False"));
 

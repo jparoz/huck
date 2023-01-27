@@ -3,11 +3,13 @@ use std::mem;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use crate::ast::{ForeignImportItem, Module, ModulePath, Statement, UnresolvedName};
+use crate::ast::{ForeignImportItem, Statement};
 use crate::error::Error as HuckError;
 use crate::generatable_module::GeneratableModule;
+use crate::module::{Module, ModulePath};
+use crate::name::{ResolvedName, Source, UnresolvedName};
 use crate::parse::parse;
-use crate::resolve::ResolvedName;
+use crate::precedence::ApplyPrecedence;
 use crate::types::{self, ApplySub, Error as TypeError, Type};
 use crate::{codegen, log, resolve};
 
@@ -285,7 +287,7 @@ impl Context {
                 for assumed_type in assumed_types {
                     self.cg.explicit_instance(assumed_type, type_scheme.clone());
                 }
-            } else if name.source == resolve::Source::Builtin {
+            } else if name.source == Source::Builtin {
                 // @Cleanup: @DRY with Pattern::UnaryConstructor branch
                 // in ConstraintGenerator::bind_pattern
 

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
-use crate::ast::{Assignment, Definition, Expr, Lhs, Pattern, Term, UnresolvedName};
-use crate::resolve::ResolvedName;
+use crate::ast::{Assignment, Definition, Expr, Lhs, Pattern, Term};
+use crate::name::ResolvedName;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub struct Precedence(pub Associativity, pub u8);

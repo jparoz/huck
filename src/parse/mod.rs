@@ -12,10 +12,10 @@ use nom::{Finish, IResult};
 use std::collections::BTreeMap;
 use std::time::Instant;
 
+use crate::module::ModulePath;
+use crate::name::UnresolvedName;
+use crate::precedence::{Associativity, Precedence};
 use crate::{ast::*, log};
-
-pub mod precedence;
-use precedence::{Associativity, Precedence};
 
 pub mod post;
 

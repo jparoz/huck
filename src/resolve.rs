@@ -1,72 +1,11 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::fmt::{self, Display};
+use std::fmt;
 use std::sync::atomic::{self, AtomicUsize};
 use std::time::Instant;
 
-use crate::ast::UnresolvedName;
-use crate::context::Context;
+use crate::module::{Module, ModulePath};
+use crate::name::{ResolvedName, Source, UnresolvedName};
 use crate::{ast, log};
-
-/// A `ResolvedName` is a unique token, used in the compiler to uniquely identify a value.
-/// After name resolution:
-/// all names have been confirmed to exist,
-/// and all references to a function have the same `ResolvedName`,
-/// no matter where the references appear.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub struct ResolvedName {
-    pub source: Source,
-    pub ident: &'static str,
-}
-
-impl ResolvedName {
-    pub fn is_local(&self) -> bool {
-        matches!(self.source, Source::Local(..))
-    }
-}
-
-impl Display for ResolvedName {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}.{}", self.source, self.ident)
-    }
-}
-
-/// A `Source` describes where to find an identifier,
-/// whether it's a Huck or foreign import,
-/// or a local variable (let-binding, etc.).
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub enum Source {
-    /// From a Huck module.
-    Module(ast::ModulePath),
-
-    /// From a foreign (Lua) module.
-    Foreign {
-        /// Includes the quotation marks.
-        require: &'static str,
-        foreign_name: ast::ForeignName,
-    },
-
-    /// From e.g. a let binding.
-    /// Contains a unique ID,
-    /// so that we can tell apart identically-named but different `ResolvedName`s.
-    Local(usize),
-
-    /// Compiler builtin
-    Builtin,
-}
-
-impl Display for Source {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Source::Module(path) => path.fmt(f),
-            Source::Foreign {
-                require,
-                foreign_name,
-            } => write!(f, r#"require({require})["{foreign_name}"]"#),
-            Source::Local(id) => write!(f, "<local {id}>"),
-            Source::Builtin => write!(f, "<compiler builtin>"),
-        }
-    }
-}
 
 /// This struct manages name resolution in a single module.
 /// The following example illustrates which names are held in which `Scope`
@@ -77,7 +16,7 @@ impl Display for Source {
 #[derive(Clone)]
 pub struct Resolver {
     /// The path of the module which the `Scope` represents.
-    module_path: ast::ModulePath,
+    module_path: ModulePath,
 
     /// The `Scope` used for value-level names.
     scope: Scope,
@@ -91,7 +30,7 @@ pub struct Resolver {
 
     /// Assumptions about imported modules,
     /// regardless of whether they have any explicitly imported names.
-    module_assumptions: Vec<ast::ModulePath>,
+    module_assumptions: Vec<ModulePath>,
 }
 
 impl Resolver {
@@ -118,7 +57,7 @@ impl Resolver {
 
         Resolver {
             // @XXX @Fixme: use an Option or something
-            module_path: ast::ModulePath("XXX"),
+            module_path: ModulePath("XXX"),
             scope,
             type_scope,
             assumptions: Vec::new(),
@@ -128,13 +67,13 @@ impl Resolver {
 
     pub fn resolve(
         &mut self,
-        module: ast::Module<UnresolvedName>,
-    ) -> Result<ast::Module<ResolvedName>, Error> {
+        module: Module<UnresolvedName>,
+    ) -> Result<Module<ResolvedName>, Error> {
         let start_time = Instant::now();
         log::trace!(log::RESOLVE, "Resolving module {}", module.path);
 
         // This is the new module we'll be building as we resolve names.
-        let mut resolved_module: ast::Module<ResolvedName> = ast::Module::new(module.path);
+        let mut resolved_module: Module<ResolvedName> = Module::new(module.path);
 
         // Set the current module path.
         self.module_path = module.path;
@@ -303,16 +242,14 @@ impl Resolver {
     /// Clears out any names from the scope which aren't Prelude or builtin names.
     pub fn clear_scopes(&mut self) {
         for (_name, sources) in self.scope.names.iter_mut() {
-            sources.retain(|s| {
-                s == &Source::Builtin || s == &Source::Module(ast::ModulePath("Prelude"))
-            })
+            sources.retain(|s| s == &Source::Builtin || s == &Source::Module(ModulePath("Prelude")))
         }
     }
 
     /// Checks that any assumptions made in the scope exist in the given map of modules.
     pub fn check_assumptions(
         &mut self,
-        modules: &BTreeMap<ast::ModulePath, ast::Module<ResolvedName>>,
+        modules: &BTreeMap<ModulePath, Module<ResolvedName>>,
     ) -> Result<(), Error> {
         log::trace!(log::RESOLVE, "Checking resolution assumptions");
 
@@ -945,7 +882,7 @@ impl Scope {
     fn resolve_name(
         &mut self,
         name: UnresolvedName,
-        module_path: ast::ModulePath,
+        module_path: ModulePath,
     ) -> Result<ResolvedName, Error> {
         match name {
             UnresolvedName::Qualified(path, ident) => {
@@ -995,7 +932,7 @@ impl Binding {
         Binding(Source::Local(id), name)
     }
 
-    fn module(path: ast::ModulePath, name: UnresolvedName) -> Self {
+    fn module(path: ModulePath, name: UnresolvedName) -> Self {
         Binding(Source::Module(path), name)
     }
 
@@ -1149,10 +1086,10 @@ impl ast::Expr<ResolvedName> {
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Identifier not in scope (module {0}): {1}")]
-    NotInScope(ast::ModulePath, UnresolvedName),
+    NotInScope(ModulePath, UnresolvedName),
 
     #[error("Module `{0}` doesn't exist")]
-    NonexistentModule(ast::ModulePath),
+    NonexistentModule(ModulePath),
 
     #[error("Variable `{0}` doesn't exist in module `{1}`")]
     NonexistentValueName(&'static str, Source),

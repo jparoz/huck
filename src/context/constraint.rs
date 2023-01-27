@@ -4,7 +4,7 @@ use std::iter;
 
 use crate::ast::{self, Assignment, Definition, Expr, Lhs, Numeral, Pattern, Term};
 use crate::log;
-use crate::resolve::{ResolvedName, Source};
+use crate::name::{ResolvedName, Source};
 use crate::types::{
     self, ApplySub, Primitive, Substitution, Type, TypeDefinition, TypeScheme, TypeVar, TypeVarSet,
 };

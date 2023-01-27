@@ -4,7 +4,10 @@ mod context;
 mod error;
 mod generatable_module;
 mod log;
+mod module;
+mod name;
 mod parse;
+mod precedence;
 mod resolve;
 mod types;
 

@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 
-use crate::ast::{Definition, Expr, ForeignName, ModulePath};
-use crate::resolve::ResolvedName;
+use crate::ast::{Definition, Expr, ForeignName};
+use crate::module::ModulePath;
+use crate::name::ResolvedName;
 use crate::types::{Type, TypeDefinition, TypeScheme};
 
 /// This is the structure which represents a module

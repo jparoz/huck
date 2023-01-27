@@ -1,52 +1,8 @@
 use std::collections::BTreeMap;
 use std::fmt::{self, Display};
 
-use crate::parse::precedence::Precedence;
-
-/// A Module is a dictionary of Huck function definitions.
-/// This is produced from a Vec<Statement>,
-/// by using the parsed precedence rules to reshape the AST,
-/// and collecting statements referring to the same function
-/// into a single Definition struct for each function name.
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Module<Name> {
-    pub path: ModulePath,
-    pub definitions: BTreeMap<Name, Definition<Name>>,
-
-    pub type_definitions: BTreeMap<Name, TypeDefinition<Name>>,
-
-    /// Note that all the members of this field can also be found
-    /// in the values of the `type_definitions` field.
-    pub constructors: BTreeMap<Name, Vec<TypeTerm<Name>>>,
-
-    pub imports: BTreeMap<ModulePath, Vec<Name>>,
-    pub foreign_imports: BTreeMap<&'static str, Vec<ForeignImportItem<Name>>>,
-    pub foreign_exports: Vec<(&'static str, Expr<Name>)>,
-}
-
-impl<Name> Module<Name> {
-    pub fn new(path: ModulePath) -> Self {
-        Self {
-            path,
-            definitions: BTreeMap::new(),
-            type_definitions: BTreeMap::new(),
-            constructors: BTreeMap::new(),
-            imports: BTreeMap::new(),
-            foreign_imports: BTreeMap::new(),
-            foreign_exports: Vec::new(),
-        }
-    }
-}
-
-/// A ModulePath is a path to a Huck module, as defined within that module.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ModulePath(pub &'static str);
-
-impl Display for ModulePath {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
+use crate::module::ModulePath;
+use crate::precedence::Precedence;
 
 /// A definition is the correct AST for a given Huck definition,
 /// combined from any statements concerning the same Name.
@@ -74,13 +30,12 @@ impl<Name> Default for Definition<Name> {
 /// The order here is important! See [`resolve::resolve`](crate::resolve::resolve).
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum Statement<Name> {
-    // @Note: imports MUST come before assignments.
     Import(ModulePath, Vec<Name>),
+    // @Cleanup: combine with the above enum (Vec::length() == 0)
     QualifiedImport(ModulePath),
     /// Includes the quotation marks in the require string
     ForeignImport(&'static str, Vec<ForeignImportItem<Name>>),
 
-    // @Note: Precedence MUST come before assignments.
     Precedence(Name, Precedence),
 
     AssignmentWithType(TypeScheme<Name>, Assignment<Name>),
@@ -96,37 +51,6 @@ pub enum Statement<Name> {
 }
 
 pub type Assignment<Name> = (Lhs<Name>, Expr<Name>);
-
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
-pub enum UnresolvedName {
-    Ident(&'static str),
-
-    // @Todo @Cleanup: remove this (?)
-    Binop(&'static str),
-
-    Qualified(ModulePath, &'static str),
-}
-
-impl UnresolvedName {
-    /// If it's an `Ident` or `Binop`, returns the inner `&'static str`.
-    /// If it's a `Qualified` name, returns only the `ident` part (not the path!)
-    pub fn ident(&self) -> &'static str {
-        match self {
-            UnresolvedName::Qualified(_, s)
-            | UnresolvedName::Ident(s)
-            | UnresolvedName::Binop(s) => s,
-        }
-    }
-}
-
-impl Display for UnresolvedName {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            UnresolvedName::Ident(s) | UnresolvedName::Binop(s) => write!(f, "{s}"),
-            UnresolvedName::Qualified(path, s) => write!(f, "{path}.{s}"),
-        }
-    }
-}
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub enum Lhs<Name> {
@@ -477,13 +401,6 @@ pub type ConstructorDefinition<Name> = (Name, Vec<TypeTerm<Name>>);
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct ForeignImportItem<Name>(pub ForeignName, pub Name, pub TypeScheme<Name>);
-// {
-//     // @Note: &'static str,
-//     // because it's guaranteed to be an ident-legal name
-//     // (i.e. parsed by parse::var)
-//     SameName(&'static str, TypeScheme<Name>),
-//     Rename(ForeignName, UnresolvedName, TypeScheme<Name>),
-// }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub struct ForeignName(pub &'static str);

@@ -2,25 +2,25 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 
 use crate::context::Context;
+use crate::module::{Module, ModulePath};
+use crate::name::UnresolvedName;
 use crate::{ast, log};
 
+// @Todo @Cleanup: this doesn't need to be a method on Context at all
 impl Context {
     /// Takes the `Vec<Statement>` from parsing
     /// and turns it into a more coherent data structure.
     pub fn post_parse(
         &mut self,
-        parsed: BTreeMap<ast::ModulePath, Vec<ast::Statement<ast::UnresolvedName>>>,
-        // @Cleanup: not ast::Module (move to a new Rust mod called something like `module`)
-    ) -> Result<BTreeMap<ast::ModulePath, ast::Module<ast::UnresolvedName>>, super::Error> {
+        parsed: BTreeMap<ModulePath, Vec<ast::Statement<UnresolvedName>>>,
+    ) -> Result<BTreeMap<ModulePath, Module<UnresolvedName>>, super::Error> {
         let mut modules = BTreeMap::new();
 
         for (path, mut statements) in parsed {
             // Start the timer to measure how long resolution takes.
             let start_time = Instant::now();
 
-            let mut module = ast::Module::new(path);
-
-            let mut precs = BTreeMap::new();
+            let mut module = Module::new(path);
 
             // Sort the statements so they're processed in the correct order.
             // @Note @Performance:
@@ -38,7 +38,7 @@ impl Context {
             );
 
             // Process all parsed statements,
-            // and insert them into the Module (and precs map).
+            // and insert them into the Module.
             log::trace!(log::RESOLVE, "Processing parsed statements");
             for stat in statements {
                 match stat {
@@ -57,7 +57,6 @@ impl Context {
                         .extend(import_items.into_iter()),
 
                     ast::Statement::Precedence(name, prec) => {
-                        precs.insert(name, prec);
                         // If there was already a precedence for this name, that's an error.
                         if let Some(previous_prec) = module
                             .definitions
