@@ -102,7 +102,7 @@ impl Context {
     pub fn typecheck(
         &mut self,
         mut modules: BTreeMap<ModulePath, Module<ResolvedName>>,
-    ) -> Result<BTreeMap<ModulePath, GeneratableModule>, HuckError> {
+    ) -> Result<BTreeMap<ModulePath, GeneratableModule>, TypeError> {
         // Start the timer to measure how long typechecking takes.
         let start_time = Instant::now();
         log::info!(log::TYPECHECK, "Typechecking all modules...");
@@ -265,7 +265,7 @@ impl Context {
     pub fn bind_all_module_level_assumptions(
         &mut self,
         module: &GeneratableModule,
-    ) -> Result<(), HuckError> {
+    ) -> Result<(), TypeError> {
         log::trace!(log::TYPECHECK, "Emitting constraints about assumptions:");
 
         let mut assumptions = BTreeMap::new();
@@ -324,7 +324,7 @@ impl Context {
     fn bind_all_context_level_assumptions(
         &mut self,
         modules: &BTreeMap<ModulePath, GeneratableModule>,
-    ) -> Result<(), HuckError> {
+    ) -> Result<(), TypeError> {
         log::trace!(
             log::TYPECHECK,
             "Emitting constraints about context-level assumptions:"
@@ -333,19 +333,15 @@ impl Context {
         for module in modules.values() {
             for (import_name, (import_path, _import_stem)) in module.imports.iter() {
                 // Find the inferred type.
-                let import_module = modules.get(import_path).ok_or_else(|| {
-                    HuckError::from(resolve::Error::NonexistentModule(*import_path))
-                })?;
-                let typ = import_module.get_type(import_name).ok_or_else(|| {
-                    HuckError::from(
-                        // @Fixme @XXX @Todo @Nocommit
-                        resolve::Error::NonexistentImport(
-                            *import_path,
-                            // *import_name,
-                            "FAKE",
-                        ),
-                    )
-                })?;
+                // @Note: this should be infallable,
+                // because we've already confirmed everything exists in the resolve step.
+                let import_module = modules
+                    .get(import_path)
+                    .expect("should already be resolved");
+
+                let typ = import_module
+                    .get_type(import_name)
+                    .expect("should already be resolved and typechecked");
 
                 // If there are any assumptions about the variable, bind them.
                 if let Some(assumed_types) = self.assumptions.remove(import_name) {
