@@ -279,7 +279,7 @@ impl Context {
     /// If the name isn't defined in this module, check if it's imported;
     /// if it is, then this assumption is promoted to Context level
     /// by inserting it into the Context.
-    pub fn bind_all_module_level_assumptions(
+    fn bind_all_module_level_assumptions(
         &mut self,
         module: &GeneratableModule,
     ) -> Result<(), TypeError> {
