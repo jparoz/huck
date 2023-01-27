@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod test;
 
-use crate::ast;
 use crate::generatable_module::GeneratableModule;
 use crate::log;
 use crate::resolve::ResolvedName;
 use crate::types::{Type, TypeDefinition};
+use crate::{ast, resolve};
 
 use std::collections::BTreeSet;
 use std::fmt::Write;
@@ -96,9 +96,10 @@ impl<'a> CodeGenerator<'a> {
 
         // Next import all the imports.
         log::trace!(log::CODEGEN, "  Generating import statements");
-        for (name, (_path, stem)) in self.module.imports.iter() {
-            writeln!(lua, r#"{PREFIX}["{name}"] = require("{stem}")["{name}"]"#)?;
-
+        for (name, _) in self.module.imports.iter() {
+            // @Todo @Cleanup: probably don't need to do this anymore,
+            // but we will need to change the generation loop.
+            //
             // Mark the import as generated.
             // @Checkme: name clashes? Maybe already caught this?
             assert!(self.generated.insert(*name));
@@ -106,12 +107,10 @@ impl<'a> CodeGenerator<'a> {
 
         // Next import all the foreign imports.
         log::trace!(log::CODEGEN, "  Generating foreign import statements");
-        for (name, (require_string, lua_name, _type_scheme)) in self.module.foreign_imports.iter() {
-            writeln!(
-                lua,
-                r#"{PREFIX}["{name}"] = require({require_string})["{lua_name}"]"#
-            )?;
-
+        for (name, _) in self.module.foreign_imports.iter() {
+            // @Todo @Cleanup: probably don't need to do this anymore,
+            // but we will need to change the generation loop.
+            //
             // Mark the foreign import as generated.
             // @Checkme: name clashes? Maybe already caught this?
             assert!(self.generated.insert(*name));
@@ -155,7 +154,7 @@ impl<'a> CodeGenerator<'a> {
                 let has_all_deps = defn
                     .dependencies()
                     .iter()
-                    .all(|n| self.generated.contains(n));
+                    .all(|n| self.generated.contains(n) || n.is_builtin());
 
                 if has_any_args || has_all_deps {
                     // Because there are arguments, it's going to be a Lua function.
@@ -221,12 +220,12 @@ impl<'a> CodeGenerator<'a> {
         let mut lua = String::new();
 
         // Write the definition to the `lua` string.
-        write!(lua, r#"{}["{}"] = "#, PREFIX, name)?;
+        write!(lua, r#"{}["{}"] = "#, PREFIX, name.ident)?;
         writeln!(lua, "{}", self.curried_function(&defn.assignments)?)?;
         writeln!(
             self.return_entries,
             r#"["{name}"] = {prefix}["{name}"],"#,
-            name = name,
+            name = name.ident,
             prefix = PREFIX,
         )?;
 
@@ -511,7 +510,7 @@ impl<'a> CodeGenerator<'a> {
     }
 
     /// Generates code for a pattern match.
-    /// Note: This only modified `self.conditions` and `self.bindings`.
+    /// Note: This only modifies `self.conditions` and `self.bindings`.
     fn pattern_match(
         &mut self,
         pat: &ast::Pattern<ResolvedName>,
@@ -522,8 +521,9 @@ impl<'a> CodeGenerator<'a> {
         // This is to allow nested pattern matches.
         match pat {
             ast::Pattern::Bind(s) => {
+                assert!(s.is_local());
                 self.bindings
-                    .push(format!("local {} = {}\n", lua_safe(s), lua_arg_name));
+                    .push(format!("local {} = {}\n", lua_local(s.ident), lua_arg_name));
             }
 
             // @Note: the Lua logic is identical for Huck lists and tuples.
@@ -670,19 +670,41 @@ impl<'a> CodeGenerator<'a> {
     }
 
     fn reference(&mut self, name: &ResolvedName) -> Result<String> {
-        // @Hack @Prelude
-        if name.ident == "True" || name.ident == "False" {
-            let mut name_string = name.ident.to_string();
-            name_string.make_ascii_lowercase();
-            Ok(name_string)
-        } else if self.module.contains(name) {
-            // It's a top-level definition,
-            // so we should emit e.g. _HUCK["var"]
-            Ok(format!(r#"{}["{}"]"#, PREFIX, name))
-        } else {
-            // It's a locally-bound definition,
-            // so we should emit e.g. var
-            Ok(lua_safe(name))
+        match name.source {
+            resolve::Source::Module(path) if path == self.module.path => {
+                // It's a top-level definition from this module,
+                // so we should emit e.g. _HUCK["var"]
+                Ok(format!(r#"{}["{}"]"#, PREFIX, name.ident))
+            }
+
+            resolve::Source::Module(path) => {
+                // It's a top-level definition from a different module,
+                // so we should emit e.g. require("Bar")["var"]
+                Ok(format!(r#"require("{}")["{}"]"#, path, name.ident))
+            }
+
+            resolve::Source::Foreign {
+                require,
+                foreign_name,
+            } => {
+                // e.g. require("inspect")["inspect"]
+                Ok(format!(r#"require({require})["{foreign_name}"]"#))
+            }
+
+            resolve::Source::Local(_id) => {
+                // It's a locally-bound definition,
+                // so we should emit e.g. var
+                Ok(lua_local(name.ident))
+            }
+
+            resolve::Source::Builtin => {
+                // At the moment, these are the only builtin values.
+                assert!(matches!(name.ident, "True" | "False"));
+
+                let mut name_string = name.ident.to_string();
+                name_string.make_ascii_lowercase();
+                Ok(name_string)
+            }
         }
     }
 
@@ -699,12 +721,12 @@ impl<'a> CodeGenerator<'a> {
 }
 
 /// Returns a Lua-safe version of a Huck identifier.
-///
+/// Used when binding local variable names.
 /// Guaranteed to return the same string each time it's called with the same argument.
-fn lua_safe(name: &ResolvedName) -> String {
+fn lua_local(ident: &'static str) -> String {
     let mut output = String::new();
 
-    for c in format!("{name}").chars() {
+    for c in ident.chars() {
         match c {
             '=' => output.push_str("_EQUALS"),
             '+' => output.push_str("_PLUS"),
