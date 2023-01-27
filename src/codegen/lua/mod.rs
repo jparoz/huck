@@ -94,28 +94,6 @@ impl<'a> CodeGenerator<'a> {
             write!(lua, "{}", self.type_definition(type_defn)?)?;
         }
 
-        // Next import all the imports.
-        log::trace!(log::CODEGEN, "  Generating import statements");
-        for (name, _) in self.module.imports.iter() {
-            // @Todo @Cleanup: probably don't need to do this anymore,
-            // but we will need to change the generation loop.
-            //
-            // Mark the import as generated.
-            // @Checkme: name clashes? Maybe already caught this?
-            assert!(self.generated.insert(*name));
-        }
-
-        // Next import all the foreign imports.
-        log::trace!(log::CODEGEN, "  Generating foreign import statements");
-        for (name, _) in self.module.foreign_imports.iter() {
-            // @Todo @Cleanup: probably don't need to do this anymore,
-            // but we will need to change the generation loop.
-            //
-            // Mark the foreign import as generated.
-            // @Checkme: name clashes? Maybe already caught this?
-            assert!(self.generated.insert(*name));
-        }
-
         // Next, we can generate all the definitions.
         log::trace!(log::CODEGEN, "  Generating definitions");
 
@@ -149,12 +127,13 @@ impl<'a> CodeGenerator<'a> {
                 // so we should have already caught this in a compile error.
                 let has_any_args = defn.assignments[0].0.arg_count() > 0;
 
-                // If the definition has no un-generated dependencies,
+                // If the definition has no un-generated dependencies from this module,
                 // then we're ready generate it.
                 let has_all_deps = defn
                     .dependencies()
                     .iter()
-                    .all(|n| self.generated.contains(n) || n.is_builtin());
+                    .filter(|n| n.source == resolve::Source::Module(self.module.path))
+                    .all(|n| self.generated.contains(n));
 
                 if has_any_args || has_all_deps {
                     // Because there are arguments, it's going to be a Lua function.
@@ -680,6 +659,8 @@ impl<'a> CodeGenerator<'a> {
             resolve::Source::Module(path) => {
                 // It's a top-level definition from a different module,
                 // so we should emit e.g. require("Bar")["var"]
+                //
+                // @Fixme: need to look up the file_stem instead of just using path
                 Ok(format!(r#"require("{}")["{}"]"#, path, name.ident))
             }
 

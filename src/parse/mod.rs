@@ -681,4 +681,8 @@ pub enum Error {
     // @Cleanup @Errors: this should print the source locations of the two definitions
     #[error("Multiple type definitions with the same name ({0})")]
     MultipleTypeDefinitions(UnresolvedName),
+
+    // @Cleanup @Errors: this should print the source locations of the two definitions
+    #[error("Multiple type constructors with the same name ({0})")]
+    MultipleTypeConstructors(UnresolvedName),
 }

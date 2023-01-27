@@ -130,7 +130,7 @@ impl ConstraintGenerator {
 
     /// Takes a TypeScheme and replaces all quantified variables with fresh variables;
     /// then returns the resulting Type.
-    pub fn instantiate(&mut self, ts: TypeScheme) -> Type {
+    fn instantiate(&mut self, ts: TypeScheme) -> Type {
         let TypeScheme { vars, mut typ } = ts;
         let sub = vars
             .into_iter()

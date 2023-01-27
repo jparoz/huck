@@ -19,10 +19,6 @@ pub struct ResolvedName {
 }
 
 impl ResolvedName {
-    pub fn is_builtin(&self) -> bool {
-        self.source == Source::Builtin
-    }
-
     pub fn is_local(&self) -> bool {
         matches!(self.source, Source::Local(..))
     }
@@ -295,6 +291,44 @@ impl Resolver {
         );
 
         Ok(resolved_module)
+    }
+
+    /// Clears out any names from the scope which aren't Prelude or builtin names.
+    pub fn clear_scopes(&mut self) {
+        for (_name, sources) in self.scope.names.iter_mut() {
+            sources.retain(|s| {
+                s == &Source::Builtin || s == &Source::Module(ast::ModulePath("Prelude"))
+            })
+        }
+    }
+
+    /// Checks that any assumptions made in the scope exist in the given map of modules.
+    pub fn check_assumptions(
+        &self,
+        modules: &BTreeMap<ast::ModulePath, ast::Module<ResolvedName>>,
+    ) -> Result<(), Error> {
+        log::trace!(log::RESOLVE, "Checking resolution assumptions");
+        for assumption in self.scope.assumptions.iter() {
+            let path = if let Source::Module(path) = assumption.source {
+                path
+            } else {
+                return Err(Error::NonexistentQualified(*assumption));
+            };
+
+            if !modules
+                .get(&path)
+                .map(|module| {
+                    module.definitions.contains_key(assumption)
+                        || module.constructors.contains_key(assumption)
+                })
+                .unwrap_or(false)
+            {
+                return Err(Error::NonexistentQualified(*assumption));
+            }
+
+            log::trace!(log::RESOLVE, "  Found name {assumption}");
+        }
+        Ok(())
     }
 
     /// Adds the given `Binding` to the value scope.
@@ -806,6 +840,15 @@ impl fmt::Debug for Resolver {
             }
         }
 
+        writeln!(f, "Assumptions: {{")?;
+        for assumption in self.scope.assumptions.iter() {
+            writeln!(f, "  {assumption:?}")?;
+        }
+        for assumption in self.type_scope.assumptions.iter() {
+            writeln!(f, "  {assumption:?}")?;
+        }
+        writeln!(f, "}}")?;
+
         Ok(())
     }
 }
@@ -1055,5 +1098,8 @@ pub enum Error {
     NonexistentModule(ast::ModulePath),
 
     #[error("Identifier `{1}` doesn't exist in module `{0}`")]
-    NonexistentImport(ast::ModulePath, UnresolvedName),
+    NonexistentImport(ast::ModulePath, &'static str),
+
+    #[error("Qualified identifier `{0}` doesn't exist")]
+    NonexistentQualified(ResolvedName),
 }

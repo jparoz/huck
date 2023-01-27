@@ -35,8 +35,7 @@ pub struct Context {
 
     /// These are type assumptions made about imported names,
     /// so need to be handled at Context level rather than module level.
-    // @Todo @Cleanup: change this to use ResolvedName
-    assumptions: BTreeMap<(ModulePath, ResolvedName), Vec<Type>>,
+    assumptions: BTreeMap<ResolvedName, Vec<Type>>,
 }
 
 impl Context {
@@ -60,35 +59,25 @@ impl Context {
         let mut resolved_modules = BTreeMap::new();
         let mut resolver = resolve::Resolver::new();
 
-        // Start with the prelude
+        // Start with the prelude...
         let prelude_path = ModulePath("Prelude");
         if let Some(unresolved_prelude) = modules.remove(&prelude_path) {
             let resolved_prelude = resolver.resolve(unresolved_prelude)?;
             resolved_modules.insert(prelude_path, resolved_prelude);
         }
 
-        // @Todo: pass the prelude scope into resolve for the other modules,
-        // so it can be automatically inserted into scope.
-        // Or change the function signature of resolve to accept a &mut Scope,
-        // instead of making a new one each time.
-
+        // Then resolve all other modules.
         for (path, module) in modules {
-            // @Note: `resolver` now has builtin and Prelude names in scope.
-            // If we clone it for each module,
-            // we don't need to worry about cross-pollution between modules
-            // (except Prelude which is intentional).
-            // Possibly we should do this in a more hygenic way,
-            // so that we don't have to just clone the `Resolver` each time.
-            let mut resolver = resolver.clone();
-
             let resolved_module = resolver.resolve(module)?;
             resolved_modules.insert(path, resolved_module);
+
+            // Clear out the scope of variables defined in this module.
+            // Possibly we should do this in a more thoughtful way.
+            resolver.clear_scopes();
         }
 
-        // @Todo: check that qualified names were used properly
-        // (i.e. check the `assumptions` field on each `Scope`)
-        // Something like this should be the error (or maybe a new special variant):
-        // Err(Error::NonexistentImport(path, UnresolvedName::Ident(ident)))
+        // Check that any qualified names used actually exist.
+        resolver.check_assumptions(&resolved_modules)?;
 
         // @Todo: apply operator precedence
 
@@ -296,14 +285,6 @@ impl Context {
                 for assumed_type in assumed_types {
                     self.cg.explicit_instance(assumed_type, type_scheme.clone());
                 }
-            } else if let Some((path, _stem)) = module.imports.get(&name) {
-                // This means that the name was imported from another Huck module;
-                // so we need to resolve it at Context level later.
-                // We do this by pushing it into self.assumptions (i.e. the Context)
-                self.assumptions
-                    .entry((*path, name))
-                    .or_default()
-                    .extend(assumed_types);
             } else if name.source == resolve::Source::Builtin {
                 // @Cleanup: @DRY with Pattern::UnaryConstructor branch
                 // in ConstraintGenerator::bind_pattern
@@ -315,8 +296,16 @@ impl Context {
                         .for_each(|t| self.cg.equate(t, Type::Primitive(types::Primitive::Bool))),
                     _ => unreachable!("missing a compiler builtin type"),
                 }
+            // } else if let Some((path, _stem)) = module.imports.get(&name) {
             } else {
-                unreachable!("name should be properly resolved by now: {name}")
+                // This means that the name was imported from another Huck module;
+                // so we need to resolve it at Context level later.
+                // We do this by pushing it into self.assumptions (i.e. the Context)
+                self.assumptions
+                    .entry(name)
+                    .or_default()
+                    .extend(assumed_types);
+                // unreachable!("name should be properly resolved by now: {name}")
             }
         }
 
@@ -353,14 +342,13 @@ impl Context {
                         resolve::Error::NonexistentImport(
                             *import_path,
                             // *import_name,
-                            UnresolvedName::Ident("FAKE"),
+                            "FAKE",
                         ),
                     )
                 })?;
 
                 // If there are any assumptions about the variable, bind them.
-                if let Some(assumed_types) = self.assumptions.remove(&(*import_path, *import_name))
-                {
+                if let Some(assumed_types) = self.assumptions.remove(import_name) {
                     // Constrain that the assumed types are instances of the inferred type.
                     for assumed_type in assumed_types {
                         self.cg.implicit_instance(assumed_type, typ.clone());

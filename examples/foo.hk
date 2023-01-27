@@ -3,6 +3,8 @@ module Foo;
 import Bar (bar, baz);
 foo = bar baz;
 
+foo_quux = Bar.bar Bar.quux;
+
 foreign import "inspect" (inspect : forall a. a -> String);
 resultOfInspect = inspect foo;
 

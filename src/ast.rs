@@ -12,7 +12,13 @@ use crate::parse::precedence::Precedence;
 pub struct Module<Name> {
     pub path: ModulePath,
     pub definitions: BTreeMap<Name, Definition<Name>>,
+
     pub type_definitions: BTreeMap<Name, TypeDefinition<Name>>,
+
+    /// Note that all the members of this field can also be found
+    /// in the values of the `type_definitions` field.
+    pub constructors: BTreeMap<Name, Vec<TypeTerm<Name>>>,
+
     pub imports: BTreeMap<ModulePath, Vec<Name>>,
     pub foreign_imports: BTreeMap<&'static str, Vec<(ForeignName, Name, TypeScheme<Name>)>>,
     pub foreign_exports: Vec<(&'static str, Expr<Name>)>,
@@ -24,6 +30,7 @@ impl<Name> Module<Name> {
             path,
             definitions: BTreeMap::new(),
             type_definitions: BTreeMap::new(),
+            constructors: BTreeMap::new(),
             imports: BTreeMap::new(),
             foreign_imports: BTreeMap::new(),
             foreign_exports: Vec::new(),

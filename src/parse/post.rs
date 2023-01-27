@@ -123,6 +123,12 @@ impl Context {
                     }
 
                     ast::Statement::TypeDefinition(type_defn) => {
+                        for (constr, types) in type_defn.constructors.iter().cloned() {
+                            if module.constructors.insert(constr, types).is_some() {
+                                return Err(super::Error::MultipleTypeConstructors(constr));
+                            }
+                        }
+
                         if let Some(first_defn) =
                             module.type_definitions.insert(type_defn.name, type_defn)
                         {
