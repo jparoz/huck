@@ -42,7 +42,6 @@ impl Context {
             log::trace!(log::RESOLVE, "Processing parsed statements");
             for stat in statements {
                 match stat {
-                    // @Todo: do some actual resolution
                     ast::Statement::Import(path, names) => {
                         module.imports.entry(path).or_default().extend(names)
                     }
@@ -51,19 +50,11 @@ impl Context {
                         module.imports.entry(path).or_default();
                     }
 
-                    // @Todo: do some actual resolution
                     ast::Statement::ForeignImport(require_string, import_items) => module
                         .foreign_imports
                         .entry(require_string)
                         .or_default()
-                        .extend(import_items.into_iter().map(|item| match item {
-                            ast::ForeignImportItem::SameName(name, ts) => {
-                                (ast::ForeignName(name), ast::UnresolvedName::Ident(name), ts)
-                            }
-                            ast::ForeignImportItem::Rename(lua_name, name, ts) => {
-                                (lua_name, name, ts)
-                            }
-                        })),
+                        .extend(import_items.into_iter()),
 
                     ast::Statement::Precedence(name, prec) => {
                         precs.insert(name, prec);

@@ -129,7 +129,7 @@ fn foreign_import_item(
     alt((
         map(
             separated_pair(ws(var), reserved_op(":"), type_scheme),
-            |(name, ts)| ForeignImportItem::SameName(name, ts),
+            |(name, ts)| ForeignImportItem(ForeignName(name), UnresolvedName::Ident(name), ts),
         ),
         map(
             nom_tuple((
@@ -139,7 +139,7 @@ fn foreign_import_item(
                 reserved_op(":"),
                 type_scheme,
             )),
-            |(lua_name, _, huck_name, _, ts)| ForeignImportItem::Rename(lua_name, huck_name, ts),
+            |(lua_name, _, huck_name, _, ts)| ForeignImportItem(lua_name, huck_name, ts),
         ),
     ))(input)
 }

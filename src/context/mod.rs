@@ -3,7 +3,7 @@ use std::mem;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use crate::ast::{Module, ModulePath, Statement, UnresolvedName};
+use crate::ast::{ForeignImportItem, Module, ModulePath, Statement, UnresolvedName};
 use crate::error::Error as HuckError;
 use crate::generatable_module::GeneratableModule;
 use crate::parse::parse;
@@ -175,7 +175,7 @@ impl Context {
 
             // Insert all (foreign) imported names into the scope.
             for (require_string, imports) in module.foreign_imports {
-                for (lua_name, huck_name, ast_type_scheme) in imports {
+                for ForeignImportItem(lua_name, huck_name, ast_type_scheme) in imports {
                     log::trace!(
                         log::IMPORT,
                         "Inserting into scope of {module_path}: \

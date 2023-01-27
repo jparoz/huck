@@ -20,7 +20,7 @@ pub struct Module<Name> {
     pub constructors: BTreeMap<Name, Vec<TypeTerm<Name>>>,
 
     pub imports: BTreeMap<ModulePath, Vec<Name>>,
-    pub foreign_imports: BTreeMap<&'static str, Vec<(ForeignName, Name, TypeScheme<Name>)>>,
+    pub foreign_imports: BTreeMap<&'static str, Vec<ForeignImportItem<Name>>>,
     pub foreign_exports: Vec<(&'static str, Expr<Name>)>,
 }
 
@@ -476,13 +476,14 @@ pub struct TypeDefinition<Name> {
 pub type ConstructorDefinition<Name> = (Name, Vec<TypeTerm<Name>>);
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub enum ForeignImportItem<Name> {
-    // @Note: &'static str,
-    // because it's guaranteed to be an ident-legal name
-    // (i.e. parsed by parse::var)
-    SameName(&'static str, TypeScheme<Name>),
-    Rename(ForeignName, UnresolvedName, TypeScheme<Name>),
-}
+pub struct ForeignImportItem<Name>(pub ForeignName, pub Name, pub TypeScheme<Name>);
+// {
+//     // @Note: &'static str,
+//     // because it's guaranteed to be an ident-legal name
+//     // (i.e. parsed by parse::var)
+//     SameName(&'static str, TypeScheme<Name>),
+//     Rename(ForeignName, UnresolvedName, TypeScheme<Name>),
+// }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub struct ForeignName(pub &'static str);

@@ -198,8 +198,8 @@ impl Resolver {
 
         // Add all the foreign imports to the as well as resolving the names.
         // @Cleanup: don't clone
-        for (require, tuples) in module.foreign_imports.clone() {
-            for (foreign_name, name, ts) in tuples {
+        for (require, items) in module.foreign_imports.clone() {
+            for ast::ForeignImportItem(foreign_name, name, ts) in items {
                 log::trace!(
                     log::RESOLVE,
                     "Importing `require({require})[\"{foreign_name}\"]` \
@@ -225,7 +225,7 @@ impl Resolver {
                     .foreign_imports
                     .entry(require)
                     .or_default()
-                    .push((
+                    .push(ast::ForeignImportItem(
                         foreign_name,
                         ResolvedName {
                             source,
