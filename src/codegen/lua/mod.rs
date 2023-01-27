@@ -48,10 +48,6 @@ type Result<T> = std::result::Result<T, CodegenError>;
 /// not to Huck constructs.
 #[derive(Debug)]
 struct CodeGenerator<'a> {
-    // These are used in generating curried functions.
-    conditions: Vec<String>,
-    bindings: Vec<String>,
-
     // This is a String containing the contents of the Lua table which shall be returned.
     return_entries: String,
 
@@ -64,9 +60,6 @@ struct CodeGenerator<'a> {
 impl<'a> CodeGenerator<'a> {
     fn new(module: &'a GeneratableModule) -> Self {
         CodeGenerator {
-            conditions: Vec::new(),
-            bindings: Vec::new(),
-
             return_entries: String::new(),
 
             generated: BTreeSet::new(),
@@ -331,13 +324,13 @@ impl<'a> CodeGenerator<'a> {
         writeln!(lua, "local {}_{} = {}", PREFIX, id, expr_s)?;
 
         for (pat, expr) in arms {
-            self.pattern_match(pat, &format!("{}_{}", PREFIX, id))?;
+            let (conditions, bindings) = self.pattern_match(pat, &format!("{}_{}", PREFIX, id))?;
 
-            if self.conditions.is_empty() {
+            if conditions.is_empty() {
                 has_unconditional_branch = true;
 
                 // First bind the bindings
-                for b in self.bindings.drain(..) {
+                for b in bindings {
                     lua.write_str(&b)?;
                 }
                 // Then return the return value
@@ -345,8 +338,8 @@ impl<'a> CodeGenerator<'a> {
             } else {
                 // Check the conditions
                 lua.write_str("if ")?;
-                let condition_count = self.conditions.len();
-                for (i, cond) in self.conditions.drain(..).enumerate() {
+                let condition_count = conditions.len();
+                for (i, cond) in conditions.into_iter().enumerate() {
                     write!(lua, "({})", cond)?;
                     if i < condition_count - 1 {
                         lua.write_str("\nand ")?;
@@ -355,7 +348,7 @@ impl<'a> CodeGenerator<'a> {
                 writeln!(lua, " then")?;
 
                 // If the conditions are met, then bind the bindings
-                for b in self.bindings.drain(..) {
+                for b in bindings {
                     lua.write_str(&b)?;
                 }
 
@@ -403,63 +396,81 @@ impl<'a> CodeGenerator<'a> {
             }
         }
 
-        // Return the expr
-        // @DRY: case
-
-        let mut has_unconditional_branch = false;
-
-        for (lhs, expr) in assignments {
-            let args = lhs.args();
-            if arg_count != args.len() {
-                return Err(CodegenError::IncorrectArgumentCount(format!(
-                    "{}",
-                    lhs.name()
-                )));
-            }
-
-            for i in 0..arg_count {
-                self.pattern_match(&args[i], &format!("{}_{}", PREFIX, ids[i]))?;
-            }
-
-            if self.conditions.is_empty() {
-                has_unconditional_branch = true;
-
-                // If we have no Huck arguments,
-                // then we should be a Lua value, not a Lua function;
-                // so we don't return, we just are.
-                if arg_count > 0 {
-                    // First bind the bindings
-                    for b in self.bindings.drain(..) {
-                        lua.write_str(&b)?;
-                    }
-                    // Then return the return value
-                    write!(lua, "return ")?;
+        // Some @DRY: CodeGenerator::case
+        //
+        // Before returning the expression,
+        // we split the branches based on whether or not they have any conditions.
+        // This is to make sure that unconditional branch(es) go at the end.
+        let branches = assignments
+            .iter()
+            .map(|(lhs, expr)| {
+                let args = lhs.args();
+                if arg_count != args.len() {
+                    return Err(CodegenError::IncorrectArgumentCount(format!(
+                        "{}",
+                        lhs.name()
+                    )));
                 }
 
-                writeln!(lua, "{}", self.expr(expr)?)?;
-            } else {
-                // Check the conditions
-                lua.write_str("if ")?;
-                let condition_count = self.conditions.len();
-                for (i, cond) in self.conditions.drain(..).enumerate() {
-                    write!(lua, "({})", cond)?;
-                    if i < condition_count - 1 {
-                        lua.write_str("\nand ")?;
-                    }
+                let mut conds = Vec::new();
+                let mut binds = Vec::new();
+                for i in 0..arg_count {
+                    let (cond, bind) =
+                        self.pattern_match(&args[i], &format!("{}_{}", PREFIX, ids[i]))?;
+                    conds.extend(cond);
+                    binds.extend(bind);
                 }
-                writeln!(lua, " then")?;
 
-                // If the conditions are met, then bind the bindings
-                for b in self.bindings.drain(..) {
+                Ok((conds, binds, expr))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let (unconditional, conditional): (Vec<_>, Vec<_>) = branches
+            .into_iter()
+            .partition(|(conds, _binds, _expr)| conds.is_empty());
+
+        let has_unconditional_branch = !unconditional.is_empty();
+
+        // !conds.is_empty()
+        for (conds, binds, expr) in conditional {
+            // Check the conditions
+            lua.write_str("if ")?;
+            let condition_count = conds.len();
+            for (i, cond) in conds.into_iter().enumerate() {
+                write!(lua, "({})", cond)?;
+                if i < condition_count - 1 {
+                    lua.write_str("\nand ")?;
+                }
+            }
+            writeln!(lua, " then")?;
+
+            // If the conditions are met, then bind the bindings
+            for b in binds {
+                lua.write_str(&b)?;
+            }
+
+            // Return the return value
+            writeln!(lua, "return {}", self.expr(expr)?)?;
+
+            // End the if
+            writeln!(lua, "end")?;
+        }
+
+        // conds.is_empty()
+        for (_conds, binds, expr) in unconditional {
+            // If we have no Huck arguments,
+            // then we should be a Lua value, not a Lua function;
+            // so we don't return, we just are.
+            if arg_count > 0 {
+                // First bind the bindings
+                for b in binds {
                     lua.write_str(&b)?;
                 }
-
-                // Return the return value
-                writeln!(lua, "return {}", self.expr(expr)?)?;
-
-                // End the if
-                writeln!(lua, "end")?;
+                // Then return the return value
+                write!(lua, "return ")?;
             }
+
+            writeln!(lua, "{}", self.expr(expr)?)?;
         }
 
         // Emit a runtime error in case no pattern matches
@@ -482,20 +493,24 @@ impl<'a> CodeGenerator<'a> {
     }
 
     /// Generates code for a pattern match.
-    /// Note: This only modifies `self.conditions` and `self.bindings`.
+    /// Returns `conditions` and `bindings`,
+    /// which are `Vec`s of Lua segments used to implement the pattern match.
     fn pattern_match(
         &mut self,
         pat: &ast::Pattern<ResolvedName>,
         lua_arg_name: &str,
-    ) -> Result<()> {
+    ) -> Result<(Vec<String>, Vec<String>)> {
         // This function takes a Lua argument name,
         // e.g. _HUCK_0, _HUCK_12[3], _HUCK_3[13][334] or whatever.
         // This is to allow nested pattern matches.
+
+        let mut conditions = Vec::new();
+        let mut bindings = Vec::new();
+
         match pat {
             ast::Pattern::Bind(s) => {
                 assert!(s.is_local());
-                self.bindings
-                    .push(format!("local {} = {}\n", lua_local(s.ident), lua_arg_name));
+                bindings.push(format!("local {} = {}\n", lua_local(s.ident), lua_arg_name));
             }
 
             // @Note: the Lua logic is identical for Huck lists and tuples.
@@ -507,27 +522,28 @@ impl<'a> CodeGenerator<'a> {
                 // instead of just failing to pattern match.
                 //
                 // Check that the list is the correct length
-                self.conditions
-                    .push(format!("#{} == {}", lua_arg_name, list.len()));
+                conditions.push(format!("#{} == {}", lua_arg_name, list.len()));
 
                 // Check that each pattern matches
                 for (i, pat) in list.iter().enumerate() {
                     let new_lua_arg_name = format!("{}[{}]", lua_arg_name, i + 1);
-                    self.pattern_match(pat, &new_lua_arg_name)?;
+                    let (sub_conds, sub_binds) = self.pattern_match(pat, &new_lua_arg_name)?;
+                    conditions.extend(sub_conds);
+                    bindings.extend(sub_binds);
                 }
             }
 
             ast::Pattern::Numeral(lit) => {
-                self.conditions.push(format!("{} == {}", lua_arg_name, lit));
+                conditions.push(format!("{} == {}", lua_arg_name, lit));
             }
 
             ast::Pattern::String(lit) => {
-                self.conditions.push(format!("{} == {}", lua_arg_name, lit));
+                conditions.push(format!("{} == {}", lua_arg_name, lit));
             }
 
             ast::Pattern::Destructure { constructor, args } => {
                 // Check that it's the right variant
-                self.conditions.push(format!(
+                conditions.push(format!(
                     r#"getmetatable({}).__variant == "{}""#,
                     lua_arg_name, constructor
                 ));
@@ -535,22 +551,30 @@ impl<'a> CodeGenerator<'a> {
                 // Check that each pattern matches
                 for (i, pat) in args.iter().enumerate() {
                     let new_lua_arg_name = format!("{}[{}]", lua_arg_name, i + 1);
-                    self.pattern_match(pat, &new_lua_arg_name)?;
+                    let (sub_conds, sub_binds) = self.pattern_match(pat, &new_lua_arg_name)?;
+                    conditions.extend(sub_conds);
+                    bindings.extend(sub_binds);
                 }
             }
 
             ast::Pattern::Binop { lhs, rhs, operator } => {
                 // Check that it's the right variant
-                self.conditions.push(format!(
+                conditions.push(format!(
                     r#"getmetatable({}).__variant == "{}""#,
                     lua_arg_name, operator
                 ));
 
                 // Check that the LHS pattern matches
-                self.pattern_match(lhs, &format!("{}[{}]", lua_arg_name, 1))?;
+                let (sub_conds, sub_binds) =
+                    self.pattern_match(lhs, &format!("{}[{}]", lua_arg_name, 1))?;
+                conditions.extend(sub_conds);
+                bindings.extend(sub_binds);
 
                 // Check that the RHS pattern matches
-                self.pattern_match(rhs, &format!("{}[{}]", lua_arg_name, 2))?;
+                let (sub_conds, sub_binds) =
+                    self.pattern_match(rhs, &format!("{}[{}]", lua_arg_name, 2))?;
+                conditions.extend(sub_conds);
+                bindings.extend(sub_binds);
             }
 
             // @Hardcode @Hack-ish @Prelude
@@ -559,13 +583,12 @@ impl<'a> CodeGenerator<'a> {
             {
                 let mut name_string = name.ident.to_string();
                 name_string.make_ascii_lowercase();
-                self.conditions
-                    .push(format!(r#"{} == {}"#, lua_arg_name, name_string));
+                conditions.push(format!(r#"{} == {}"#, lua_arg_name, name_string));
             }
 
             ast::Pattern::UnaryConstructor(name) => {
                 // Check that it's the right variant
-                self.conditions.push(format!(
+                conditions.push(format!(
                     r#"getmetatable({}).__variant == "{}""#,
                     lua_arg_name, name
                 ));
@@ -574,7 +597,7 @@ impl<'a> CodeGenerator<'a> {
             ast::Pattern::Unit => (), // Don't need to do anything because unit is ignored
         };
 
-        Ok(())
+        Ok((conditions, bindings))
     }
 
     /// Generates all the type constructors found in the type definition.
