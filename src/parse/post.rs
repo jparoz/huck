@@ -16,26 +16,11 @@ impl Context {
     ) -> Result<BTreeMap<ModulePath, Module<UnresolvedName>>, super::Error> {
         let mut modules = BTreeMap::new();
 
-        for (path, mut statements) in parsed {
+        for (path, statements) in parsed {
             // Start the timer to measure how long resolution takes.
             let start_time = Instant::now();
 
             let mut module = Module::new(path);
-
-            // Sort the statements so they're processed in the correct order.
-            // @Note @Performance:
-            // This could be really slow on big programs.
-            // For now we just time it and log,
-            // but one day we might need to optimise this a bit more carefully.
-            let sort_time = Instant::now();
-            // @Note @Important:
-            // This relies on the (derived!) impl PartialOrd for Statement.
-            statements.sort();
-            log::trace!(
-                log::METRICS,
-                "Statement sort time in resolve: {:?}",
-                sort_time.elapsed()
-            );
 
             // Process all parsed statements,
             // and insert them into the Module.
