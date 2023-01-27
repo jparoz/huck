@@ -12,6 +12,9 @@ foo = bar baz;
 
 foo_quux = Bar.bar Bar.quux;
 
+add a b = a + b;
+usesAdd = 12 `add` 34;
+
 foreign import "inspect" (inspect : forall a. a -> String);
 resultOfInspect = inspect foo;
 

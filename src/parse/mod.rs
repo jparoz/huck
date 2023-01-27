@@ -570,16 +570,10 @@ where
 
 fn operator(input: &'static str) -> IResult<&'static str, UnresolvedName> {
     map(
-        verify(
-            ws(recognize(alt((
-                value((), many1(operator_char)),
-                value(
-                    (),
-                    delimited(char('`'), alt((lower_ident, upper_ident)), char('`')),
-                ),
-            )))),
-            |s| !is_reserved(s),
-        ),
+        ws(alt((
+            verify(recognize(many1(operator_char)), |s| !is_reserved(s)),
+            delimited(char('`'), ident, char('`')),
+        ))),
         UnresolvedName::Unqualified,
     )(input)
 }
