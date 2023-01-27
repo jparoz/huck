@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, VecDeque};
 use std::fmt::{self, Debug, Write};
 use std::iter;
 
-use crate::ast::{self, Assignment, Definition, Expr, Lhs, Numeral, Pattern, Term, UnresolvedName};
+use crate::ast::{self, Assignment, Definition, Expr, Lhs, Numeral, Pattern, Term};
 use crate::log;
 use crate::resolve::{ResolvedName, Source};
 use crate::types::{
@@ -611,6 +611,11 @@ impl ConstraintGenerator {
                 source: Source::Builtin,
                 ident: "Bool",
             }) => Type::Primitive(Primitive::Bool),
+
+            ast::TypeTerm::Concrete(ResolvedName {
+                source: Source::Builtin,
+                ident: "IO",
+            }) => Type::Primitive(Primitive::IO),
 
             ast::TypeTerm::Unit => Type::Primitive(Primitive::Unit),
 
