@@ -17,8 +17,6 @@ use crate::name::UnresolvedName;
 use crate::precedence::{Associativity, Precedence};
 use crate::{ast::*, log};
 
-pub mod post;
-
 #[cfg(test)]
 mod test;
 

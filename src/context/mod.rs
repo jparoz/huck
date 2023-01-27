@@ -55,7 +55,12 @@ impl Context {
 
         // Post-parse processing
         // @XXX @Todo: don't clone
-        let mut modules = self.post_parse(self.parsed.clone())?;
+        let mut modules = self
+            .parsed
+            .clone()
+            .into_iter()
+            .map(|(path, stats)| Ok((path, Module::from_statements(path, stats)?)))
+            .collect::<Result<BTreeMap<ModulePath, Module<UnresolvedName>>, HuckError>>()?;
 
         // Resolve names
         let mut resolved_modules = BTreeMap::new();

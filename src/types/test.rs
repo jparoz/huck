@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 
 use crate::context::Context;
 use crate::generatable_module::GeneratableModule;
-use crate::module::ModulePath;
-use crate::name::{ResolvedName, Source};
+use crate::module::{Module, ModulePath};
+use crate::name::{ResolvedName, Source, UnresolvedName};
 use crate::resolve::Resolver;
 use crate::types::{Primitive, Type};
 
@@ -27,8 +27,15 @@ fn typ_module(s: &'static str) -> GeneratableModule {
     // Parse
     ctx.include_string(s).unwrap();
 
-    // Post-parse
-    let modules = ctx.post_parse(ctx.parsed.clone()).unwrap();
+    // Post-parse processing
+    // @XXX @Todo: don't clone
+    let modules = ctx
+        .parsed
+        .clone()
+        .into_iter()
+        .map(|(path, stats)| Ok((path, Module::from_statements(path, stats)?)))
+        .collect::<Result<BTreeMap<ModulePath, Module<UnresolvedName>>, crate::parse::Error>>()
+        .unwrap();
 
     // Resolve
     let mut resolved_modules = BTreeMap::new();
