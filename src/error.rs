@@ -1,4 +1,4 @@
-use crate::{codegen, parse, resolve, types};
+use crate::{codegen, parse, resolve, typecheck};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -15,7 +15,7 @@ pub enum Error {
     Resolve(#[from] resolve::Error),
 
     #[error("Type error: {0}")]
-    Type(#[from] types::Error),
+    Type(#[from] typecheck::Error),
 
     #[error("Code generation error: {0}")]
     CodeGen(#[from] codegen::Error),

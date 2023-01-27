@@ -9,6 +9,7 @@ mod name;
 mod parse;
 mod precedence;
 mod resolve;
+mod typecheck;
 mod types;
 
 #[allow(dead_code)]

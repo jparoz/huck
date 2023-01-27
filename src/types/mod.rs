@@ -9,10 +9,7 @@ mod substitution;
 #[cfg(test)]
 mod test;
 
-pub use error::Error;
 pub use substitution::{ApplySub, Substitution};
-
-use error::Error as TypeError;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Type {
@@ -29,69 +26,6 @@ pub enum Type {
     /// Type application (e.g. `Foo a`)
     App(Box<Type>, Box<Type>),
     // @Future @TypeBinops (maybe as type application)
-}
-
-impl Type {
-    pub fn free_vars(&self) -> TypeVarSet {
-        match self {
-            Type::Concrete(_) | Type::Primitive(_) => TypeVarSet::empty(),
-
-            Type::Var(var) => TypeVarSet::single(var.clone()),
-            Type::Arrow(a, b) | Type::App(a, b) => a.free_vars().union(&b.free_vars()),
-            Type::List(t) => t.free_vars(),
-            Type::Tuple(v) => v
-                .iter()
-                .fold(TypeVarSet::empty(), |a, t| a.union(&t.free_vars())),
-        }
-    }
-
-    /// Takes a Type and quantifies all free type variables, except the ones given in type_set.
-    pub fn generalize(&self, type_set: &TypeVarSet) -> TypeScheme {
-        TypeScheme {
-            vars: self.free_vars().difference(type_set),
-            typ: self.clone(),
-        }
-    }
-
-    /// Finds the most general unifier for two types.
-    pub fn unify(self, other: Self) -> Result<Substitution, TypeError> {
-        let mut sub = Substitution::empty();
-
-        let mut pairs = vec![(self, other)];
-
-        while let Some((a, b)) = pairs.pop() {
-            match (a, b) {
-                (t1, t2) if t1 == t2 => (),
-                (Type::Var(var), t) | (t, Type::Var(var)) => {
-                    if t.free_vars().contains(&var) {
-                        // @CheckMe
-                        return Err(TypeError::CouldNotUnifyRecursive(t, Type::Var(var)));
-                    } else {
-                        let s = Substitution::single(var.clone(), t.clone());
-                        for (a2, b2) in pairs.iter_mut() {
-                            a2.apply(&s);
-                            b2.apply(&s);
-                        }
-                        sub = sub.then(s);
-                    }
-                }
-                (Type::List(t1), Type::List(t2)) => pairs.push((*t1, *t2)),
-                (Type::Tuple(ts1), Type::Tuple(ts2)) => {
-                    for (t1, t2) in ts1.into_iter().zip(ts2.into_iter()) {
-                        pairs.push((t1, t2));
-                    }
-                }
-                (Type::Arrow(a1, b1), Type::Arrow(a2, b2))
-                | (Type::App(a1, b1), Type::App(a2, b2)) => {
-                    pairs.push((*a1, *a2));
-                    pairs.push((*b1, *b2));
-                }
-                (t1, t2) => return Err(TypeError::CouldNotUnify(t1, t2)),
-            }
-        }
-
-        Ok(sub)
-    }
 }
 
 impl Display for Type {
@@ -142,12 +76,6 @@ pub enum Primitive {
 pub struct TypeScheme {
     pub vars: TypeVarSet,
     pub typ: Type,
-}
-
-impl TypeScheme {
-    pub fn free_vars(&self) -> TypeVarSet {
-        self.typ.free_vars().difference(&self.vars)
-    }
 }
 
 impl Display for TypeScheme {

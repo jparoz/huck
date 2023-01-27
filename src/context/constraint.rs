@@ -6,7 +6,7 @@ use crate::ast::{self, Assignment, Definition, Expr, Lhs, Numeral, Pattern, Term
 use crate::log;
 use crate::name::{ResolvedName, Source};
 use crate::types::{
-    self, ApplySub, Primitive, Substitution, Type, TypeDefinition, TypeScheme, TypeVar, TypeVarSet,
+    ApplySub, Primitive, Substitution, Type, TypeDefinition, TypeScheme, TypeVar, TypeVarSet,
 };
 
 pub trait ActiveVars {
@@ -63,11 +63,11 @@ impl Debug for Constraint {
 }
 
 #[derive(Debug, Default)]
-pub(super) struct ConstraintGenerator {
+pub struct ConstraintGenerator {
     constraints: Vec<Constraint>,
 
     /// All the currently assumed types of name uses.
-    pub(super) assumptions: BTreeMap<ResolvedName, Vec<Type>>,
+    pub assumptions: BTreeMap<ResolvedName, Vec<Type>>,
 
     m_stack: Vec<TypeVar>,
 }
@@ -241,7 +241,7 @@ impl ConstraintGenerator {
         }
     }
 
-    pub fn solve(&mut self) -> Result<Substitution, types::Error> {
+    pub fn solve(&mut self) -> Result<Substitution, crate::typecheck::Error> {
         log::trace!(
             log::TYPECHECK,
             "Called ConstraintGenerator::solve, starting constraints:"
