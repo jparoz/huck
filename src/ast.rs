@@ -94,13 +94,6 @@ impl<Name: Copy> Lhs<Name> {
             Lhs::Binop { a, b, .. } => vec![a.clone(), b.clone()],
         }
     }
-
-    pub fn names_bound(&self) -> Vec<Name> {
-        self.args()
-            .into_iter()
-            .flat_map(|pat| pat.names_bound())
-            .collect()
-    }
 }
 
 impl<Name: Display> Display for Lhs<Name> {
