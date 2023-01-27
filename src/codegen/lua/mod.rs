@@ -571,7 +571,6 @@ impl<'a> CodeGenerator<'a> {
 
             ast::Pattern::UnaryConstructor(name) => {
                 // Check that it's the right variant
-                // assert!(matches!(name, ResolvedName::Ident(_))); @Nocommit
                 self.conditions.push(format!(
                     r#"getmetatable({}).__variant == "{}""#,
                     lua_arg_name, name

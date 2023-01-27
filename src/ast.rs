@@ -107,14 +107,6 @@ impl<Name: Display> Display for Lhs<Name> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Lhs::Func { name, args } => {
-                // // @Nocommit: put this somewhere like impl Display for UnresolvedName
-                // match name {
-                //     UnresolvedName::Ident(s) => write!(f, "{s}")?,
-                //     UnresolvedName::Binop(s) => write!(f, "({s})")?,
-                //     UnresolvedName::Lambda => unreachable!(),
-                //     // @Fixme: don't use Debug
-                //     UnresolvedName::Qualified(source, s) => write!(f, "{source:?}.{s}")?,
-                // }
                 write!(f, "{name}")?;
                 for arg in args.iter() {
                     write!(f, " {arg}")?;
