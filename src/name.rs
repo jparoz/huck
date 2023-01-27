@@ -8,22 +8,16 @@ use crate::module::ModulePath;
 /// and which may or may not shadow other identifiers with the same name.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub enum UnresolvedName {
-    Ident(&'static str),
-
-    // @Todo @Cleanup: remove this (?)
-    Binop(&'static str),
-
+    Unqualified(&'static str),
     Qualified(ModulePath, &'static str),
 }
 
 impl UnresolvedName {
-    /// If it's an `Ident` or `Binop`, returns the inner `&'static str`.
+    /// If it's an `Unqualified` name, returns the inner `&'static str`.
     /// If it's a `Qualified` name, returns only the `ident` part (not the path!)
     pub fn ident(&self) -> &'static str {
         match self {
-            UnresolvedName::Qualified(_, s)
-            | UnresolvedName::Ident(s)
-            | UnresolvedName::Binop(s) => s,
+            UnresolvedName::Qualified(_, s) | UnresolvedName::Unqualified(s) => s,
         }
     }
 }
@@ -31,7 +25,7 @@ impl UnresolvedName {
 impl Display for UnresolvedName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            UnresolvedName::Ident(s) | UnresolvedName::Binop(s) => write!(f, "{s}"),
+            UnresolvedName::Unqualified(s) => write!(f, "{s}"),
             UnresolvedName::Qualified(path, s) => write!(f, "{path}.{s}"),
         }
     }

@@ -38,19 +38,19 @@ impl Resolver {
     pub fn new() -> Self {
         let scope = Scope {
             names: BTreeMap::from([
-                (UnresolvedName::Ident("True"), vec![Source::Builtin]),
-                (UnresolvedName::Ident("False"), vec![Source::Builtin]),
+                (UnresolvedName::Unqualified("True"), vec![Source::Builtin]),
+                (UnresolvedName::Unqualified("False"), vec![Source::Builtin]),
             ]),
             ..Scope::default()
         };
 
         let type_scope = Scope {
             names: BTreeMap::from([
-                (UnresolvedName::Ident("Int"), vec![Source::Builtin]),
-                (UnresolvedName::Ident("Float"), vec![Source::Builtin]),
-                (UnresolvedName::Ident("String"), vec![Source::Builtin]),
-                (UnresolvedName::Ident("Bool"), vec![Source::Builtin]),
-                (UnresolvedName::Ident("IO"), vec![Source::Builtin]),
+                (UnresolvedName::Unqualified("Int"), vec![Source::Builtin]),
+                (UnresolvedName::Unqualified("Float"), vec![Source::Builtin]),
+                (UnresolvedName::Unqualified("String"), vec![Source::Builtin]),
+                (UnresolvedName::Unqualified("Bool"), vec![Source::Builtin]),
+                (UnresolvedName::Unqualified("IO"), vec![Source::Builtin]),
             ]),
             ..Scope::default()
         };
@@ -118,10 +118,7 @@ impl Resolver {
                 // @Todo @Errors: this should throw an error
                 // (that is, if this is reachable; maybe it's already a parse error.
                 // Actually, this should definitely be a parse error.)
-                assert!(matches!(
-                    name,
-                    UnresolvedName::Ident(_) | UnresolvedName::Binop(_)
-                ));
+                assert!(matches!(name, UnresolvedName::Unqualified(_)));
 
                 let resolved = ResolvedName {
                     source: Source::Module(path),
@@ -159,10 +156,7 @@ impl Resolver {
                 // @Todo @Errors: this should throw an error
                 // (that is, if this is reachable; maybe it's already a parse error.
                 // Actually, this should definitely be a parse error.)
-                assert!(matches!(
-                    name,
-                    UnresolvedName::Ident(_) | UnresolvedName::Binop(_)
-                ));
+                assert!(matches!(name, UnresolvedName::Unqualified(_)));
 
                 let source = Source::Foreign {
                     require,
@@ -733,7 +727,7 @@ impl Resolver {
             .vars
             .iter()
             // @Cleanup: this doesn't seem like the right place to make it an UnresolvedName...
-            .map(|v| Binding::local(UnresolvedName::Ident(v)))
+            .map(|v| Binding::local(UnresolvedName::Unqualified(v)))
             .collect();
 
         for b in bindings.iter() {
@@ -785,8 +779,8 @@ impl Resolver {
             // @Todo @Checkme: do we need to do something here? Oh well for now
             // ast::TypeTerm::Var(var_s) => {
             //     let res_type_name =
-            //         // @Cleanup: This matches the UnresolvedName::Ident in resolve_type_scheme
-            //         self.resolve_type_name(UnresolvedName::Ident(var_s))?;
+            //         // @Cleanup: This matches the UnresolvedName::Unqualified in resolve_type_scheme
+            //         self.resolve_type_name(UnresolvedName::Unqualified(var_s))?;
             //     Ok((ast::TypeTerm::Var(res_type_name)))
             // }
             ast::TypeTerm::Var(v) => Ok(ast::TypeTerm::Var(v)),
@@ -961,7 +955,7 @@ impl From<Binding> for ResolvedName {
 
 impl From<ResolvedName> for Binding {
     fn from(name: ResolvedName) -> Self {
-        Binding(name.source, UnresolvedName::Ident(name.ident))
+        Binding(name.source, UnresolvedName::Unqualified(name.ident))
     }
 }
 

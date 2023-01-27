@@ -128,8 +128,10 @@ fn foreign_import_item(
 ) -> IResult<&'static str, ForeignImportItem<UnresolvedName>> {
     alt((
         map(
-            separated_pair(ws(var), reserved_op(":"), type_scheme),
-            |(name, ts)| ForeignImportItem(ForeignName(name), UnresolvedName::Ident(name), ts),
+            separated_pair(ws(lower_ident), reserved_op(":"), type_scheme),
+            |(name, ts)| {
+                ForeignImportItem(ForeignName(name), UnresolvedName::Unqualified(name), ts)
+            },
         ),
         map(
             nom_tuple((
@@ -196,7 +198,9 @@ fn lhs(input: &'static str) -> IResult<&'static str, Lhs<UnresolvedName>> {
 
 fn pattern(input: &'static str) -> IResult<&'static str, Pattern<UnresolvedName>> {
     alt((
-        map(ws(var), |v| Pattern::Bind(UnresolvedName::Ident(v))),
+        map(ws(lower_ident), |v| {
+            Pattern::Bind(UnresolvedName::Unqualified(v))
+        }),
         map(list(pattern), Pattern::List),
         map(tuple(pattern), Pattern::Tuple),
         map(numeral, Pattern::Numeral),
@@ -232,7 +236,7 @@ fn type_scheme(input: &'static str) -> IResult<&'static str, TypeScheme<Unresolv
         nom_tuple((
             opt(preceded(
                 reserved("forall"),
-                terminated(many1(ws(var)), ws(tag("."))),
+                terminated(many1(ws(lower_ident)), ws(tag("."))),
             )),
             type_expr,
         )),
@@ -271,9 +275,9 @@ fn type_app(input: &'static str) -> IResult<&'static str, TypeExpr<UnresolvedNam
 fn type_term(input: &'static str) -> IResult<&'static str, TypeTerm<UnresolvedName>> {
     alt((
         map(ws(upper_ident), |s| {
-            TypeTerm::Concrete(UnresolvedName::Ident(s))
+            TypeTerm::Concrete(UnresolvedName::Unqualified(s))
         }),
-        map(ws(var), TypeTerm::Var),
+        map(ws(lower_ident), TypeTerm::Var),
         map(delimited(ws(tag("[")), type_expr, ws(tag("]"))), |t| {
             TypeTerm::List(Box::new(t))
         }),
@@ -417,7 +421,7 @@ fn term(input: &'static str) -> IResult<&'static str, Term<UnresolvedName>> {
     ))(input)
 }
 
-fn var(input: &'static str) -> IResult<&'static str, &'static str> {
+fn lower_ident(input: &'static str) -> IResult<&'static str, &'static str> {
     verify(
         recognize(nom_tuple((
             satisfy(is_var_start_char),
@@ -435,7 +439,28 @@ fn upper_ident(input: &'static str) -> IResult<&'static str, &'static str> {
 }
 
 fn ident(input: &'static str) -> IResult<&'static str, &'static str> {
-    alt((var, upper_ident))(input)
+    alt((lower_ident, upper_ident))(input)
+}
+
+fn name(input: &'static str) -> IResult<&'static str, UnresolvedName> {
+    alt((qualified_name, unqualified_name, parens(operator)))(input)
+}
+
+fn qualified_name(input: &'static str) -> IResult<&'static str, UnresolvedName> {
+    ws(map(
+        separated_pair(
+            recognize(separated_list1(
+                tag("."),
+                preceded(
+                    peek(nom_tuple((module_path_segment, tag("."), ident))),
+                    module_path_segment,
+                ),
+            )),
+            tag("."),
+            ident,
+        ),
+        |(path, ident)| UnresolvedName::Qualified(ModulePath(path), ident),
+    ))(input)
 }
 
 fn module_path_segment(input: &'static str) -> IResult<&'static str, &'static str> {
@@ -445,29 +470,12 @@ fn module_path_segment(input: &'static str) -> IResult<&'static str, &'static st
     )))(input)
 }
 
-fn name(input: &'static str) -> IResult<&'static str, UnresolvedName> {
-    ws(alt((
-        map(
-            separated_pair(
-                recognize(separated_list1(
-                    tag("."),
-                    preceded(
-                        peek(nom_tuple((module_path_segment, tag("."), ident))),
-                        module_path_segment,
-                    ),
-                )),
-                tag("."),
-                ident,
-            ),
-            |(path, ident)| UnresolvedName::Qualified(ModulePath(path), ident),
-        ),
-        map(ident, UnresolvedName::Ident),
-        parens(operator),
-    )))(input)
+fn unqualified_name(input: &'static str) -> IResult<&'static str, UnresolvedName> {
+    ws(map(ident, UnresolvedName::Unqualified))(input)
 }
 
 fn upper_name(input: &'static str) -> IResult<&'static str, UnresolvedName> {
-    ws(map(upper_ident, UnresolvedName::Ident))(input)
+    ws(map(upper_ident, UnresolvedName::Unqualified))(input)
 }
 
 fn lua_name(input: &'static str) -> IResult<&'static str, ForeignName> {
@@ -493,7 +501,7 @@ fn constructor_definition(
 fn constructor_lhs(
     input: &'static str,
 ) -> IResult<&'static str, (UnresolvedName, Vec<&'static str>)> {
-    nom_tuple((upper_name, many0(ws(var))))(input)
+    nom_tuple((upper_name, many0(ws(lower_ident))))(input)
 }
 
 fn numeral(input: &'static str) -> IResult<&'static str, Numeral> {
@@ -565,11 +573,14 @@ fn operator(input: &'static str) -> IResult<&'static str, UnresolvedName> {
         verify(
             ws(recognize(alt((
                 value((), many1(operator_char)),
-                value((), delimited(char('`'), alt((var, upper_ident)), char('`'))),
+                value(
+                    (),
+                    delimited(char('`'), alt((lower_ident, upper_ident)), char('`')),
+                ),
             )))),
             |s| !is_reserved(s),
         ),
-        UnresolvedName::Binop,
+        UnresolvedName::Unqualified,
     )(input)
 }
 

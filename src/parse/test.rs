@@ -28,7 +28,10 @@ fn statement_import_unqualified() {
             "",
             Statement::Import(
                 ModulePath("Foo.Bar"),
-                vec![UnresolvedName::Ident("foo"), UnresolvedName::Ident("Bar")]
+                vec![
+                    UnresolvedName::Unqualified("foo"),
+                    UnresolvedName::Unqualified("Bar")
+                ]
             )
         ))
     )
@@ -44,12 +47,12 @@ fn statement_import_foreign() {
                 r#""inspect""#,
                 vec![ast::ForeignImportItem(
                     ast::ForeignName("inspect"),
-                    UnresolvedName::Ident("inspect"),
+                    UnresolvedName::Unqualified("inspect"),
                     ast::TypeScheme {
                         typ: ast::TypeExpr::Arrow(
                             Box::new(ast::TypeExpr::Term(ast::TypeTerm::Var("a"))),
                             Box::new(ast::TypeExpr::Term(ast::TypeTerm::Concrete(
-                                UnresolvedName::Ident("String")
+                                UnresolvedName::Unqualified("String")
                             )))
                         ),
                         vars: vec!["a"]
@@ -67,7 +70,7 @@ fn statement_assign_without_type() {
         parse::statement("a = 123;").unwrap().1,
         Statement::AssignmentWithoutType((
             ast::Lhs::Func {
-                name: UnresolvedName::Ident("a"),
+                name: UnresolvedName::Unqualified("a"),
                 args: vec![]
             },
             ast::Expr::Term(ast::Term::Numeral(ast::Numeral::Int("123")))
@@ -83,11 +86,13 @@ fn statement_assign_with_type() {
         Statement::AssignmentWithType(
             ast::TypeScheme {
                 vars: vec![],
-                typ: ast::TypeExpr::Term(ast::TypeTerm::Concrete(UnresolvedName::Ident("Int")))
+                typ: ast::TypeExpr::Term(ast::TypeTerm::Concrete(UnresolvedName::Unqualified(
+                    "Int"
+                )))
             },
             (
                 ast::Lhs::Func {
-                    name: UnresolvedName::Ident("a"),
+                    name: UnresolvedName::Unqualified("a"),
                     args: vec![]
                 },
                 ast::Expr::Term(ast::Term::Numeral(ast::Numeral::Int("123")))
@@ -102,10 +107,12 @@ fn statement_type_annotation() {
     assert_eq!(
         parse::statement("a: Int;").unwrap().1,
         Statement::TypeAnnotation(
-            UnresolvedName::Ident("a"),
+            UnresolvedName::Unqualified("a"),
             ast::TypeScheme {
                 vars: vec![],
-                typ: ast::TypeExpr::Term(ast::TypeTerm::Concrete(UnresolvedName::Ident("Int")))
+                typ: ast::TypeExpr::Term(ast::TypeTerm::Concrete(UnresolvedName::Unqualified(
+                    "Int"
+                )))
             },
         )
     );
@@ -117,7 +124,7 @@ fn statement_precedence() {
     assert_eq!(
         parse::statement("infixl 5 >>;").unwrap().1,
         Statement::Precedence(
-            UnresolvedName::Binop(">>"),
+            UnresolvedName::Unqualified(">>"),
             Precedence {
                 associativity: Associativity::Left,
                 priority: 5
@@ -132,13 +139,13 @@ fn statement_type_definition() {
     assert_eq!(
         parse::statement("type Foo = Bar | Baz Int;").unwrap().1,
         Statement::TypeDefinition(ast::TypeDefinition {
-            name: UnresolvedName::Ident("Foo"),
+            name: UnresolvedName::Unqualified("Foo"),
             vars: vec![],
             constructors: vec![
-                (UnresolvedName::Ident("Bar"), vec![]),
+                (UnresolvedName::Unqualified("Bar"), vec![]),
                 (
-                    UnresolvedName::Ident("Baz"),
-                    vec![ast::TypeTerm::Concrete(UnresolvedName::Ident("Int"))]
+                    UnresolvedName::Unqualified("Baz"),
+                    vec![ast::TypeTerm::Concrete(UnresolvedName::Unqualified("Int"))]
                 ),
             ]
         })
@@ -172,7 +179,7 @@ fn name_qualified_upper() {
 #[test]
 fn unit() {
     assert_eq!(parse::statement(r#"unit = ();"#).unwrap().1, {
-        let name = UnresolvedName::Ident("unit");
+        let name = UnresolvedName::Unqualified("unit");
         Statement::AssignmentWithoutType((
             ast::Lhs::Func { name, args: vec![] },
             ast::Expr::Term(ast::Term::Unit),
@@ -183,14 +190,16 @@ fn unit() {
 #[test]
 fn apply_to_unit() {
     assert_eq!(parse::statement(r#"applyToUnit f = f ();"#).unwrap().1, {
-        let name = UnresolvedName::Ident("applyToUnit");
+        let name = UnresolvedName::Unqualified("applyToUnit");
         Statement::AssignmentWithoutType((
             ast::Lhs::Func {
                 name,
-                args: vec![ast::Pattern::Bind(UnresolvedName::Ident("f"))],
+                args: vec![ast::Pattern::Bind(UnresolvedName::Unqualified("f"))],
             },
             ast::Expr::App {
-                func: Box::new(ast::Expr::Term(ast::Term::Name(UnresolvedName::Ident("f")))),
+                func: Box::new(ast::Expr::Term(ast::Term::Name(
+                    UnresolvedName::Unqualified("f"),
+                ))),
                 argument: Box::new(ast::Expr::Term(ast::Term::Unit)),
             },
         ))
@@ -210,14 +219,16 @@ fn case() {
         .unwrap()
         .1,
         {
-            let name = UnresolvedName::Ident("foo");
+            let name = UnresolvedName::Unqualified("foo");
             Statement::AssignmentWithoutType((
                 ast::Lhs::Func {
                     name,
-                    args: vec![ast::Pattern::Bind(UnresolvedName::Ident("x"))],
+                    args: vec![ast::Pattern::Bind(UnresolvedName::Unqualified("x"))],
                 },
                 ast::Expr::Case {
-                    expr: Box::new(ast::Expr::Term(ast::Term::Name(UnresolvedName::Ident("x")))),
+                    expr: Box::new(ast::Expr::Term(ast::Term::Name(
+                        UnresolvedName::Unqualified("x"),
+                    ))),
                     arms: vec![
                         (
                             ast::Pattern::Numeral(ast::Numeral::Int("1")),
