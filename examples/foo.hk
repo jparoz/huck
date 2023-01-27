@@ -1,6 +1,13 @@
 module Foo;
 
 import Bar (bar, baz);
+
+(* import Quux (quux); *)
+(* myQuux = quux; *)
+
+(* import Quux; *)
+(* myQuux = Quux.quux; *)
+
 foo = bar baz;
 
 foo_quux = Bar.bar Bar.quux;

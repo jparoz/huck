@@ -84,6 +84,14 @@ pub struct Resolver {
 
     /// The `Scope` used for type-level names.
     type_scope: Scope,
+
+    /// Holds assumptions about imported names,
+    /// without knowing whether they're value- or type-level.
+    assumptions: Vec<ResolvedName>,
+
+    /// Assumptions about imported modules,
+    /// regardless of whether they have any explicitly imported names.
+    module_assumptions: Vec<ast::ModulePath>,
 }
 
 impl Resolver {
@@ -113,6 +121,8 @@ impl Resolver {
             module_path: ast::ModulePath("XXX"),
             scope,
             type_scope,
+            assumptions: Vec::new(),
+            module_assumptions: Vec::new(),
         }
     }
 
@@ -155,6 +165,10 @@ impl Resolver {
 
         // Add all the imports to the scope as well as resolving the names.
         for (path, names) in module.imports {
+            // Assume that the module exists, to be checked later.
+            self.module_assumptions.push(path);
+
+            // Handle the imported names.
             for name in names {
                 log::trace!(
                     log::RESOLVE,
@@ -170,15 +184,22 @@ impl Resolver {
                     UnresolvedName::Ident(_) | UnresolvedName::Binop(_)
                 ));
 
+                let resolved = ResolvedName {
+                    source: Source::Module(path),
+                    ident: name.ident(),
+                };
+
+                // Assume that the module and the imported name both exist,
+                // to be checked later.
+                self.assumptions.push(resolved);
+                log::trace!(log::RESOLVE, "  Assumed name `{resolved}` exists");
+
                 // Replicate into the new module, resolving the import's name.
                 resolved_module
                     .imports
                     .entry(path)
                     .or_default()
-                    .push(ResolvedName {
-                        source: Source::Module(path),
-                        ident: name.ident(),
-                    });
+                    .push(resolved);
 
                 // Insert it into the scope
                 // @Todo @Checkme @Errors: can we collide here? if so, we should check that first.
@@ -290,30 +311,80 @@ impl Resolver {
 
     /// Checks that any assumptions made in the scope exist in the given map of modules.
     pub fn check_assumptions(
-        &self,
+        &mut self,
         modules: &BTreeMap<ast::ModulePath, ast::Module<ResolvedName>>,
     ) -> Result<(), Error> {
         log::trace!(log::RESOLVE, "Checking resolution assumptions");
-        for assumption in self.scope.assumptions.iter() {
+
+        // Assumptions about modules
+        for assumption in self.module_assumptions.drain(..) {
+            if !modules.contains_key(&assumption) {
+                return Err(Error::NonexistentModule(assumption));
+            }
+        }
+
+        // Assumptions about value-level names
+        for assumption in self.scope.assumptions.drain(..) {
             let path = if let Source::Module(path) = assumption.source {
                 path
             } else {
-                return Err(Error::NonexistentQualified(*assumption));
+                unreachable!()
             };
 
-            if !modules
-                .get(&path)
-                .map(|module| {
-                    module.definitions.contains_key(assumption)
-                        || module.constructors.contains_key(assumption)
-                })
-                .unwrap_or(false)
+            let module = modules.get(&path).ok_or(Error::NonexistentModule(path))?;
+
+            if !(module.definitions.contains_key(&assumption)
+                || module.constructors.contains_key(&assumption))
             {
-                return Err(Error::NonexistentQualified(*assumption));
+                return Err(Error::NonexistentValueName(
+                    assumption.ident,
+                    assumption.source,
+                ));
             }
 
             log::trace!(log::RESOLVE, "  Found name {assumption}");
         }
+
+        // Assumptions about type-level names
+        for assumption in self.type_scope.assumptions.drain(..) {
+            let path = if let Source::Module(path) = assumption.source {
+                path
+            } else {
+                unreachable!()
+            };
+
+            let module = modules.get(&path).ok_or(Error::NonexistentModule(path))?;
+
+            if !(module.type_definitions.contains_key(&assumption)) {
+                return Err(Error::NonexistentTypeName(
+                    assumption.ident,
+                    assumption.source,
+                ));
+            }
+
+            log::trace!(log::RESOLVE, "  Found name {assumption}");
+        }
+
+        // Assumptions arising from imports (so we don't know if type- or value-level)
+        for assumption in self.assumptions.drain(..) {
+            let path = if let Source::Module(path) = assumption.source {
+                path
+            } else {
+                unreachable!()
+            };
+
+            let module = modules.get(&path).ok_or(Error::NonexistentModule(path))?;
+
+            if !(module.definitions.contains_key(&assumption)
+                || module.constructors.contains_key(&assumption)
+                || module.type_definitions.contains_key(&assumption))
+            {
+                return Err(Error::NonexistentName(assumption.ident, assumption.source));
+            }
+
+            log::trace!(log::RESOLVE, "  Found name {assumption}");
+        }
+
         Ok(())
     }
 
@@ -891,7 +962,7 @@ impl Scope {
                 // when we've resolved all the rest of the names in all modules.
                 // This `assumptions` entry is to mark that we still need to do this check.
                 self.assumptions.push(resolved);
-                log::trace!(log::RESOLVE, "  Assumed name `{resolved}`");
+                log::trace!(log::RESOLVE, "  Assumed name `{resolved}` exists");
 
                 Ok(resolved)
             }
@@ -1083,9 +1154,12 @@ pub enum Error {
     #[error("Module `{0}` doesn't exist")]
     NonexistentModule(ast::ModulePath),
 
-    #[error("Identifier `{1}` doesn't exist in module `{0}`")]
-    NonexistentImport(ast::ModulePath, &'static str),
+    #[error("Variable `{0}` doesn't exist in module `{1}`")]
+    NonexistentValueName(&'static str, Source),
 
-    #[error("Qualified identifier `{0}` doesn't exist")]
-    NonexistentQualified(ResolvedName),
+    #[error("Type `{0}` doesn't exist in module `{1}`")]
+    NonexistentTypeName(&'static str, Source),
+
+    #[error("Identifier `{0}` doesn't exist in module `{1}`")]
+    NonexistentName(&'static str, Source),
 }
