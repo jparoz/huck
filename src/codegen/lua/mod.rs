@@ -319,7 +319,6 @@ impl<'a> CodeGenerator<'a> {
     ) -> Result<String> {
         let mut lua = String::new();
 
-        let mut has_any_conditions = false;
         let mut has_unconditional_branch = false;
 
         let id = Self::unique();
@@ -333,8 +332,6 @@ impl<'a> CodeGenerator<'a> {
 
         for (pat, expr) in arms {
             self.pattern_match(pat, &format!("{}_{}", PREFIX, id))?;
-
-            has_any_conditions = has_any_conditions || !self.conditions.is_empty();
 
             if self.conditions.is_empty() {
                 has_unconditional_branch = true;
@@ -373,7 +370,7 @@ impl<'a> CodeGenerator<'a> {
         // Emit a runtime error in case no pattern matches
         // @Warn: emit a compile time warning as well
         // @Exhaustiveness: do some exhaustiveness checking before emitting these warnings/errors
-        if has_any_conditions && !has_unconditional_branch {
+        if !has_unconditional_branch {
             writeln!(lua, r#"error("Unmatched pattern in case expression")"#,)?;
         }
 
@@ -409,7 +406,6 @@ impl<'a> CodeGenerator<'a> {
         // Return the expr
         // @DRY: case
 
-        let mut has_any_conditions = false;
         let mut has_unconditional_branch = false;
 
         for (lhs, expr) in assignments {
@@ -424,8 +420,6 @@ impl<'a> CodeGenerator<'a> {
             for i in 0..arg_count {
                 self.pattern_match(&args[i], &format!("{}_{}", PREFIX, ids[i]))?;
             }
-
-            has_any_conditions = has_any_conditions || !self.conditions.is_empty();
 
             if self.conditions.is_empty() {
                 has_unconditional_branch = true;
@@ -471,7 +465,7 @@ impl<'a> CodeGenerator<'a> {
         // Emit a runtime error in case no pattern matches
         // @Warn: emit a compile time warning as well
         // @Exhaustiveness: do some exhaustiveness checking before emitting these warnings/errors
-        if has_any_conditions && !has_unconditional_branch {
+        if !has_unconditional_branch {
             writeln!(
                 lua,
                 r#"error("Unmatched pattern in function `{}`")"#,
