@@ -920,8 +920,7 @@ impl Scope {
     }
 }
 
-/// @Nocommit: document this
-// @Note: guaranteed that it's an `ImportSource::Local`
+/// `Binding` represents a binding of an unresolved identifier to a particular binding site.
 #[derive(Debug, Clone, Copy)]
 struct Binding(Source, UnresolvedName);
 
