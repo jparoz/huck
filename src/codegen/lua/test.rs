@@ -1,9 +1,8 @@
-use crate::ast::ModulePath;
-use crate::utils::normalize;
-
 use crate::codegen;
 use crate::context::Context;
 use crate::error::Error as HuckError;
+use crate::module::ModulePath;
+use crate::utils::normalize;
 
 /// Takes some Huck and turns it into Lua, doing every step in between.
 pub fn transpile(huck: &'static str) -> Result<String, HuckError> {
@@ -18,22 +17,14 @@ pub fn transpile(huck: &'static str) -> Result<String, HuckError> {
         .include_file(concat!(env!("CARGO_MANIFEST_DIR"), "/huck/Prelude.hk"))
         .unwrap();
 
+    // Include our module
     let huck = Box::leak(format!("module Test; {huck}").into_boxed_str());
-
-    // Parse
     context.include_string(huck)?;
 
-    // Resolve
-    let modules = context.post_parse(context.parsed.clone())?;
+    // Compile
+    let lua = &context.compile()?[0].1;
 
-    // Typecheck
-    let mut gen_mods = context.typecheck(modules)?;
-
-    // Generate code
-    let module = gen_mods.remove(&ModulePath("Test")).unwrap();
-    let lua = codegen::lua::generate(&module)?;
-
-    Ok(normalize(&lua))
+    Ok(normalize(lua))
 }
 
 macro_rules! wrap {

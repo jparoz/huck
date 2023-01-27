@@ -1,7 +1,31 @@
-use crate::ast::{ModulePath, UnresolvedName};
+use std::collections::BTreeMap;
+
 use crate::context::Context;
 use crate::generatable_module::GeneratableModule;
+use crate::module::ModulePath;
+use crate::name::{ResolvedName, Source};
+use crate::resolve::Resolver;
 use crate::types::Type;
+
+/// Shorthand to make a locally-defined ResolvedName.
+macro_rules! name {
+    ($name:expr) => {
+        ResolvedName {
+            source: Source::Module(ModulePath("Test")),
+            ident: $name,
+        }
+    };
+}
+
+/// Shorthand to make a builtin ResolvedName.
+macro_rules! builtin {
+    ($name:expr) => {
+        ResolvedName {
+            source: Source::Builtin,
+            ident: $name,
+        }
+    };
+}
 
 /// Typechecks the given module and returns the resulting GeneratableModule.
 fn typ_module(s: &'static str) -> GeneratableModule {
@@ -9,9 +33,25 @@ fn typ_module(s: &'static str) -> GeneratableModule {
     ctx.include_file(concat!(env!("CARGO_MANIFEST_DIR"), "/huck/Prelude.hk"))
         .unwrap();
     let s = Box::leak(format!("module Test; {s}").into_boxed_str());
+
+    // Parse
     ctx.include_string(s).unwrap();
+
+    // Post-parse
     let modules = ctx.post_parse(ctx.parsed.clone()).unwrap();
-    let mut gen_mods = ctx.typecheck(modules).unwrap();
+
+    // Resolve
+    let mut resolved_modules = BTreeMap::new();
+    let mut resolver = Resolver::new();
+    for (path, module) in modules {
+        let resolved_module = resolver.resolve(module).unwrap();
+        resolved_modules.insert(path, resolved_module);
+        resolver.clear_scopes();
+    }
+
+    // @Todo: apply precedence
+
+    let mut gen_mods = ctx.typecheck(resolved_modules).unwrap();
     gen_mods.remove(&ModulePath("Test")).unwrap()
 }
 
@@ -30,29 +70,35 @@ fn tuple_is_ordered() {
 
 #[test]
 fn literal_int() {
-    assert_eq!(typ(r#"a = 123;"#), Type::Concrete("Int"));
+    assert_eq!(typ(r#"a = 123;"#), Type::Concrete(builtin!("Int")));
 }
 
 #[test]
 fn literal_float() {
-    assert_eq!(typ(r#"a = 1.23;"#), Type::Concrete("Float"));
+    assert_eq!(typ(r#"a = 1.23;"#), Type::Concrete(builtin!("Float")));
 }
 
 #[test]
 fn literal_string() {
-    assert_eq!(typ(r#"a = "Hello, world!";"#), Type::Concrete("String"));
+    assert_eq!(
+        typ(r#"a = "Hello, world!";"#),
+        Type::Concrete(builtin!("String"))
+    );
 }
 
 #[test]
 fn literal_unit() {
-    assert_eq!(typ(r#"a = ();"#), Type::Concrete("()"));
+    assert_eq!(typ(r#"a = ();"#), Type::Concrete(builtin!("()")));
 }
 
 #[test]
 fn literal_tuple_int_string() {
     assert_eq!(
         typ(r#"a = (123, "Hello, world!");"#),
-        Type::Tuple(vec![Type::Concrete("Int"), Type::Concrete("String")])
+        Type::Tuple(vec![
+            Type::Concrete(builtin!("Int")),
+            Type::Concrete(builtin!("String"))
+        ])
     );
 }
 
@@ -60,7 +106,7 @@ fn literal_tuple_int_string() {
 fn literal_list_int() {
     assert_eq!(
         typ(r#"a = [123, 456];"#),
-        Type::List(Box::new(Type::Concrete("Int")))
+        Type::List(Box::new(Type::Concrete(builtin!("Int"))))
     );
 }
 
@@ -127,8 +173,8 @@ fn function_add() {
     assert_eq!(
         typ(r#"f x = x + 5;"#),
         Type::Arrow(
-            Box::new(Type::Concrete("Int")),
-            Box::new(Type::Concrete("Int"))
+            Box::new(Type::Concrete(builtin!("Int"))),
+            Box::new(Type::Concrete(builtin!("Int")))
         )
     );
 }
@@ -142,12 +188,9 @@ fn constructor_unary() {
         "#,
     );
 
-    let val = module
-        .definitions
-        .get(&UnresolvedName::Ident("val"))
-        .unwrap();
+    let val = module.definitions.get(&name!("val")).unwrap();
 
-    assert_eq!(val.0, Type::Concrete("Foo"))
+    assert_eq!(val.0, Type::Concrete(builtin!("Foo")))
 }
 
 #[test]
@@ -159,11 +202,7 @@ fn constructor_unary_returned() {
         "#,
     );
 
-    let val = module
-        .definitions
-        .get(&UnresolvedName::Ident("val"))
-        .unwrap()
-        .clone();
+    let val = module.definitions.get(&name!("val")).unwrap().clone();
 
     assert!(matches!(val.0, Type::Arrow(_, _)));
 
@@ -173,7 +212,7 @@ fn constructor_unary_returned() {
         unreachable!()
     };
     assert!(matches!(*l, Type::Var(_)));
-    assert!(matches!(*r, Type::Concrete(foo) if foo == "Foo"));
+    assert!(matches!(*r, Type::Concrete(foo) if foo == name!("Foo")));
 }
 
 #[test]
@@ -185,16 +224,13 @@ fn constructor_unary_argument() {
         "#,
     );
 
-    let val = module
-        .definitions
-        .get(&UnresolvedName::Ident("val"))
-        .unwrap();
+    let val = module.definitions.get(&name!("val")).unwrap();
 
     assert_eq!(
         val.0,
         Type::Arrow(
-            Box::new(Type::Concrete("Foo")),
-            Box::new(Type::Concrete("Int")),
+            Box::new(Type::Concrete(builtin!("Foo"))),
+            Box::new(Type::Concrete(builtin!("Int"))),
         ),
     )
 }
@@ -208,12 +244,9 @@ fn constructor_newtype_int() {
         "#,
     );
 
-    let val = module
-        .definitions
-        .get(&UnresolvedName::Ident("val"))
-        .unwrap();
+    let val = module.definitions.get(&name!("val")).unwrap();
 
-    assert_eq!(val.0, Type::Concrete("Foo"))
+    assert_eq!(val.0, Type::Concrete(builtin!("Foo")))
 }
 
 #[test]
@@ -227,12 +260,9 @@ fn constructor_newtype_unwrap_int() {
         "#,
     );
 
-    let val = module
-        .definitions
-        .get(&UnresolvedName::Ident("val"))
-        .unwrap();
+    let val = module.definitions.get(&name!("val")).unwrap();
 
-    assert_eq!(val.0, Type::Concrete("Int"))
+    assert_eq!(val.0, Type::Concrete(builtin!("Int")))
 }
 
 #[test]
@@ -244,16 +274,13 @@ fn constructor_newtype_generic_int() {
         "#,
     );
 
-    let val = module
-        .definitions
-        .get(&UnresolvedName::Ident("val"))
-        .unwrap();
+    let val = module.definitions.get(&name!("val")).unwrap();
 
     assert_eq!(
         val.0,
         Type::App(
-            Box::new(Type::Concrete("Foo")),
-            Box::new(Type::Concrete("Int"))
+            Box::new(Type::Concrete(builtin!("Foo"))),
+            Box::new(Type::Concrete(builtin!("Int")))
         ),
     )
 }
@@ -267,11 +294,7 @@ fn constructor_newtype_generic_var() {
         "#,
     );
 
-    let val = module
-        .definitions
-        .get(&UnresolvedName::Ident("val"))
-        .unwrap()
-        .clone();
+    let val = module.definitions.get(&name!("val")).unwrap().clone();
 
     assert!(matches!(val.0, Type::Arrow(_, _)));
 
@@ -288,7 +311,7 @@ fn constructor_newtype_generic_var() {
     } else {
         unreachable!()
     };
-    assert!(matches!(*constr, Type::Concrete(foo) if foo == "Foo"));
+    assert!(matches!(*constr, Type::Concrete(foo) if foo == name!("Foo")));
     assert!(matches!(*inner, Type::Var(_)));
 }
 
@@ -303,12 +326,9 @@ fn constructor_newtype_generic_unwrap_int() {
         "#,
     );
 
-    let val = module
-        .definitions
-        .get(&UnresolvedName::Ident("val"))
-        .unwrap();
+    let val = module.definitions.get(&name!("val")).unwrap();
 
-    assert_eq!(val.0, Type::Concrete("Int"))
+    assert_eq!(val.0, Type::Concrete(builtin!("Int")))
 }
 
 #[test]
@@ -320,12 +340,9 @@ fn function_apply_to_literal() {
         "#,
     );
 
-    let val = module
-        .definitions
-        .get(&UnresolvedName::Ident("val"))
-        .unwrap();
+    let val = module.definitions.get(&name!("val")).unwrap();
 
-    assert_eq!(val.0, Type::Concrete("Int"))
+    assert_eq!(val.0, Type::Concrete(builtin!("Int")))
 }
 
 #[test]
@@ -338,12 +355,9 @@ fn function_apply_to_variable() {
         "#,
     );
 
-    let val = module
-        .definitions
-        .get(&UnresolvedName::Ident("val"))
-        .unwrap();
+    let val = module.definitions.get(&name!("val")).unwrap();
 
-    assert_eq!(val.0, Type::Concrete("Int"))
+    assert_eq!(val.0, Type::Concrete(builtin!("Int")))
 }
 
 #[test]
@@ -357,10 +371,7 @@ fn function_apply_to_variable_indirect() {
         "#,
     );
 
-    let val = module
-        .definitions
-        .get(&UnresolvedName::Ident("val"))
-        .unwrap();
+    let val = module.definitions.get(&name!("val")).unwrap();
 
-    assert_eq!(val.0, Type::Concrete("Int"))
+    assert_eq!(val.0, Type::Concrete(builtin!("Int")))
 }
