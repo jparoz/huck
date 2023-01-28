@@ -180,12 +180,7 @@ impl<'a> CodeGenerator<'a> {
         Ok(lua)
     }
 
-    // @Todo @Cleanup: move most of this comment to earlier in the pipe, when we make Definitions.
-    /// Generates a Lua expression representing a Huck definition,
-    /// even if it's defined on multiple lines.
-    /// This has to be generated from the Vec<Assignment>,
-    /// because in the case of multiple definitions,
-    /// we have to generate a Lua 'switch' statement.
+    /// Generates a Lua expression representing a Huck definition.
     fn definition(
         &mut self,
         name: &ResolvedName,

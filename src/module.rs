@@ -5,11 +5,11 @@ use std::time::Instant;
 use crate::name::UnresolvedName;
 use crate::{ast, log, parse};
 
-/// A Module is a dictionary of Huck function definitions.
-/// This is produced from a Vec<Statement>,
+/// A `Module` is a dictionary of Huck function definitions.
+/// This is produced from a `Vec<Statement>`,
 /// by using the parsed precedence rules to reshape the AST,
 /// and collecting statements referring to the same function
-/// into a single Definition struct for each function name.
+/// into a single `Definition` struct for each function name.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Module<Name> {
     pub path: ModulePath,

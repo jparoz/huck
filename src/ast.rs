@@ -27,7 +27,6 @@ impl<Name> Default for Definition<Name> {
 }
 
 /// A Statement is a sum type for any of the top-level Huck constructs.
-/// The order here is important! See [`resolve::resolve`](crate::resolve::resolve).
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum Statement<Name> {
     Import(ModulePath, Vec<Name>),
@@ -46,7 +45,7 @@ pub enum Statement<Name> {
     /// The str is taken straight from the source
     /// and dumped into the output Lua
     /// without any sort of validation.
-    /// See [`parse::statement`](crate::parse::statement).
+    // See parse::statement.
     ForeignExport(&'static str, Expr<Name>),
 }
 

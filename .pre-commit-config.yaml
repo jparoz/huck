@@ -15,3 +15,9 @@ repos:
         entry: cargo test
         language: system
         pass_filenames: false
+      - id: cargo-doc
+        name: cargo doc
+        description: Ensure that documentation builds correctly
+        entry: env RUSTDOCFLAGS="-D warnings" cargo doc
+        language: system
+        pass_filenames: false
