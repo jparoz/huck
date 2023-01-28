@@ -5,19 +5,19 @@ use std::iter;
 use crate::ast::{self, Assignment, Definition, Expr, Lhs, Numeral, Pattern, Term};
 use crate::log;
 use crate::name::{ResolvedName, Source};
-use crate::types::{
-    ApplySub, Primitive, Substitution, Type, TypeDefinition, TypeScheme, TypeVar, TypeVarSet,
-};
+use crate::types::{Primitive, Type, TypeDefinition, TypeScheme, TypeVar, TypeVarSet};
 
-pub trait ActiveVars {
-    fn active_vars(&self) -> TypeVarSet;
-}
+use super::substitution::{ApplySub, Substitution};
 
 #[derive(PartialEq, Eq, Clone)]
 pub enum Constraint {
     Equality(Type, Type),
     ImplicitInstance(Type, Type, TypeVarSet),
     ExplicitInstance(Type, TypeScheme),
+}
+
+trait ActiveVars {
+    fn active_vars(&self) -> TypeVarSet;
 }
 
 impl ActiveVars for Constraint {
@@ -67,7 +67,7 @@ pub struct ConstraintGenerator {
     constraints: Vec<Constraint>,
 
     /// All the currently assumed types of name uses.
-    pub assumptions: BTreeMap<ResolvedName, Vec<Type>>,
+    pub(super) assumptions: BTreeMap<ResolvedName, Vec<Type>>,
 
     m_stack: Vec<TypeVar>,
 }

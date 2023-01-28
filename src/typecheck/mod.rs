@@ -4,12 +4,17 @@ use std::{collections::BTreeMap, time::Instant};
 use crate::generatable_module::GeneratableModule;
 use crate::module::{Module, ModulePath};
 use crate::name::{ResolvedName, Source};
-use crate::types::{self, ApplySub, Substitution, Type, TypeScheme, TypeVarSet};
+use crate::types::{self, Type, TypeScheme, TypeVarSet};
 use crate::{ast, log};
 
-// @Cleanup: not pub (?)
-pub mod constraint;
+mod constraint;
+mod substitution;
+
 use constraint::ConstraintGenerator;
+use substitution::{ApplySub, Substitution};
+
+#[cfg(test)]
+mod test;
 
 /// Manages typechecking of a group of modules.
 #[derive(Debug, Default)]
@@ -289,7 +294,7 @@ impl Typechecker {
 }
 
 impl Type {
-    pub fn free_vars(&self) -> TypeVarSet {
+    fn free_vars(&self) -> TypeVarSet {
         match self {
             Type::Concrete(_) | Type::Primitive(_) => TypeVarSet::empty(),
 
@@ -303,7 +308,7 @@ impl Type {
     }
 
     /// Takes a Type and quantifies all free type variables, except the ones given in type_set.
-    pub fn generalize(&self, type_set: &TypeVarSet) -> TypeScheme {
+    fn generalize(&self, type_set: &TypeVarSet) -> TypeScheme {
         TypeScheme {
             vars: self.free_vars().difference(type_set),
             typ: self.clone(),
@@ -311,7 +316,7 @@ impl Type {
     }
 
     /// Finds the most general unifier for two types.
-    pub fn unify(self, other: Self) -> Result<Substitution, Error> {
+    fn unify(self, other: Self) -> Result<Substitution, Error> {
         let mut sub = Substitution::empty();
 
         let mut pairs = vec![(self, other)];
@@ -352,7 +357,7 @@ impl Type {
 }
 
 impl TypeScheme {
-    pub fn free_vars(&self) -> TypeVarSet {
+    fn free_vars(&self) -> TypeVarSet {
         self.typ.free_vars().difference(&self.vars)
     }
 }

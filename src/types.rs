@@ -3,14 +3,6 @@ use std::fmt::{self, Display};
 
 use crate::name::ResolvedName;
 
-mod error;
-mod substitution;
-
-#[cfg(test)]
-mod test;
-
-pub use substitution::{ApplySub, Substitution};
-
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Type {
     Var(TypeVar),

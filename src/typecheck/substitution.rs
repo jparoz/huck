@@ -1,9 +1,8 @@
 use std::collections::BTreeMap;
 use std::fmt::{self, Debug};
 
-use crate::typecheck::constraint::Constraint;
-
-use super::{Type, TypeScheme, TypeVar, TypeVarSet};
+use super::constraint::Constraint;
+use crate::types::{Type, TypeScheme, TypeVar, TypeVarSet};
 
 pub struct Substitution(BTreeMap<TypeVar, Type>);
 
@@ -35,7 +34,7 @@ impl Substitution {
         self.0.iter()
     }
 
-    pub fn get(&self, k: &TypeVar) -> Option<&Type> {
+    fn get(&self, k: &TypeVar) -> Option<&Type> {
         self.0.get(k)
     }
 }
