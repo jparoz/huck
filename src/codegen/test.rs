@@ -6,7 +6,7 @@ use crate::utils::normalize;
 /// Takes some Huck and turns it into Lua, doing every step in between.
 pub fn transpile(huck: &'static str) -> Result<String, HuckError> {
     // Reset the unique ID counter to get consistent results
-    codegen::lua::CodeGenerator::reset_unique();
+    codegen::CodeGenerator::reset_unique();
 
     // Make a context with one file
     let mut context = Context::new();

@@ -92,7 +92,7 @@ impl Context {
         // @Todo @Cleanup: move this into codegen (?)
         for (module_path, file_path) in self.file_paths {
             log::trace!(log::CODEGEN, "Generating code for module {module_path}");
-            let lua = codegen::lua::generate(&gen_mods[&module_path])?;
+            let lua = codegen::generate(&gen_mods[&module_path])?;
             generated.push((file_path, lua));
         }
 
