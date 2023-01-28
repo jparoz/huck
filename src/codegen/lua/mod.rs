@@ -324,7 +324,7 @@ impl<'a> CodeGenerator<'a> {
         writeln!(lua, "local {}_{} = {}", PREFIX, id, expr_s)?;
 
         for (pat, expr) in arms {
-            let (conditions, bindings) = self.pattern_match(pat, &format!("{}_{}", PREFIX, id))?;
+            let (conditions, bindings) = pattern_match(pat, &format!("{}_{}", PREFIX, id))?;
 
             if conditions.is_empty() {
                 has_unconditional_branch = true;
@@ -415,8 +415,7 @@ impl<'a> CodeGenerator<'a> {
                 let mut conds = Vec::new();
                 let mut binds = Vec::new();
                 for i in 0..arg_count {
-                    let (cond, bind) =
-                        self.pattern_match(&args[i], &format!("{}_{}", PREFIX, ids[i]))?;
+                    let (cond, bind) = pattern_match(&args[i], &format!("{}_{}", PREFIX, ids[i]))?;
                     conds.extend(cond);
                     binds.extend(bind);
                 }
@@ -490,114 +489,6 @@ impl<'a> CodeGenerator<'a> {
         }
 
         Ok(lua)
-    }
-
-    /// Generates code for a pattern match.
-    /// Returns `conditions` and `bindings`,
-    /// which are `Vec`s of Lua segments used to implement the pattern match.
-    fn pattern_match(
-        &mut self,
-        pat: &ast::Pattern<ResolvedName>,
-        lua_arg_name: &str,
-    ) -> Result<(Vec<String>, Vec<String>)> {
-        // This function takes a Lua argument name,
-        // e.g. _HUCK_0, _HUCK_12[3], _HUCK_3[13][334] or whatever.
-        // This is to allow nested pattern matches.
-
-        let mut conditions = Vec::new();
-        let mut bindings = Vec::new();
-
-        match pat {
-            ast::Pattern::Bind(s) => {
-                assert!(s.is_local());
-                bindings.push(format!("local {} = {}\n", lua_local(s.ident), lua_arg_name));
-            }
-
-            // @Note: the Lua logic is identical for Huck lists and tuples.
-            // This is because they have the same representation in Lua: a heterogenous list!
-            ast::Pattern::List(list) | ast::Pattern::Tuple(list) => {
-                // @Fixme @Errors: for tuples,
-                // this should give a runtime error saying something like
-                // "tuple of incorrect length",
-                // instead of just failing to pattern match.
-                //
-                // Check that the list is the correct length
-                conditions.push(format!("#{} == {}", lua_arg_name, list.len()));
-
-                // Check that each pattern matches
-                for (i, pat) in list.iter().enumerate() {
-                    let new_lua_arg_name = format!("{}[{}]", lua_arg_name, i + 1);
-                    let (sub_conds, sub_binds) = self.pattern_match(pat, &new_lua_arg_name)?;
-                    conditions.extend(sub_conds);
-                    bindings.extend(sub_binds);
-                }
-            }
-
-            ast::Pattern::Numeral(lit) => {
-                conditions.push(format!("{} == {}", lua_arg_name, lit));
-            }
-
-            ast::Pattern::String(lit) => {
-                conditions.push(format!("{} == {}", lua_arg_name, lit));
-            }
-
-            ast::Pattern::Destructure { constructor, args } => {
-                // Check that it's the right variant
-                conditions.push(format!(
-                    r#"getmetatable({}).__variant == "{}""#,
-                    lua_arg_name, constructor
-                ));
-
-                // Check that each pattern matches
-                for (i, pat) in args.iter().enumerate() {
-                    let new_lua_arg_name = format!("{}[{}]", lua_arg_name, i + 1);
-                    let (sub_conds, sub_binds) = self.pattern_match(pat, &new_lua_arg_name)?;
-                    conditions.extend(sub_conds);
-                    bindings.extend(sub_binds);
-                }
-            }
-
-            ast::Pattern::Binop { lhs, rhs, operator } => {
-                // Check that it's the right variant
-                conditions.push(format!(
-                    r#"getmetatable({}).__variant == "{}""#,
-                    lua_arg_name, operator
-                ));
-
-                // Check that the LHS pattern matches
-                let (sub_conds, sub_binds) =
-                    self.pattern_match(lhs, &format!("{}[{}]", lua_arg_name, 1))?;
-                conditions.extend(sub_conds);
-                bindings.extend(sub_binds);
-
-                // Check that the RHS pattern matches
-                let (sub_conds, sub_binds) =
-                    self.pattern_match(rhs, &format!("{}[{}]", lua_arg_name, 2))?;
-                conditions.extend(sub_conds);
-                bindings.extend(sub_binds);
-            }
-
-            // @Hardcode @Hack-ish @Prelude
-            ast::Pattern::UnaryConstructor(name)
-                if name.ident == "True" || name.ident == "False" =>
-            {
-                let mut name_string = name.ident.to_string();
-                name_string.make_ascii_lowercase();
-                conditions.push(format!(r#"{} == {}"#, lua_arg_name, name_string));
-            }
-
-            ast::Pattern::UnaryConstructor(name) => {
-                // Check that it's the right variant
-                conditions.push(format!(
-                    r#"getmetatable({}).__variant == "{}""#,
-                    lua_arg_name, name
-                ));
-            }
-
-            ast::Pattern::Unit => (), // Don't need to do anything because unit is ignored
-        };
-
-        Ok((conditions, bindings))
     }
 
     /// Generates all the type constructors found in the type definition.
@@ -714,6 +605,109 @@ impl<'a> CodeGenerator<'a> {
     pub fn reset_unique() {
         UNIQUE_COUNTER.store(0, atomic::Ordering::Relaxed);
     }
+}
+
+/// Generates code for a pattern match.
+/// Returns `conditions` and `bindings`,
+/// which are `Vec`s of Lua segments used to implement the pattern match.
+fn pattern_match(
+    pat: &ast::Pattern<ResolvedName>,
+    lua_arg_name: &str,
+) -> Result<(Vec<String>, Vec<String>)> {
+    // This function takes a Lua argument name,
+    // e.g. _HUCK_0, _HUCK_12[3], _HUCK_3[13][334] or whatever.
+    // This is to allow nested pattern matches.
+
+    let mut conditions = Vec::new();
+    let mut bindings = Vec::new();
+
+    match pat {
+        ast::Pattern::Bind(s) => {
+            assert!(s.is_local());
+            bindings.push(format!("local {} = {}\n", lua_local(s.ident), lua_arg_name));
+        }
+
+        // @Note: the Lua logic is identical for Huck lists and tuples.
+        // This is because they have the same representation in Lua: a heterogenous list!
+        ast::Pattern::List(list) | ast::Pattern::Tuple(list) => {
+            // @Fixme @Errors: for tuples,
+            // this should give a runtime error saying something like
+            // "tuple of incorrect length",
+            // instead of just failing to pattern match.
+            //
+            // Check that the list is the correct length
+            conditions.push(format!("#{} == {}", lua_arg_name, list.len()));
+
+            // Check that each pattern matches
+            for (i, pat) in list.iter().enumerate() {
+                let new_lua_arg_name = format!("{}[{}]", lua_arg_name, i + 1);
+                let (sub_conds, sub_binds) = pattern_match(pat, &new_lua_arg_name)?;
+                conditions.extend(sub_conds);
+                bindings.extend(sub_binds);
+            }
+        }
+
+        ast::Pattern::Numeral(lit) => {
+            conditions.push(format!("{} == {}", lua_arg_name, lit));
+        }
+
+        ast::Pattern::String(lit) => {
+            conditions.push(format!("{} == {}", lua_arg_name, lit));
+        }
+
+        ast::Pattern::Destructure { constructor, args } => {
+            // Check that it's the right variant
+            conditions.push(format!(
+                r#"getmetatable({}).__variant == "{}""#,
+                lua_arg_name, constructor
+            ));
+
+            // Check that each pattern matches
+            for (i, pat) in args.iter().enumerate() {
+                let new_lua_arg_name = format!("{}[{}]", lua_arg_name, i + 1);
+                let (sub_conds, sub_binds) = pattern_match(pat, &new_lua_arg_name)?;
+                conditions.extend(sub_conds);
+                bindings.extend(sub_binds);
+            }
+        }
+
+        ast::Pattern::Binop { lhs, rhs, operator } => {
+            // Check that it's the right variant
+            conditions.push(format!(
+                r#"getmetatable({}).__variant == "{}""#,
+                lua_arg_name, operator
+            ));
+
+            // Check that the LHS pattern matches
+            let (sub_conds, sub_binds) = pattern_match(lhs, &format!("{}[{}]", lua_arg_name, 1))?;
+            conditions.extend(sub_conds);
+            bindings.extend(sub_binds);
+
+            // Check that the RHS pattern matches
+            let (sub_conds, sub_binds) = pattern_match(rhs, &format!("{}[{}]", lua_arg_name, 2))?;
+            conditions.extend(sub_conds);
+            bindings.extend(sub_binds);
+        }
+
+        // @Hardcode @Hack-ish @Prelude
+        ast::Pattern::UnaryConstructor(name) if name.ident == "True" || name.ident == "False" => {
+            let mut name_string = name.ident.to_string();
+            name_string.make_ascii_lowercase();
+            conditions.push(format!(r#"{} == {}"#, lua_arg_name, name_string));
+        }
+
+        ast::Pattern::UnaryConstructor(name) => {
+            // Check that it's the right variant
+            conditions.push(format!(
+                r#"getmetatable({}).__variant == "{}""#,
+                lua_arg_name, name
+            ));
+        }
+
+        ast::Pattern::Unit => (), // Don't need to do anything because unit is ignored
+    };
+
+    Ok((conditions, bindings))
 }
 
 /// Returns a Lua-safe version of a Huck identifier.
