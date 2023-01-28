@@ -28,7 +28,7 @@ impl<Name> Default for Definition<Name> {
 
 /// A Statement is a sum type for any of the top-level Huck constructs.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub enum Statement<Name> {
+pub enum Statement<Name, Ty> {
     Import(ModulePath, Vec<Name>),
     // @Cleanup: combine with the above enum (Vec::length() == 0)
     QualifiedImport(ModulePath),
@@ -40,7 +40,7 @@ pub enum Statement<Name> {
     AssignmentWithType(TypeScheme<Name>, Assignment<Name>),
     AssignmentWithoutType(Assignment<Name>),
     TypeAnnotation(Name, TypeScheme<Name>),
-    TypeDefinition(TypeDefinition<Name>),
+    TypeDefinition(TypeDefinition<Name, Ty>),
 
     /// The str is taken straight from the source
     /// and dumped into the output Lua
@@ -375,10 +375,11 @@ pub enum TypeTerm<Name> {
 
 /// Parsed representation of a new type definition (e.g. `type Foo = Bar;`).
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub struct TypeDefinition<Name> {
+pub struct TypeDefinition<Name, Ty> {
     pub name: Name,
     pub vars: Vec<&'static str>,
     pub constructors: Vec<ConstructorDefinition<Name>>,
+    pub typ: Ty,
 }
 
 pub type ConstructorDefinition<Name> = (Name, Vec<TypeTerm<Name>>);

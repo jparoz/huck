@@ -141,6 +141,7 @@ fn statement_type_definition() {
         Statement::TypeDefinition(ast::TypeDefinition {
             name: UnresolvedName::Unqualified("Foo"),
             vars: vec![],
+            typ: (),
             constructors: vec![
                 (UnresolvedName::Unqualified("Bar"), vec![]),
                 (

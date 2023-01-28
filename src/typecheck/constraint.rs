@@ -535,12 +535,13 @@ impl ConstraintGenerator {
 
     pub fn generate_type_definition(
         &mut self,
-        type_defn: &ast::TypeDefinition<ResolvedName>,
+        type_defn: &ast::TypeDefinition<ResolvedName, ()>,
     ) -> TypeDefinition {
         let ast::TypeDefinition {
             name,
             vars: vars_s,
             constructors: constrs,
+            typ: (),
         } = type_defn;
 
         // We'll build these structures by iterating over the type arguments.

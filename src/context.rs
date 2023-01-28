@@ -21,7 +21,7 @@ pub struct Context {
     pub file_paths: BTreeMap<ModulePath, PathBuf>,
 
     /// The freshly parsed statement lists for each module.
-    pub parsed: BTreeMap<ModulePath, Vec<ast::Statement<UnresolvedName>>>,
+    pub parsed: BTreeMap<ModulePath, Vec<ast::Statement<UnresolvedName, ()>>>,
 }
 
 impl Context {
@@ -44,7 +44,7 @@ impl Context {
             .clone()
             .into_iter()
             .map(|(path, stats)| Ok((path, Module::from_statements(path, stats)?)))
-            .collect::<Result<BTreeMap<ModulePath, Module<UnresolvedName>>, HuckError>>()?;
+            .collect::<Result<BTreeMap<ModulePath, Module<UnresolvedName, ()>>, HuckError>>()?;
 
         // Resolve names
         let mut resolved_modules = BTreeMap::new();

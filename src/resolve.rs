@@ -67,13 +67,13 @@ impl Resolver {
 
     pub fn resolve(
         &mut self,
-        module: Module<UnresolvedName>,
-    ) -> Result<Module<ResolvedName>, Error> {
+        module: Module<UnresolvedName, ()>,
+    ) -> Result<Module<ResolvedName, ()>, Error> {
         let start_time = Instant::now();
         log::trace!(log::RESOLVE, "Resolving module {}", module.path);
 
         // This is the new module we'll be building as we resolve names.
-        let mut resolved_module: Module<ResolvedName> = Module::new(module.path);
+        let mut resolved_module: Module<ResolvedName, ()> = Module::new(module.path);
 
         // Set the current module path.
         self.module_path = module.path;
@@ -243,7 +243,7 @@ impl Resolver {
     /// Checks that any assumptions made in the scope exist in the given map of modules.
     pub fn check_assumptions(
         &mut self,
-        modules: &BTreeMap<ModulePath, Module<ResolvedName>>,
+        modules: &BTreeMap<ModulePath, Module<ResolvedName, ()>>,
     ) -> Result<(), Error> {
         log::trace!(log::RESOLVE, "Checking resolution assumptions");
 
@@ -690,8 +690,8 @@ impl Resolver {
 
     fn resolve_type_definition(
         &mut self,
-        type_defn: ast::TypeDefinition<UnresolvedName>,
-    ) -> Result<ast::TypeDefinition<ResolvedName>, Error> {
+        type_defn: ast::TypeDefinition<UnresolvedName, ()>,
+    ) -> Result<ast::TypeDefinition<ResolvedName, ()>, Error> {
         // @Checkme: do we need to bind any more names,
         // or did we do that already in resolve?
 
@@ -716,6 +716,7 @@ impl Resolver {
             name,
             constructors,
             vars: type_defn.vars,
+            typ: (),
         })
     }
 

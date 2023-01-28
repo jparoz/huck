@@ -35,7 +35,7 @@ impl Typechecker {
     /// Typechecks the given Huck context.
     pub fn typecheck(
         &mut self,
-        mut modules: BTreeMap<ModulePath, Module<ResolvedName>>,
+        mut modules: BTreeMap<ModulePath, Module<ResolvedName, ()>>,
     ) -> Result<BTreeMap<ModulePath, GeneratableModule>, Error> {
         // Start the timer to measure how long typechecking takes.
         let start_time = Instant::now();

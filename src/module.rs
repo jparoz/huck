@@ -11,11 +11,11 @@ use crate::{ast, log, parse};
 /// and collecting statements referring to the same function
 /// into a single `Definition` struct for each function name.
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Module<Name> {
+pub struct Module<Name, Ty> {
     pub path: ModulePath,
     pub definitions: BTreeMap<Name, ast::Definition<Name>>,
 
-    pub type_definitions: BTreeMap<Name, ast::TypeDefinition<Name>>,
+    pub type_definitions: BTreeMap<Name, ast::TypeDefinition<Name, Ty>>,
 
     /// Note that all the members of this field can also be found
     /// in the values of the `type_definitions` field.
@@ -26,7 +26,7 @@ pub struct Module<Name> {
     pub foreign_exports: Vec<(&'static str, ast::Expr<Name>)>,
 }
 
-impl<Name> Module<Name> {
+impl<Name, Ty> Module<Name, Ty> {
     pub fn new(path: ModulePath) -> Self {
         Self {
             path,
@@ -40,12 +40,12 @@ impl<Name> Module<Name> {
     }
 }
 
-impl Module<UnresolvedName> {
+impl Module<UnresolvedName, ()> {
     /// Takes the `Vec<Statement>` from parsing
     /// and turns it into a `Module`.
     pub fn from_statements(
         path: ModulePath,
-        statements: Vec<ast::Statement<UnresolvedName>>,
+        statements: Vec<ast::Statement<UnresolvedName, ()>>,
         // @Cleanup: maybe not parse error
     ) -> Result<Self, parse::Error> {
         // Start the timer to measure how long post-parsing takes.

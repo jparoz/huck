@@ -38,7 +38,7 @@ pub trait ApplyPrecedence {
     fn apply(&mut self, precs: &BTreeMap<ResolvedName, Precedence>);
 }
 
-impl ApplyPrecedence for Module<ResolvedName> {
+impl ApplyPrecedence for Module<ResolvedName, ()> {
     fn apply(&mut self, precs: &BTreeMap<ResolvedName, Precedence>) {
         for defn in self.definitions.values_mut() {
             defn.apply(precs);

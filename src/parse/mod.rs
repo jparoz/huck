@@ -20,7 +20,9 @@ use crate::{ast::*, log};
 #[cfg(test)]
 mod test;
 
-pub fn parse(input: &'static str) -> Result<(ModulePath, Vec<Statement<UnresolvedName>>), Error> {
+pub fn parse(
+    input: &'static str,
+) -> Result<(ModulePath, Vec<Statement<UnresolvedName, ()>>), Error> {
     // Start the timer to measure how long parsing takes.
     let start_time = Instant::now();
 
@@ -54,7 +56,7 @@ fn module_path(input: &'static str) -> IResult<&'static str, ModulePath> {
     )(input)
 }
 
-fn statement(input: &'static str) -> IResult<&'static str, Statement<UnresolvedName>> {
+fn statement(input: &'static str) -> IResult<&'static str, Statement<UnresolvedName, ()>> {
     alt((
         // Assignment with inline type annotation
         map(assign_with_type, |(ts, assign)| {
@@ -81,6 +83,7 @@ fn statement(input: &'static str) -> IResult<&'static str, Statement<UnresolvedN
                     name,
                     vars,
                     constructors,
+                    typ: (),
                 })
             },
         ),

@@ -36,7 +36,7 @@ fn typ_module(s: &'static str) -> GeneratableModule {
         .clone()
         .into_iter()
         .map(|(path, stats)| Ok((path, Module::from_statements(path, stats)?)))
-        .collect::<Result<BTreeMap<ModulePath, Module<UnresolvedName>>, crate::parse::Error>>()
+        .collect::<Result<BTreeMap<ModulePath, Module<UnresolvedName, ()>>, crate::parse::Error>>()
         .unwrap();
 
     // Resolve
