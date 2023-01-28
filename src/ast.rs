@@ -3,6 +3,7 @@ use std::fmt::{self, Display};
 
 use crate::module::ModulePath;
 use crate::precedence::Precedence;
+use crate::types;
 
 /// A definition is the correct AST for a given Huck definition,
 /// combined from any statements concerning the same Name.
@@ -377,7 +378,7 @@ pub enum TypeTerm<Name> {
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct TypeDefinition<Name, Ty> {
     pub name: Name,
-    pub vars: Vec<&'static str>,
+    pub vars: types::TypeVarSet,
     pub constructors: BTreeMap<Name, ConstructorDefinition<Name, Ty>>,
     pub typ: Ty,
 }

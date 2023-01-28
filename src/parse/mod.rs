@@ -15,7 +15,7 @@ use std::time::Instant;
 use crate::module::ModulePath;
 use crate::name::UnresolvedName;
 use crate::precedence::{Associativity, Precedence};
-use crate::{ast::*, log};
+use crate::{ast::*, log, types};
 
 #[cfg(test)]
 mod test;
@@ -511,8 +511,19 @@ fn constructor_definition(
 
 fn constructor_lhs(
     input: &'static str,
-) -> IResult<&'static str, (UnresolvedName, Vec<&'static str>)> {
-    nom_tuple((upper_name, many0(ws(lower_ident))))(input)
+) -> IResult<&'static str, (UnresolvedName, types::TypeVarSet)> {
+    nom_tuple((upper_name, type_vars))(input)
+}
+
+fn type_vars(input: &'static str) -> IResult<&'static str, types::TypeVarSet> {
+    map(many0(ws(lower_ident)), |vars| {
+        let mut set = types::TypeVarSet::empty();
+        for s in vars.iter() {
+            let var = types::TypeVar::Explicit(s);
+            set.insert(var);
+        }
+        set
+    })(input)
 }
 
 fn numeral(input: &'static str) -> IResult<&'static str, Numeral> {

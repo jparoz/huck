@@ -98,7 +98,7 @@ impl Display for TypeVar {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub struct TypeVarSet(BTreeSet<TypeVar>);
 
 impl TypeVarSet {

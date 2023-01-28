@@ -533,27 +533,25 @@ impl ConstraintGenerator {
         TypeScheme { vars, typ }
     }
 
+    // @Todo @Cleanup: should this take the type definition by value? Maybe soon.
     pub fn generate_type_definition(
         &mut self,
         type_defn: &ast::TypeDefinition<ResolvedName, ()>,
     ) -> TypeDefinition {
         let ast::TypeDefinition {
             name,
-            vars: vars_s,
+            vars,
             constructors: constrs,
             typ: (),
         } = type_defn;
 
-        // We'll build these structures by iterating over the type arguments.
-        let mut vars = TypeVarSet::empty();
+        // We'll build the type by iterating over the type arguments.
         let mut typ = Type::Concrete(*name);
 
-        for s in vars_s.iter() {
+        for var in vars.iter() {
             // The final returned type of the constructor needs to reflect this type argument;
             // so we mark that here.
-            let var = TypeVar::Explicit(s);
-            vars.insert(var.clone());
-            typ = Type::App(Box::new(typ), Box::new(Type::Var(var)));
+            typ = Type::App(Box::new(typ), Box::new(Type::Var(var.clone())));
         }
 
         let mut constructors = BTreeMap::new();
@@ -577,7 +575,7 @@ impl ConstraintGenerator {
 
         TypeDefinition {
             name: *name,
-            vars,
+            vars: vars.clone(),
             typ,
             constructors,
         }

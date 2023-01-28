@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use crate::ast::{self, Statement};
 use crate::module::ModulePath;
 use crate::name::UnresolvedName;
-use crate::parse;
 use crate::precedence::{Associativity, Precedence};
+use crate::{parse, types};
 
 #[test]
 fn module_declaration() {
@@ -142,7 +142,7 @@ fn statement_type_definition() {
         parse::statement("type Foo = Bar | Baz Int;").unwrap().1,
         Statement::TypeDefinition(ast::TypeDefinition {
             name: UnresolvedName::Unqualified("Foo"),
-            vars: vec![],
+            vars: types::TypeVarSet::empty(),
             typ: (),
             constructors: BTreeMap::from([
                 (
