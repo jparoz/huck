@@ -4,7 +4,9 @@ use crate::context::Context;
 use crate::generatable_module::GeneratableModule;
 use crate::module::{Module, ModulePath};
 use crate::name::{ResolvedName, Source, UnresolvedName};
+use crate::precedence::ApplyPrecedence;
 use crate::resolve::Resolver;
+use crate::typecheck::Typechecker;
 use crate::types::{Primitive, Type};
 
 /// Shorthand to make a ResolvedName.
@@ -46,9 +48,21 @@ fn typ_module(s: &'static str) -> GeneratableModule {
         resolver.clear_scopes();
     }
 
-    // @Todo: apply precedence
+    // Apply operator precedences
+    let mut precs = BTreeMap::new();
+    for module in resolved_modules.values() {
+        for (name, defn) in module.definitions.iter() {
+            precs.extend(std::iter::repeat(name).zip(defn.precedence.iter()));
+        }
+    }
 
-    let mut gen_mods = ctx.typecheck(resolved_modules).unwrap();
+    for module in resolved_modules.values_mut() {
+        module.apply(&precs);
+    }
+
+    // Typecheck
+    let mut typechecker = Typechecker::new();
+    let mut gen_mods = typechecker.typecheck(resolved_modules).unwrap();
     gen_mods.remove(&ModulePath("Test")).unwrap()
 }
 

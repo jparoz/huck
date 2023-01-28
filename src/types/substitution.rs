@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::fmt::{self, Debug};
 
-use crate::context::Constraint;
+use crate::typecheck::constraint::Constraint;
 
 use super::{Type, TypeScheme, TypeVar, TypeVarSet};
 

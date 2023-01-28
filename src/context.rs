@@ -4,16 +4,10 @@ use std::path::{Path, PathBuf};
 
 use crate::error::Error as HuckError;
 use crate::module::{Module, ModulePath};
-use crate::name::{ResolvedName, UnresolvedName};
+use crate::name::UnresolvedName;
 use crate::parse::parse;
 use crate::precedence::ApplyPrecedence;
-use crate::types::Type;
-use crate::{ast, codegen, log, resolve};
-
-mod constraint;
-use constraint::ConstraintGenerator;
-
-pub use constraint::Constraint;
+use crate::{ast, codegen, log, resolve, typecheck};
 
 /// Context is the structure which manages module imports.
 /// It contains some modules, manages references between modules, and prepares for typechecking.
@@ -28,13 +22,6 @@ pub struct Context {
 
     /// The freshly parsed statement lists for each module.
     pub parsed: BTreeMap<ModulePath, Vec<ast::Statement<UnresolvedName>>>,
-
-    /// The constraint generator.
-    pub cg: ConstraintGenerator,
-
-    /// These are type assumptions made about imported names,
-    /// so need to be handled at Context level rather than module level.
-    pub assumptions: BTreeMap<ResolvedName, Vec<Type>>,
 }
 
 impl Context {
@@ -47,7 +34,7 @@ impl Context {
     //
     // @Future: we could incrementally process modules somehow,
     // rather than just having this monolithic all-or-nothing compile step.
-    pub fn compile(mut self) -> Result<Vec<(PathBuf, String)>, HuckError> {
+    pub fn compile(self) -> Result<Vec<(PathBuf, String)>, HuckError> {
         // @Todo @Cleanup: Move lots of the state stored on Context to be variables here.
 
         // Post-parse processing
@@ -96,7 +83,8 @@ impl Context {
         }
 
         // Typecheck
-        let gen_mods = self.typecheck(resolved_modules)?;
+        let mut typechecker = typecheck::Typechecker::new();
+        let gen_mods = typechecker.typecheck(resolved_modules)?;
 
         // Generate code
         let mut generated = Vec::new();

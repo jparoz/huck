@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
-use crate::ast::{Definition, Expr, ForeignName};
+use crate::ast::{self, Expr, ForeignName};
 use crate::module::ModulePath;
 use crate::name::ResolvedName;
-use crate::types::{Type, TypeDefinition, TypeScheme};
+use crate::types::{self, Type, TypeScheme};
 
 /// This is the structure which represents a module
 /// which has been typechecked and processed
@@ -15,18 +15,19 @@ use crate::types::{Type, TypeDefinition, TypeScheme};
 #[derive(Debug)]
 pub struct GeneratableModule {
     pub path: ModulePath,
-    pub definitions: BTreeMap<ResolvedName, (Type, Definition<ResolvedName>)>,
-    pub type_definitions: BTreeMap<ResolvedName, TypeDefinition>,
+    pub definitions: BTreeMap<ResolvedName, (Type, ast::Definition<ResolvedName>)>,
+    pub type_definitions: BTreeMap<ResolvedName, types::TypeDefinition>,
     pub constructors: BTreeMap<ResolvedName, Type>,
 
-    /// Mapping from a name to its originating module's path and file stem.
-    pub imports: BTreeMap<ResolvedName, (ModulePath, String)>,
+    pub imports: BTreeMap<ModulePath, Vec<ResolvedName>>,
 
-    /// Mapping from a name to its originating foreign module's require string,
-    /// the corresponding Lua name,
-    /// and the type scheme given at the import.
-    pub foreign_imports: BTreeMap<ResolvedName, (&'static str, ForeignName, TypeScheme)>,
-
+    /// Mapping from a foreign module's require string
+    /// to information necessary to generate the import.
+    //
+    // @Todo:
+    // pub foreign_imports:
+    //     BTreeMap<&'static str, Vec<ast::ForeignImportItem<Name, types::TypeScheme>>>,
+    pub foreign_imports: BTreeMap<&'static str, Vec<(ForeignName, ResolvedName, TypeScheme)>>,
     /// Vec of Lua assignments to make at the end of the module.
     pub foreign_exports: Vec<(&'static str, Expr<ResolvedName>)>,
 }
@@ -44,25 +45,10 @@ impl GeneratableModule {
         }
     }
 
-    pub fn contains(&self, name: &ResolvedName) -> bool {
-        self.definitions.contains_key(name)
-            || self.constructors.contains_key(name)
-            || self.imports.contains_key(name)
-            || self.foreign_imports.contains_key(name)
-    }
-
     pub fn get_type(&self, name: &ResolvedName) -> Option<Type> {
         self.constructors
             .get(name)
             .cloned()
             .or_else(|| self.definitions.get(name).map(|(typ, _)| typ.clone()))
-    }
-
-    pub fn get_path(&self, name: &ResolvedName) -> Option<ModulePath> {
-        self.imports
-            .get(name)
-            .map(|(path, _)| *path)
-            .or_else(|| self.definitions.get(name).map(|_| self.path))
-            .or_else(|| self.constructors.get(name).map(|_| self.path))
     }
 }

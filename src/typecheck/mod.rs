@@ -1,14 +1,32 @@
 use std::mem;
 use std::{collections::BTreeMap, time::Instant};
 
-use crate::context::Context;
 use crate::generatable_module::GeneratableModule;
 use crate::module::{Module, ModulePath};
 use crate::name::{ResolvedName, Source};
 use crate::types::{self, ApplySub, Substitution, Type, TypeScheme, TypeVarSet};
 use crate::{ast, log};
 
-impl Context {
+// @Cleanup: not pub (?)
+pub mod constraint;
+use constraint::ConstraintGenerator;
+
+/// Manages typechecking of a group of modules.
+#[derive(Debug, Default)]
+pub struct Typechecker {
+    /// The constraint generator.
+    cg: ConstraintGenerator,
+
+    /// These are type assumptions made about imported names,
+    /// so need to be handled at Typechecker level rather than module level.
+    assumptions: BTreeMap<ResolvedName, Vec<Type>>,
+}
+
+impl Typechecker {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     /// Typechecks the given Huck context.
     pub fn typecheck(
         &mut self,
@@ -71,17 +89,12 @@ impl Context {
 
             // Insert all imported names into the scope.
             for (path, names) in module.imports {
-                for name in names {
-                    log::trace!(
-                        log::IMPORT,
-                        "Inserting into scope of {module_path}: import {path} ({name})"
-                    );
-                    // @Todo @Checkme: name clashes?
-                    assert!(gen_mod
-                        .imports
-                        .insert(name, (path, self.file_stem(path)))
-                        .is_none());
-                }
+                log::trace!(
+                    log::IMPORT,
+                    "Inserting into scope of {module_path}: import {path} ({names:?})"
+                );
+                // @Todo @Errors: check for name clashes
+                gen_mod.imports.entry(path).or_default().extend(names);
             }
 
             // Insert all (foreign) imported names into the scope.
@@ -92,18 +105,16 @@ impl Context {
                         "Inserting into scope of {module_path}: \
                          foreign import {require_string} ({lua_name} as {huck_name})"
                     );
-                    // @Todo @Checkme: name clashes?
-                    assert!(gen_mod
+                    // @Todo @Errors: check for name clashes
+                    gen_mod
                         .foreign_imports
-                        .insert(
+                        .entry(require_string)
+                        .or_default()
+                        .push((
+                            lua_name,
                             huck_name,
-                            (
-                                require_string,
-                                lua_name,
-                                self.cg.generate_type_scheme(&ast_type_scheme)
-                            )
-                        )
-                        .is_none());
+                            self.cg.generate_type_scheme(&ast_type_scheme),
+                        ));
                 }
             }
 
@@ -118,19 +129,15 @@ impl Context {
                     log::IMPORT,
                     "Importing contents of Prelude into {module_path}"
                 );
-                let prelude_stem = self.file_stem(prelude_path);
                 let prelude_gm: &GeneratableModule = &gen_mods[&prelude_path];
-                for name in prelude_gm
-                    .definitions
-                    .keys()
-                    .chain(prelude_gm.constructors.keys())
-                {
-                    // @Todo @Checkme @Errors @Warn: name clashes?
-                    assert!(gen_mod
-                        .imports
-                        .insert(*name, (prelude_path, prelude_stem.clone()))
-                        .is_none());
-                }
+
+                // @Todo @Checkme @Errors @Warn: name clashes
+                gen_mod.imports.entry(prelude_path).or_default().extend(
+                    prelude_gm
+                        .definitions
+                        .keys()
+                        .chain(prelude_gm.constructors.keys()),
+                );
             }
 
             // Polymorphically bind all top-level names.
@@ -188,13 +195,21 @@ impl Context {
                 for assumed_type in assumed_types {
                     self.cg.implicit_instance(assumed_type, typ.clone());
                 }
-            } else if let Some((_require_string, _lua_name, type_scheme)) =
-                module.foreign_imports.get(&name)
-            {
+            } else if let Source::Foreign { require, .. } = name.source {
                 // This means that the name was imported from a foreign (Lua) module;
                 // this means that the Huck author gave an explicit type signature at the import.
-                for assumed_type in assumed_types {
-                    self.cg.explicit_instance(assumed_type, type_scheme.clone());
+
+                let imports = module
+                    .foreign_imports
+                    .get(require)
+                    .expect("should already be resolved");
+
+                for (_foreign_name, huck_name, ts) in imports {
+                    if huck_name == &name {
+                        for assumed_type in assumed_types.iter() {
+                            self.cg.explicit_instance(assumed_type.clone(), ts.clone());
+                        }
+                    }
                 }
             } else if name.source == Source::Builtin {
                 // @Cleanup: @DRY with Pattern::UnaryConstructor branch
@@ -207,7 +222,6 @@ impl Context {
                         .for_each(|t| self.cg.equate(t, Type::Primitive(types::Primitive::Bool))),
                     _ => unreachable!("missing a compiler builtin type"),
                 }
-            // } else if let Some((path, _stem)) = module.imports.get(&name) {
             } else {
                 // This means that the name was imported from another Huck module;
                 // so we need to resolve it at Context level later.
@@ -216,7 +230,6 @@ impl Context {
                     .entry(name)
                     .or_default()
                     .extend(assumed_types);
-                // unreachable!("name should be properly resolved by now: {name}")
             }
         }
 
@@ -242,7 +255,7 @@ impl Context {
         );
 
         for module in modules.values() {
-            for (import_name, (import_path, _import_stem)) in module.imports.iter() {
+            for (import_path, import_names) in module.imports.iter() {
                 // Find the inferred type.
                 // @Note: this should be infallable,
                 // because we've already confirmed everything exists in the resolve step.
@@ -250,20 +263,22 @@ impl Context {
                     .get(import_path)
                     .expect("should already be resolved");
 
-                let typ = import_module
-                    .get_type(import_name)
-                    .expect("should already be resolved and typechecked");
+                for import_name in import_names {
+                    let typ = import_module
+                        .get_type(import_name)
+                        .expect("should already be resolved and typechecked");
 
-                // If there are any assumptions about the variable, bind them.
-                if let Some(assumed_types) = self.assumptions.remove(import_name) {
-                    // Constrain that the assumed types are instances of the inferred type.
-                    for assumed_type in assumed_types {
-                        self.cg.implicit_instance(assumed_type, typ.clone());
-                    }
-                } else {
-                    // @Todo @Errors @Warn: emit a warning for unused imports
-                    if import_path != &ModulePath("Prelude") {
-                        log::warn!(log::IMPORT, "unused: import {import_path} ({import_name})");
+                    // If there are any assumptions about the variable, bind them.
+                    if let Some(assumed_types) = self.assumptions.remove(import_name) {
+                        // Constrain that the assumed types are instances of the inferred type.
+                        for assumed_type in assumed_types {
+                            self.cg.implicit_instance(assumed_type, typ.clone());
+                        }
+                    } else {
+                        // @Todo @Errors @Warn: emit a warning for unused imports
+                        if import_path != &ModulePath("Prelude") {
+                            log::warn!(log::IMPORT, "unused: import {import_path} ({import_name})");
+                        }
                     }
                 }
             }
