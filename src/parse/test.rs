@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use crate::ast::{self, Statement};
 use crate::module::ModulePath;
 use crate::name::UnresolvedName;
@@ -142,13 +144,24 @@ fn statement_type_definition() {
             name: UnresolvedName::Unqualified("Foo"),
             vars: vec![],
             typ: (),
-            constructors: vec![
-                (UnresolvedName::Unqualified("Bar"), vec![]),
+            constructors: BTreeMap::from([
+                (
+                    UnresolvedName::Unqualified("Bar"),
+                    ast::ConstructorDefinition {
+                        name: UnresolvedName::Unqualified("Bar"),
+                        args: vec![],
+                        typ: (),
+                    }
+                ),
                 (
                     UnresolvedName::Unqualified("Baz"),
-                    vec![ast::TypeTerm::Concrete(UnresolvedName::Unqualified("Int"))]
+                    ast::ConstructorDefinition {
+                        name: UnresolvedName::Unqualified("Baz"),
+                        args: vec![ast::TypeTerm::Concrete(UnresolvedName::Unqualified("Int"))],
+                        typ: (),
+                    }
                 ),
-            ]
+            ]),
         })
     );
 }

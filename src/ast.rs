@@ -378,11 +378,16 @@ pub enum TypeTerm<Name> {
 pub struct TypeDefinition<Name, Ty> {
     pub name: Name,
     pub vars: Vec<&'static str>,
-    pub constructors: Vec<ConstructorDefinition<Name>>,
+    pub constructors: BTreeMap<Name, ConstructorDefinition<Name, Ty>>,
     pub typ: Ty,
 }
 
-pub type ConstructorDefinition<Name> = (Name, Vec<TypeTerm<Name>>);
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+pub struct ConstructorDefinition<Name, Ty> {
+    pub name: Name,
+    pub args: Vec<TypeTerm<Name>>,
+    pub typ: Ty,
+}
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct ForeignImportItem<Name>(pub ForeignName, pub Name, pub TypeScheme<Name>);

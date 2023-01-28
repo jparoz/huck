@@ -698,18 +698,25 @@ impl Resolver {
         // @Cleanup: do we need to resolve this?
         let name = self.resolve_type_name(type_defn.name)?;
 
-        let mut constructors = Vec::new();
-        for (unres_constr_name, unres_type_terms) in type_defn.constructors {
+        let mut constructors = BTreeMap::new();
+        for unres_constr in type_defn.constructors.into_values() {
             // @Cleanup: do we need to resolve this?
-            let res_constr_name = self.resolve_name(unres_constr_name)?;
+            let name = self.resolve_name(unres_constr.name)?;
 
-            let mut res_type_terms = Vec::new();
-            for unres_type_term in unres_type_terms {
+            let mut args = Vec::new();
+            for unres_type_term in unres_constr.args {
                 let res_type_term = self.resolve_type_term(unres_type_term)?;
-                res_type_terms.push(res_type_term);
+                args.push(res_type_term);
             }
 
-            constructors.push((res_constr_name, res_type_terms))
+            constructors.insert(
+                name,
+                ast::ConstructorDefinition {
+                    name,
+                    args,
+                    typ: unres_constr.typ,
+                },
+            );
         }
 
         Ok(ast::TypeDefinition {

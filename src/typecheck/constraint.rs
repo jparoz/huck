@@ -558,8 +558,9 @@ impl ConstraintGenerator {
 
         let mut constructors = BTreeMap::new();
 
-        for (constr_name, args) in constrs {
-            let constr_type = args
+        for constr_defn in constrs.values() {
+            let constr_type = constr_defn
+                .args
                 .iter()
                 .rev()
                 .map(|term| self.generate_type_term(term))
@@ -568,10 +569,10 @@ impl ConstraintGenerator {
                 });
 
             // @Checkme: poly or mono?
-            self.bind_assumptions_poly(constr_name, &constr_type);
+            self.bind_assumptions_poly(&constr_defn.name, &constr_type);
 
             // @Errors @Checkme: no name conflicts
-            constructors.insert(*constr_name, constr_type);
+            constructors.insert(constr_defn.name, constr_type);
         }
 
         TypeDefinition {

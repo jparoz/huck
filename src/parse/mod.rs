@@ -78,7 +78,11 @@ fn statement(input: &'static str) -> IResult<&'static str, Statement<UnresolvedN
                 separated_list1(ws(tag("|")), constructor_definition),
                 semi,
             )),
-            |(_, (name, vars), _, constructors, _)| {
+            |(_, (name, vars), _, constr_defns, _)| {
+                let mut constructors = BTreeMap::new();
+                for constr_defn in constr_defns {
+                    constructors.insert(constr_defn.name, constr_defn);
+                }
                 Statement::TypeDefinition(TypeDefinition {
                     name,
                     vars,
@@ -494,9 +498,15 @@ fn lua_name(input: &'static str) -> IResult<&'static str, ForeignName> {
 /// `constructor_definition` would parse either "Bar" or "Baz Int".
 fn constructor_definition(
     input: &'static str,
-) -> IResult<&'static str, ConstructorDefinition<UnresolvedName>> {
+) -> IResult<&'static str, ConstructorDefinition<UnresolvedName, ()>> {
     // @Future: type constructor binops
-    nom_tuple((upper_name, many0(type_term)))(input)
+    map(nom_tuple((upper_name, many0(type_term))), |(name, args)| {
+        ConstructorDefinition {
+            name,
+            args,
+            typ: (),
+        }
+    })(input)
 }
 
 fn constructor_lhs(

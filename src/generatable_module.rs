@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::ast::{self, Expr, ForeignName};
+use crate::ast;
 use crate::module::ModulePath;
 use crate::name::ResolvedName;
 use crate::types::{self, Type, TypeScheme};
@@ -27,9 +27,9 @@ pub struct GeneratableModule {
     // @Todo:
     // pub foreign_imports:
     //     BTreeMap<&'static str, Vec<ast::ForeignImportItem<Name, types::TypeScheme>>>,
-    pub foreign_imports: BTreeMap<&'static str, Vec<(ForeignName, ResolvedName, TypeScheme)>>,
+    pub foreign_imports: BTreeMap<&'static str, Vec<(ast::ForeignName, ResolvedName, TypeScheme)>>,
     /// Vec of Lua assignments to make at the end of the module.
-    pub foreign_exports: Vec<(&'static str, Expr<ResolvedName>)>,
+    pub foreign_exports: Vec<(&'static str, ast::Expr<ResolvedName>)>,
 }
 
 impl GeneratableModule {

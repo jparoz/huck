@@ -19,7 +19,7 @@ pub struct Module<Name, Ty> {
 
     /// Note that all the members of this field can also be found
     /// in the values of the `type_definitions` field.
-    pub constructors: BTreeMap<Name, Vec<ast::TypeTerm<Name>>>,
+    pub constructors: BTreeMap<Name, ast::ConstructorDefinition<Name, Ty>>,
 
     pub imports: BTreeMap<ModulePath, Vec<Name>>,
     pub foreign_imports: BTreeMap<&'static str, Vec<ast::ForeignImportItem<Name>>>,
@@ -129,9 +129,13 @@ impl Module<UnresolvedName, ()> {
                 }
 
                 ast::Statement::TypeDefinition(type_defn) => {
-                    for (constr, types) in type_defn.constructors.iter().cloned() {
-                        if module.constructors.insert(constr, types).is_some() {
-                            return Err(parse::Error::MultipleTypeConstructors(constr));
+                    for constr in type_defn.constructors.values().cloned() {
+                        if let Some(existing_constr) =
+                            module.constructors.insert(constr.name, constr)
+                        {
+                            return Err(parse::Error::MultipleTypeConstructors(
+                                existing_constr.name,
+                            ));
                         }
                     }
 
