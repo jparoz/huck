@@ -68,10 +68,25 @@ impl Typechecker {
                     name,
                     typ
                 );
+                let typed_defn = {
+                    let ast::Definition {
+                        assignments,
+                        explicit_type,
+                        precedence,
+                        typ: (),
+                    } = defn;
+
+                    ast::Definition {
+                        assignments,
+                        explicit_type,
+                        precedence,
+                        typ,
+                    }
+                };
 
                 // @Note: guaranteed to be None,
                 // because we're iterating over a BTreeMap.
-                assert!(gen_mod.definitions.insert(name, (typ, defn)).is_none());
+                assert!(gen_mod.definitions.insert(name, typed_defn).is_none());
             }
 
             // Generate constraints for each type definition
@@ -165,9 +180,13 @@ impl Typechecker {
         // Apply the solution to each GeneratableModule.
         for module in gen_mods.values_mut() {
             log::info!(log::TYPECHECK, "module {}:", module.path);
-            for (name, (ref mut typ, _definition)) in module.definitions.iter_mut() {
-                typ.apply(&soln);
-                log::info!(log::TYPECHECK, "  Inferred type for {name} : {typ}");
+            for (name, ref mut definition) in module.definitions.iter_mut() {
+                definition.typ.apply(&soln);
+                log::info!(
+                    log::TYPECHECK,
+                    "  Inferred type for {name} : {}",
+                    definition.typ
+                );
             }
         }
 

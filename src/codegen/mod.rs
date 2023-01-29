@@ -107,9 +107,7 @@ impl<'a> CodeGenerator<'a> {
             // Keep track of whether we've generated anything in this pass.
             let mut generated_anything = false;
 
-            for (name, mut typed_defn) in current_pass.drain(..) {
-                let defn = &mut typed_defn.1;
-
+            for (name, mut defn) in current_pass.drain(..) {
                 // @Errors: this should throw an error saying that
                 // there was a type annotation without a corresponding definition.
                 assert!(!defn.assignments.is_empty());
@@ -134,14 +132,14 @@ impl<'a> CodeGenerator<'a> {
                     // Because there are arguments, it's going to be a Lua function.
                     // Thus, we can generate in any order.
                     log::trace!(log::CODEGEN, "    Generating {name}");
-                    write!(lua, "{}", self.definition(&name, defn)?)?;
+                    write!(lua, "{}", self.definition(&name, &defn)?)?;
 
                     // Mark that we have generated something in this pass.
                     generated_anything = true;
                 } else {
                     // Skip it for now
                     log::trace!(log::CODEGEN, "    Skipping {name}");
-                    next_pass.push((name, typed_defn));
+                    next_pass.push((name, defn));
                 }
             }
 
@@ -181,10 +179,10 @@ impl<'a> CodeGenerator<'a> {
     }
 
     /// Generates a Lua expression representing a Huck definition.
-    fn definition(
+    fn definition<Ty>(
         &mut self,
         name: &ResolvedName,
-        defn: &ast::Definition<ResolvedName>,
+        defn: &ast::Definition<ResolvedName, Ty>,
     ) -> Result<String> {
         let mut lua = String::new();
 

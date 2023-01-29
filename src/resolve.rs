@@ -365,8 +365,8 @@ impl Resolver {
 
     fn resolve_definition(
         &mut self,
-        defn: ast::Definition<UnresolvedName>,
-    ) -> Result<ast::Definition<ResolvedName>, Error> {
+        defn: ast::Definition<UnresolvedName, ()>,
+    ) -> Result<ast::Definition<ResolvedName, ()>, Error> {
         let assignments = defn
             .assignments
             .into_iter()
@@ -383,6 +383,7 @@ impl Resolver {
             assignments,
             explicit_type,
             precedence: defn.precedence,
+            typ: defn.typ,
         })
     }
 
@@ -688,10 +689,10 @@ impl Resolver {
         Ok((bindings, res_pat))
     }
 
-    fn resolve_type_definition(
+    fn resolve_type_definition<Ty>(
         &mut self,
-        type_defn: ast::TypeDefinition<UnresolvedName, ()>,
-    ) -> Result<ast::TypeDefinition<ResolvedName, ()>, Error> {
+        type_defn: ast::TypeDefinition<UnresolvedName, Ty>,
+    ) -> Result<ast::TypeDefinition<ResolvedName, Ty>, Error> {
         // @Checkme: do we need to bind any more names,
         // or did we do that already in resolve?
 
@@ -723,7 +724,7 @@ impl Resolver {
             name,
             constructors,
             vars: type_defn.vars,
-            typ: (),
+            typ: type_defn.typ,
         })
     }
 
@@ -967,7 +968,7 @@ impl From<ResolvedName> for Binding {
     }
 }
 
-impl ast::Definition<ResolvedName> {
+impl<Ty> ast::Definition<ResolvedName, Ty> {
     pub fn dependencies(&mut self) -> BTreeSet<ResolvedName> {
         let mut deps = BTreeSet::new();
 

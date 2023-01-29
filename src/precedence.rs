@@ -8,7 +8,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::ast::{Assignment, Definition, Expr, Lhs, Pattern, Term};
+use crate::ast;
 use crate::module::Module;
 use crate::name::ResolvedName;
 
@@ -46,13 +46,13 @@ impl ApplyPrecedence for Module<ResolvedName, ()> {
     }
 }
 
-impl ApplyPrecedence for Definition<ResolvedName> {
+impl<Ty> ApplyPrecedence for ast::Definition<ResolvedName, Ty> {
     fn apply(&mut self, precs: &BTreeMap<ResolvedName, Precedence>) {
         self.assignments.iter_mut().for_each(|a| a.apply(precs));
     }
 }
 
-impl ApplyPrecedence for Assignment<ResolvedName> {
+impl ApplyPrecedence for ast::Assignment<ResolvedName> {
     fn apply(&mut self, precs: &BTreeMap<ResolvedName, Precedence>) {
         // LHS
         self.0.apply(precs);
@@ -61,15 +61,15 @@ impl ApplyPrecedence for Assignment<ResolvedName> {
     }
 }
 
-impl ApplyPrecedence for Lhs<ResolvedName> {
+impl ApplyPrecedence for ast::Lhs<ResolvedName> {
     fn apply(&mut self, precs: &BTreeMap<ResolvedName, Precedence>) {
         match self {
-            Lhs::Func { args, .. } | Lhs::Lambda { args } => {
+            ast::Lhs::Func { args, .. } | ast::Lhs::Lambda { args } => {
                 for arg in args {
                     arg.apply(precs);
                 }
             }
-            Lhs::Binop { a, op: _, b } => {
+            ast::Lhs::Binop { a, op: _, b } => {
                 a.apply(precs);
                 b.apply(precs);
             }
@@ -77,21 +77,21 @@ impl ApplyPrecedence for Lhs<ResolvedName> {
     }
 }
 
-impl ApplyPrecedence for Pattern<ResolvedName> {
+impl ApplyPrecedence for ast::Pattern<ResolvedName> {
     fn apply(&mut self, precs: &BTreeMap<ResolvedName, Precedence>) {
         match self {
-            Pattern::List(args) => {
+            ast::Pattern::List(args) => {
                 for arg in args {
                     arg.apply(precs)
                 }
             }
-            Pattern::Binop {
+            ast::Pattern::Binop {
                 operator: ref mut l_op,
                 lhs: ref mut a,
                 ref mut rhs,
             } => {
                 rhs.apply(precs);
-                if let Pattern::Binop {
+                if let ast::Pattern::Binop {
                     operator: ref mut r_op,
                     lhs: ref mut b,
                     rhs: ref mut c,
@@ -124,7 +124,7 @@ impl ApplyPrecedence for Pattern<ResolvedName> {
                     }
                 }
             }
-            Pattern::Destructure { args, .. } => {
+            ast::Pattern::Destructure { args, .. } => {
                 for arg in args {
                     arg.apply(precs)
                 }
@@ -134,16 +134,16 @@ impl ApplyPrecedence for Pattern<ResolvedName> {
     }
 }
 
-impl ApplyPrecedence for Expr<ResolvedName> {
+impl ApplyPrecedence for ast::Expr<ResolvedName> {
     fn apply(&mut self, precs: &BTreeMap<ResolvedName, Precedence>) {
         match self {
-            Expr::Binop {
+            ast::Expr::Binop {
                 operator: ref mut l_op,
                 lhs: ref mut a,
                 ref mut rhs,
             } => {
                 rhs.apply(precs);
-                if let Expr::Binop {
+                if let ast::Expr::Binop {
                     operator: ref mut r_op,
                     lhs: ref mut b,
                     rhs: ref mut c,
@@ -178,20 +178,20 @@ impl ApplyPrecedence for Expr<ResolvedName> {
                 }
                 a.apply(precs);
             }
-            Expr::App { func, argument } => {
+            ast::Expr::App { func, argument } => {
                 func.apply(precs);
                 argument.apply(precs);
             }
-            Expr::Term(t) => match t {
-                Term::List(v) => {
+            ast::Expr::Term(t) => match t {
+                ast::Term::List(v) => {
                     for e in v {
                         e.apply(precs);
                     }
                 }
-                Term::Parens(e) => e.apply(precs),
+                ast::Term::Parens(e) => e.apply(precs),
                 _ => (),
             },
-            Expr::Let {
+            ast::Expr::Let {
                 definitions,
                 in_expr,
             } => {
@@ -204,7 +204,7 @@ impl ApplyPrecedence for Expr<ResolvedName> {
                 in_expr.apply(precs);
             }
 
-            Expr::If {
+            ast::Expr::If {
                 cond,
                 then_expr,
                 else_expr,
@@ -214,21 +214,21 @@ impl ApplyPrecedence for Expr<ResolvedName> {
                 else_expr.apply(precs);
             }
 
-            Expr::Case { expr, arms } => {
+            ast::Expr::Case { expr, arms } => {
                 expr.apply(precs);
                 for (_pat, arm_expr) in arms.iter_mut() {
                     arm_expr.apply(precs);
                 }
             }
 
-            Expr::Lambda { lhs, rhs } => {
+            ast::Expr::Lambda { lhs, rhs } => {
                 for mut pat in lhs.args() {
                     pat.apply(precs);
                 }
                 rhs.apply(precs);
             }
 
-            Expr::Lua(_) | Expr::UnsafeLua(_) => (),
+            ast::Expr::Lua(_) | ast::Expr::UnsafeLua(_) => (),
         }
     }
 }

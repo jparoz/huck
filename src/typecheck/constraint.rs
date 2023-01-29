@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, VecDeque};
 use std::fmt::{self, Debug, Write};
 use std::iter;
 
-use crate::ast::{self, Assignment, Definition, Expr, Lhs, Numeral, Pattern, Term};
+use crate::ast::{self, Assignment, Expr, Lhs, Numeral, Pattern, Term};
 use crate::log;
 use crate::name::{ResolvedName, Source};
 use crate::types::{Primitive, Type, TypeScheme, TypeVar, TypeVarSet};
@@ -311,7 +311,7 @@ impl ConstraintGenerator {
 
     // Generation methods
 
-    pub fn generate_definition(&mut self, definition: &Definition<ResolvedName>) -> Type {
+    pub fn generate_definition(&mut self, definition: &ast::Definition<ResolvedName, ()>) -> Type {
         // Typecheck each assignment in the definition.
         let mut typs: Vec<Type> = definition
             .assignments

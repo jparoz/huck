@@ -15,7 +15,7 @@ use crate::types::{Type, TypeScheme};
 #[derive(Debug)]
 pub struct GeneratableModule {
     pub path: ModulePath,
-    pub definitions: BTreeMap<ResolvedName, (Type, ast::Definition<ResolvedName>)>,
+    pub definitions: BTreeMap<ResolvedName, ast::Definition<ResolvedName, Type>>,
     pub type_definitions: BTreeMap<ResolvedName, ast::TypeDefinition<ResolvedName, Type>>,
     pub constructors: BTreeMap<ResolvedName, ast::ConstructorDefinition<ResolvedName, Type>>,
 
@@ -49,6 +49,6 @@ impl GeneratableModule {
         self.constructors
             .get(name)
             .map(|constr_defn| constr_defn.typ.clone())
-            .or_else(|| self.definitions.get(name).map(|(typ, _)| typ.clone()))
+            .or_else(|| self.definitions.get(name).map(|defn| defn.typ.clone()))
     }
 }

@@ -68,7 +68,7 @@ fn typ_module(s: &'static str) -> GeneratableModule {
 
 /// Infers the type of the given definition.
 fn typ(s: &'static str) -> Type {
-    typ_module(s).definitions.into_values().next().unwrap().0
+    typ_module(s).definitions.into_values().next().unwrap().typ
 }
 
 #[test]
@@ -201,7 +201,7 @@ fn constructor_unary() {
 
     let val = module.definitions.get(&name!("val")).unwrap();
 
-    assert_eq!(val.0, Type::Concrete(name!("Foo")))
+    assert_eq!(val.typ, Type::Concrete(name!("Foo")))
 }
 
 #[test]
@@ -215,9 +215,9 @@ fn constructor_unary_returned() {
 
     let val = module.definitions.get(&name!("val")).unwrap().clone();
 
-    assert!(matches!(val.0, Type::Arrow(_, _)));
+    assert!(matches!(val.typ, Type::Arrow(_, _)));
 
-    let (l, r) = if let Type::Arrow(l, r) = val.0 {
+    let (l, r) = if let Type::Arrow(l, r) = val.typ {
         (l, r)
     } else {
         unreachable!()
@@ -238,7 +238,7 @@ fn constructor_unary_argument() {
     let val = module.definitions.get(&name!("val")).unwrap();
 
     assert_eq!(
-        val.0,
+        val.typ,
         Type::Arrow(
             Box::new(Type::Concrete(name!("Foo"))),
             Box::new(Type::Primitive(Primitive::Int)),
@@ -257,7 +257,7 @@ fn constructor_newtype_int() {
 
     let val = module.definitions.get(&name!("val")).unwrap();
 
-    assert_eq!(val.0, Type::Concrete(name!("Foo")))
+    assert_eq!(val.typ, Type::Concrete(name!("Foo")))
 }
 
 #[test]
@@ -273,7 +273,7 @@ fn constructor_newtype_unwrap_int() {
 
     let val = module.definitions.get(&name!("val")).unwrap();
 
-    assert_eq!(val.0, Type::Primitive(Primitive::Int))
+    assert_eq!(val.typ, Type::Primitive(Primitive::Int))
 }
 
 #[test]
@@ -288,7 +288,7 @@ fn constructor_newtype_generic_int() {
     let val = module.definitions.get(&name!("val")).unwrap();
 
     assert_eq!(
-        val.0,
+        val.typ,
         Type::App(
             Box::new(Type::Concrete(name!("Foo"))),
             Box::new(Type::Primitive(Primitive::Int))
@@ -307,9 +307,9 @@ fn constructor_newtype_generic_var() {
 
     let val = module.definitions.get(&name!("val")).unwrap().clone();
 
-    assert!(matches!(val.0, Type::Arrow(_, _)));
+    assert!(matches!(val.typ, Type::Arrow(_, _)));
 
-    let (l, r) = if let Type::Arrow(l, r) = val.0 {
+    let (l, r) = if let Type::Arrow(l, r) = val.typ {
         (l, r)
     } else {
         unreachable!()
@@ -339,7 +339,7 @@ fn constructor_newtype_generic_unwrap_int() {
 
     let val = module.definitions.get(&name!("val")).unwrap();
 
-    assert_eq!(val.0, Type::Primitive(Primitive::Int))
+    assert_eq!(val.typ, Type::Primitive(Primitive::Int))
 }
 
 #[test]
@@ -353,7 +353,7 @@ fn function_apply_to_literal() {
 
     let val = module.definitions.get(&name!("val")).unwrap();
 
-    assert_eq!(val.0, Type::Primitive(Primitive::Int))
+    assert_eq!(val.typ, Type::Primitive(Primitive::Int))
 }
 
 #[test]
@@ -368,7 +368,7 @@ fn function_apply_to_variable() {
 
     let val = module.definitions.get(&name!("val")).unwrap();
 
-    assert_eq!(val.0, Type::Primitive(Primitive::Int))
+    assert_eq!(val.typ, Type::Primitive(Primitive::Int))
 }
 
 #[test]
@@ -384,5 +384,5 @@ fn function_apply_to_variable_indirect() {
 
     let val = module.definitions.get(&name!("val")).unwrap();
 
-    assert_eq!(val.0, Type::Primitive(Primitive::Int))
+    assert_eq!(val.typ, Type::Primitive(Primitive::Int))
 }

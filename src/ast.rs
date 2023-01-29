@@ -11,18 +11,20 @@ use crate::types;
 /// explicit type declarations,
 /// or precedence declarations.
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Definition<Name> {
+pub struct Definition<Name, Ty> {
     pub assignments: Vec<Assignment<Name>>,
     pub explicit_type: Option<TypeScheme<Name>>,
     pub precedence: Option<Precedence>,
+    pub typ: Ty,
 }
 
-impl<Name> Default for Definition<Name> {
+impl<Name> Default for Definition<Name, ()> {
     fn default() -> Self {
         Self {
             assignments: Vec::new(),
             explicit_type: None,
             precedence: None,
+            typ: (),
         }
     }
 }

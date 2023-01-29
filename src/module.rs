@@ -13,7 +13,7 @@ use crate::{ast, log, parse};
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Module<Name, Ty> {
     pub path: ModulePath,
-    pub definitions: BTreeMap<Name, ast::Definition<Name>>,
+    pub definitions: BTreeMap<Name, ast::Definition<Name, Ty>>,
 
     pub type_definitions: BTreeMap<Name, ast::TypeDefinition<Name, Ty>>,
 
