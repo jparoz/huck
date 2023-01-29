@@ -115,7 +115,20 @@ where
     P: AsRef<Path>,
 {
     let mut path_buf = path.as_ref().to_path_buf();
+
+    // Convert the path into a relative path
+    if path_buf.is_absolute() {
+        let cwd = std::env::current_dir()?;
+
+        path_buf = path_buf
+            .strip_prefix(cwd)
+            .expect("should be able to make filepaths relative")
+            .to_path_buf();
+    }
+
+    // Remove the extension
     path_buf.set_extension("");
+
     let stem = path_buf
         .into_os_string()
         .into_string()
