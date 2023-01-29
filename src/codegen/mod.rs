@@ -3,7 +3,7 @@ mod error;
 #[cfg(test)]
 mod test;
 
-use crate::generatable_module::GeneratableModule;
+use crate::module::Module;
 use crate::name::{ResolvedName, Source};
 use crate::types::Type;
 use crate::{ast, log};
@@ -22,7 +22,7 @@ static UNIQUE_COUNTER: AtomicU64 = AtomicU64::new(0);
 const PREFIX: &str = "_HUCK";
 
 /// Generates Lua for the given Huck module.
-pub fn generate(module: &GeneratableModule) -> Result<String> {
+pub fn generate(module: &Module<ResolvedName, Type>) -> Result<String> {
     let start_time = Instant::now();
 
     let generated = CodeGenerator::new(module).generate()?;
@@ -57,11 +57,11 @@ struct CodeGenerator<'a> {
     // This is the set of definitions which have already been generated.
     generated: BTreeSet<ResolvedName>,
 
-    module: &'a GeneratableModule,
+    module: &'a Module<ResolvedName, Type>,
 }
 
 impl<'a> CodeGenerator<'a> {
-    fn new(module: &'a GeneratableModule) -> Self {
+    fn new(module: &'a Module<ResolvedName, Type>) -> Self {
         CodeGenerator {
             return_entries: String::new(),
 
@@ -71,7 +71,7 @@ impl<'a> CodeGenerator<'a> {
         }
     }
 
-    /// Generate Lua code for the GeneratableModule used in CodeGenerator::new.
+    /// Generate Lua code for the Module<ResolvedName, Type> used in CodeGenerator::new.
     /// This will generate a Lua chunk which returns a table
     /// containing the definitions given in the Huck module.
     fn generate(mut self) -> Result<String> {

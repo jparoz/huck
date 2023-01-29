@@ -2,7 +2,6 @@ mod ast;
 mod codegen;
 mod context;
 mod error;
-mod generatable_module;
 mod log;
 mod module;
 mod name;

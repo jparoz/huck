@@ -1,7 +1,6 @@
 use std::mem;
 use std::{collections::BTreeMap, time::Instant};
 
-use crate::generatable_module::GeneratableModule;
 use crate::module::{Module, ModulePath};
 use crate::name::{ResolvedName, Source};
 use crate::types::{self, Type, TypeScheme, TypeVarSet};
@@ -36,7 +35,7 @@ impl Typechecker {
     pub fn typecheck(
         &mut self,
         mut modules: BTreeMap<ModulePath, Module<ResolvedName, ()>>,
-    ) -> Result<BTreeMap<ModulePath, GeneratableModule>, Error> {
+    ) -> Result<BTreeMap<ModulePath, Module<ResolvedName, Type>>, Error> {
         // Start the timer to measure how long typechecking takes.
         let start_time = Instant::now();
         log::info!(log::TYPECHECK, "Typechecking all modules...");
@@ -51,13 +50,12 @@ impl Typechecker {
             .into_iter()
             .map(|m| (prelude_path, m));
 
-        let mut gen_mods = BTreeMap::new();
+        let mut typechecked_modules = BTreeMap::new();
 
-        // for (module_path, module) in modules {
         for (module_path, module) in prelude.chain(modules.into_iter()) {
             log::trace!(log::TYPECHECK, "Typechecking: module {module_path};");
-            // Set the new GeneratableModule's path.
-            let mut gen_mod = GeneratableModule::new(module_path);
+            // Set the new `Module`'s path.
+            let mut typechecked_module = Module::new(module_path);
 
             // Generate constraints for each definition, while keeping track of inferred types
             for (name, defn) in module.definitions {
@@ -86,7 +84,10 @@ impl Typechecker {
 
                 // @Note: guaranteed to be None,
                 // because we're iterating over a BTreeMap.
-                assert!(gen_mod.definitions.insert(name, typed_defn).is_none());
+                assert!(typechecked_module
+                    .definitions
+                    .insert(name, typed_defn)
+                    .is_none());
             }
 
             // Generate constraints for each type definition
@@ -94,14 +95,14 @@ impl Typechecker {
                 let type_defn = self.cg.generate_type_definition(ast_type_defn);
 
                 for (constr_name, constr_defn) in type_defn.constructors.iter() {
-                    gen_mod
+                    typechecked_module
                         .constructors
                         .insert(*constr_name, constr_defn.clone());
                 }
 
                 // @Note: guaranteed to be None,
                 // because we're iterating over a BTreeMap.
-                assert!(gen_mod
+                assert!(typechecked_module
                     .type_definitions
                     .insert(type_defn.name, type_defn)
                     .is_none());
@@ -114,7 +115,11 @@ impl Typechecker {
                     "Inserting into scope of {module_path}: import {path} ({names:?})"
                 );
                 // @Todo @Errors: check for name clashes
-                gen_mod.imports.entry(path).or_default().extend(names);
+                typechecked_module
+                    .imports
+                    .entry(path)
+                    .or_default()
+                    .extend(names);
             }
 
             // Insert all (foreign) imported names into the scope.
@@ -132,7 +137,7 @@ impl Typechecker {
                          foreign import {require_string} ({foreign_name} as {name})"
                     );
                     // @Todo @Errors: check for name clashes
-                    gen_mod
+                    typechecked_module
                         .foreign_imports
                         .entry(require_string)
                         .or_default()
@@ -147,7 +152,9 @@ impl Typechecker {
             }
 
             // Insert all foreign exports into the scope.
-            gen_mod.foreign_exports.extend(module.foreign_exports);
+            typechecked_module
+                .foreign_exports
+                .extend(module.foreign_exports);
 
             // If there is no explicit Prelude import already,
             // import everything in Prelude.
@@ -157,36 +164,42 @@ impl Typechecker {
                     log::IMPORT,
                     "Importing contents of Prelude into {module_path}"
                 );
-                let prelude_gm: &GeneratableModule = &gen_mods[&prelude_path];
+                let prelude_gm: &Module<ResolvedName, Type> = &typechecked_modules[&prelude_path];
 
                 // @Todo @Checkme @Errors @Warn: name clashes
-                gen_mod.imports.entry(prelude_path).or_default().extend(
-                    prelude_gm
-                        .definitions
-                        .keys()
-                        .chain(prelude_gm.constructors.keys()),
-                );
+                typechecked_module
+                    .imports
+                    .entry(prelude_path)
+                    .or_default()
+                    .extend(
+                        prelude_gm
+                            .definitions
+                            .keys()
+                            .chain(prelude_gm.constructors.keys()),
+                    );
             }
 
             // Polymorphically bind all top-level names.
             // If any assumptions were found to be imported,
             // their assumptions are promoted to Context level by this method.
-            self.bind_all_module_level_assumptions(&gen_mod)?;
+            self.bind_all_module_level_assumptions(&typechecked_module)?;
 
-            // Add the GeneratableModule to the context.
-            assert!(gen_mods.insert(module_path, gen_mod).is_none());
+            // Add the Module<ResolvedName, Type> to the context.
+            assert!(typechecked_modules
+                .insert(module_path, typechecked_module)
+                .is_none());
         }
 
         // Constrain any names which were promoted to the Context level (i.e. imported names).
-        self.bind_all_context_level_assumptions(&gen_mods)?;
+        self.bind_all_context_level_assumptions(&typechecked_modules)?;
 
         // Solve the type constraints
         let soln = self.cg.solve()?;
 
-        // @Todo: apply soln to the GeneratableModule directly,
-        // after impl ApplySub for GeneratableModule
-        // Apply the solution to each GeneratableModule.
-        for module in gen_mods.values_mut() {
+        // @Todo: apply soln to the Module<ResolvedName, Type> directly,
+        // after impl ApplySub for Module<ResolvedName, Type>
+        // Apply the solution to each Module<ResolvedName, Type>.
+        for module in typechecked_modules.values_mut() {
             log::info!(log::TYPECHECK, "module {}:", module.path);
             for (name, ref mut definition) in module.definitions.iter_mut() {
                 definition.typ.apply(&soln);
@@ -204,7 +217,7 @@ impl Typechecker {
             start_time.elapsed()
         );
 
-        Ok(gen_mods)
+        Ok(typechecked_modules)
     }
 
     /// Binds all top level assumptions to the types found in their definition.
@@ -214,7 +227,7 @@ impl Typechecker {
     /// by inserting it into the Context.
     fn bind_all_module_level_assumptions(
         &mut self,
-        module: &GeneratableModule,
+        module: &Module<ResolvedName, Type>,
     ) -> Result<(), Error> {
         log::trace!(log::TYPECHECK, "Emitting constraints about assumptions:");
 
@@ -284,7 +297,7 @@ impl Typechecker {
     // we ensure that all imports exist, whether they're used or not.
     fn bind_all_context_level_assumptions(
         &mut self,
-        modules: &BTreeMap<ModulePath, GeneratableModule>,
+        modules: &BTreeMap<ModulePath, Module<ResolvedName, Type>>,
     ) -> Result<(), Error> {
         log::trace!(
             log::TYPECHECK,

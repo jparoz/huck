@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 
 use crate::context::Context;
-use crate::generatable_module::GeneratableModule;
 use crate::module::{Module, ModulePath};
 use crate::name::{ResolvedName, Source, UnresolvedName};
 use crate::precedence::ApplyPrecedence;
@@ -20,7 +19,7 @@ macro_rules! name {
 }
 
 /// Typechecks the given module and returns the resulting GeneratableModule.
-fn typ_module(s: &'static str) -> GeneratableModule {
+fn typ_module(s: &'static str) -> Module<ResolvedName, Type> {
     let mut ctx = Context::new();
     ctx.include_file(concat!(env!("CARGO_MANIFEST_DIR"), "/huck/Prelude.hk"))
         .unwrap();
