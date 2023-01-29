@@ -76,12 +76,12 @@ impl Typechecker {
 
             // Generate constraints for each type definition
             for (_name, ast_type_defn) in module.type_definitions {
-                let type_defn = self.cg.generate_type_definition(&ast_type_defn);
+                let type_defn = self.cg.generate_type_definition(ast_type_defn);
 
-                for (constr_name, constr_type) in type_defn.constructors.iter() {
+                for (constr_name, constr_defn) in type_defn.constructors.iter() {
                     gen_mod
                         .constructors
-                        .insert(*constr_name, constr_type.clone());
+                        .insert(*constr_name, constr_defn.clone());
                 }
 
                 // @Note: guaranteed to be None,

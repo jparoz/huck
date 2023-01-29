@@ -179,19 +179,3 @@ impl Display for TypeVarSet {
         Ok(())
     }
 }
-
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub struct TypeDefinition {
-    /// The name of the type defined in this TypeDefinition.
-    pub name: ResolvedName,
-
-    /// The type variables introduced in the left-hand-side of the definition.
-    pub vars: TypeVarSet,
-
-    /// The type defined in this TypeDefinition.
-    pub typ: Type,
-
-    /// A Vec of the constructors introduced in the right-hand-side of the definition,
-    /// along with their types.
-    pub constructors: BTreeMap<ResolvedName, Type>,
-}

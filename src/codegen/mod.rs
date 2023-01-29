@@ -5,7 +5,7 @@ mod test;
 
 use crate::generatable_module::GeneratableModule;
 use crate::name::{ResolvedName, Source};
-use crate::types::{Type, TypeDefinition};
+use crate::types::Type;
 use crate::{ast, log};
 
 use std::collections::BTreeSet;
@@ -490,13 +490,16 @@ impl<'a> CodeGenerator<'a> {
     }
 
     /// Generates all the type constructors found in the type definition.
-    fn type_definition(&mut self, type_defn: &TypeDefinition) -> Result<String> {
+    fn type_definition(
+        &mut self,
+        type_defn: &ast::TypeDefinition<ResolvedName, Type>,
+    ) -> Result<String> {
         let mut lua = String::new();
 
         // Write each constructor to the `lua` string.
-        for (name, typ) in type_defn.constructors.iter() {
+        for (name, constr) in type_defn.constructors.iter() {
             write!(lua, r#"{}["{}"] = "#, PREFIX, name)?;
-            writeln!(lua, "{}", self.constructor(name, typ)?)?;
+            writeln!(lua, "{}", self.constructor(name, &constr.typ)?)?;
             writeln!(
                 self.return_entries,
                 r#"["{name}"] = {prefix}["{name}"],"#,

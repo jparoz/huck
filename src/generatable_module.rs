@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use crate::ast;
 use crate::module::ModulePath;
 use crate::name::ResolvedName;
-use crate::types::{self, Type, TypeScheme};
+use crate::types::{Type, TypeScheme};
 
 /// This is the structure which represents a module
 /// which has been typechecked and processed
@@ -16,8 +16,8 @@ use crate::types::{self, Type, TypeScheme};
 pub struct GeneratableModule {
     pub path: ModulePath,
     pub definitions: BTreeMap<ResolvedName, (Type, ast::Definition<ResolvedName>)>,
-    pub type_definitions: BTreeMap<ResolvedName, types::TypeDefinition>,
-    pub constructors: BTreeMap<ResolvedName, Type>,
+    pub type_definitions: BTreeMap<ResolvedName, ast::TypeDefinition<ResolvedName, Type>>,
+    pub constructors: BTreeMap<ResolvedName, ast::ConstructorDefinition<ResolvedName, Type>>,
 
     pub imports: BTreeMap<ModulePath, Vec<ResolvedName>>,
 
@@ -48,7 +48,7 @@ impl GeneratableModule {
     pub fn get_type(&self, name: &ResolvedName) -> Option<Type> {
         self.constructors
             .get(name)
-            .cloned()
+            .map(|constr_defn| constr_defn.typ.clone())
             .or_else(|| self.definitions.get(name).map(|(typ, _)| typ.clone()))
     }
 }

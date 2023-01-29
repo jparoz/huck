@@ -5,7 +5,7 @@ use std::iter;
 use crate::ast::{self, Assignment, Definition, Expr, Lhs, Numeral, Pattern, Term};
 use crate::log;
 use crate::name::{ResolvedName, Source};
-use crate::types::{Primitive, Type, TypeDefinition, TypeScheme, TypeVar, TypeVarSet};
+use crate::types::{Primitive, Type, TypeScheme, TypeVar, TypeVarSet};
 
 use super::substitution::{ApplySub, Substitution};
 
@@ -533,11 +533,10 @@ impl ConstraintGenerator {
         TypeScheme { vars, typ }
     }
 
-    // @Todo @Cleanup: should this take the type definition by value? Maybe soon.
     pub fn generate_type_definition(
         &mut self,
-        type_defn: &ast::TypeDefinition<ResolvedName, ()>,
-    ) -> TypeDefinition {
+        type_defn: ast::TypeDefinition<ResolvedName, ()>,
+    ) -> ast::TypeDefinition<ResolvedName, Type> {
         let ast::TypeDefinition {
             name,
             vars,
@@ -546,7 +545,7 @@ impl ConstraintGenerator {
         } = type_defn;
 
         // We'll build the type by iterating over the type arguments.
-        let mut typ = Type::Concrete(*name);
+        let mut typ = Type::Concrete(name);
 
         for var in vars.iter() {
             // The final returned type of the constructor needs to reflect this type argument;
@@ -556,7 +555,7 @@ impl ConstraintGenerator {
 
         let mut constructors = BTreeMap::new();
 
-        for constr_defn in constrs.values() {
+        for constr_defn in constrs.into_values() {
             let constr_type = constr_defn
                 .args
                 .iter()
@@ -570,12 +569,19 @@ impl ConstraintGenerator {
             self.bind_assumptions_poly(&constr_defn.name, &constr_type);
 
             // @Errors @Checkme: no name conflicts
-            constructors.insert(constr_defn.name, constr_type);
+            constructors.insert(
+                constr_defn.name,
+                ast::ConstructorDefinition {
+                    name: constr_defn.name,
+                    args: constr_defn.args,
+                    typ: constr_type,
+                },
+            );
         }
 
-        TypeDefinition {
-            name: *name,
-            vars: vars.clone(),
+        ast::TypeDefinition {
+            name,
+            vars,
             typ,
             constructors,
         }
