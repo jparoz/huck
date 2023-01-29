@@ -22,7 +22,7 @@ pub struct Module<Name, Ty> {
     pub constructors: BTreeMap<Name, ast::ConstructorDefinition<Name, Ty>>,
 
     pub imports: BTreeMap<ModulePath, Vec<Name>>,
-    pub foreign_imports: BTreeMap<&'static str, Vec<ast::ForeignImportItem<Name>>>,
+    pub foreign_imports: BTreeMap<&'static str, Vec<ast::ForeignImportItem<Name, Ty>>>,
     pub foreign_exports: Vec<(&'static str, ast::Expr<Name>)>,
 }
 

@@ -47,10 +47,10 @@ fn statement_import_foreign() {
             "",
             ast::Statement::ForeignImport(
                 r#""inspect""#,
-                vec![ast::ForeignImportItem(
-                    ast::ForeignName("inspect"),
-                    UnresolvedName::Unqualified("inspect"),
-                    ast::TypeScheme {
+                vec![ast::ForeignImportItem {
+                    foreign_name: ast::ForeignName("inspect"),
+                    name: UnresolvedName::Unqualified("inspect"),
+                    type_scheme: ast::TypeScheme {
                         typ: ast::TypeExpr::Arrow(
                             Box::new(ast::TypeExpr::Term(ast::TypeTerm::Var("a"))),
                             Box::new(ast::TypeExpr::Term(ast::TypeTerm::Concrete(
@@ -58,8 +58,9 @@ fn statement_import_foreign() {
                             )))
                         ),
                         vars: vec!["a"]
-                    }
-                )]
+                    },
+                    typ: (),
+                }]
             )
         ))
     )

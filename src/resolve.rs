@@ -145,7 +145,13 @@ impl Resolver {
 
         // Add all the foreign imports to the scope as well as resolving the names.
         for (require, items) in module.foreign_imports {
-            for ast::ForeignImportItem(foreign_name, name, ts) in items {
+            for ast::ForeignImportItem {
+                foreign_name,
+                name,
+                type_scheme,
+                typ: (),
+            } in items
+            {
                 log::trace!(
                     log::RESOLVE,
                     "Importing `require({require})[\"{foreign_name}\"]` \
@@ -168,14 +174,15 @@ impl Resolver {
                     .foreign_imports
                     .entry(require)
                     .or_default()
-                    .push(ast::ForeignImportItem(
+                    .push(ast::ForeignImportItem {
                         foreign_name,
-                        ResolvedName {
+                        name: ResolvedName {
                             source,
                             ident: name.ident(),
                         },
-                        self.resolve_type_scheme(ts.clone())?,
-                    ));
+                        type_scheme: self.resolve_type_scheme(type_scheme.clone())?,
+                        typ: (),
+                    });
 
                 // Insert it into the scope
                 // @Todo @Checkme @Errors: can we collide here? if so, we should check that first.

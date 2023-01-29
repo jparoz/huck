@@ -130,12 +130,15 @@ fn statement(input: &'static str) -> IResult<&'static str, Statement<UnresolvedN
 
 fn foreign_import_item(
     input: &'static str,
-) -> IResult<&'static str, ForeignImportItem<UnresolvedName>> {
+) -> IResult<&'static str, ForeignImportItem<UnresolvedName, ()>> {
     alt((
         map(
             separated_pair(ws(lower_ident), reserved_op(":"), type_scheme),
-            |(name, ts)| {
-                ForeignImportItem(ForeignName(name), UnresolvedName::Unqualified(name), ts)
+            |(name, type_scheme)| ForeignImportItem {
+                foreign_name: ForeignName(name),
+                name: UnresolvedName::Unqualified(name),
+                type_scheme,
+                typ: (),
             },
         ),
         map(
@@ -146,7 +149,12 @@ fn foreign_import_item(
                 reserved_op(":"),
                 type_scheme,
             )),
-            |(lua_name, _, huck_name, _, ts)| ForeignImportItem(lua_name, huck_name, ts),
+            |(foreign_name, _, name, _, type_scheme)| ForeignImportItem {
+                foreign_name,
+                name,
+                type_scheme,
+                typ: (),
+            },
         ),
     ))(input)
 }

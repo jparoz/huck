@@ -119,22 +119,30 @@ impl Typechecker {
 
             // Insert all (foreign) imported names into the scope.
             for (require_string, imports) in module.foreign_imports {
-                for ast::ForeignImportItem(lua_name, huck_name, ast_type_scheme) in imports {
+                for ast::ForeignImportItem {
+                    foreign_name,
+                    name,
+                    type_scheme,
+                    typ: (),
+                } in imports
+                {
                     log::trace!(
                         log::IMPORT,
                         "Inserting into scope of {module_path}: \
-                         foreign import {require_string} ({lua_name} as {huck_name})"
+                         foreign import {require_string} ({foreign_name} as {name})"
                     );
                     // @Todo @Errors: check for name clashes
                     gen_mod
                         .foreign_imports
                         .entry(require_string)
                         .or_default()
-                        .push((
-                            lua_name,
-                            huck_name,
-                            self.cg.generate_type_scheme(&ast_type_scheme),
-                        ));
+                        .push(ast::ForeignImportItem {
+                            foreign_name,
+                            name,
+                            // @XXX @Fixme: this throws away the type variables.
+                            typ: self.cg.generate_type_scheme(&type_scheme).typ,
+                            type_scheme,
+                        });
                 }
             }
 
@@ -213,13 +221,13 @@ impl Typechecker {
         let mut assumptions = BTreeMap::new();
         mem::swap(&mut assumptions, &mut self.cg.assumptions);
 
-        for (name, assumed_types) in assumptions {
-            if let Some(typ) = module.get_type(&name) {
+        for (assumed_name, assumed_types) in assumptions {
+            if let Some(typ) = module.get_type(&assumed_name) {
                 // This means that it was defined in this module.
                 for assumed_type in assumed_types {
                     self.cg.implicit_instance(assumed_type, typ.clone());
                 }
-            } else if let Source::Foreign { require, .. } = name.source {
+            } else if let Source::Foreign { require, .. } = assumed_name.source {
                 // This means that the name was imported from a foreign (Lua) module;
                 // this means that the Huck author gave an explicit type signature at the import.
 
@@ -228,19 +236,24 @@ impl Typechecker {
                     .get(require)
                     .expect("should already be resolved");
 
-                for (_foreign_name, huck_name, ts) in imports {
-                    if huck_name == &name {
+                for ast::ForeignImportItem { name, typ, .. } in imports {
+                    if name == &assumed_name {
                         for assumed_type in assumed_types.iter() {
-                            self.cg.explicit_instance(assumed_type.clone(), ts.clone());
+                            self.cg.explicit_instance(
+                                assumed_type.clone(),
+                                // @XXX @Cleanup: we're just replacing the type variables which are
+                                // thrown away when inserting foreign imports into the scope.
+                                typ.clone().generalize(&TypeVarSet::empty()),
+                            );
                         }
                     }
                 }
-            } else if name.source == Source::Builtin {
+            } else if assumed_name.source == Source::Builtin {
                 // @Cleanup: @DRY with Pattern::UnaryConstructor branch
                 // in ConstraintGenerator::bind_pattern
 
                 // This means that it's a compiler builtin.
-                match name.ident {
+                match assumed_name.ident {
                     "True" | "False" => assumed_types
                         .into_iter()
                         .for_each(|t| self.cg.equate(t, Type::Primitive(types::Primitive::Bool))),
@@ -251,7 +264,7 @@ impl Typechecker {
                 // so we need to resolve it at Context level later.
                 // We do this by pushing it into self.assumptions (i.e. the Context)
                 self.assumptions
-                    .entry(name)
+                    .entry(assumed_name)
                     .or_default()
                     .extend(assumed_types);
             }

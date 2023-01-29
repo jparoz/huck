@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use crate::ast;
 use crate::module::ModulePath;
 use crate::name::ResolvedName;
-use crate::types::{Type, TypeScheme};
+use crate::types::Type;
 
 /// This is the structure which represents a module
 /// which has been typechecked and processed
@@ -23,11 +23,7 @@ pub struct GeneratableModule {
 
     /// Mapping from a foreign module's require string
     /// to information necessary to generate the import.
-    //
-    // @Todo:
-    // pub foreign_imports:
-    //     BTreeMap<&'static str, Vec<ast::ForeignImportItem<Name, types::TypeScheme>>>,
-    pub foreign_imports: BTreeMap<&'static str, Vec<(ast::ForeignName, ResolvedName, TypeScheme)>>,
+    pub foreign_imports: BTreeMap<&'static str, Vec<ast::ForeignImportItem<ResolvedName, Type>>>,
     /// Vec of Lua assignments to make at the end of the module.
     pub foreign_exports: Vec<(&'static str, ast::Expr<ResolvedName>)>,
 }

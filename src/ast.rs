@@ -36,7 +36,7 @@ pub enum Statement<Name, Ty> {
     // @Cleanup: combine with the above enum (Vec::length() == 0)
     QualifiedImport(ModulePath),
     /// Includes the quotation marks in the require string
-    ForeignImport(&'static str, Vec<ForeignImportItem<Name>>),
+    ForeignImport(&'static str, Vec<ForeignImportItem<Name, Ty>>),
 
     Precedence(Name, Precedence),
 
@@ -393,7 +393,12 @@ pub struct ConstructorDefinition<Name, Ty> {
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub struct ForeignImportItem<Name>(pub ForeignName, pub Name, pub TypeScheme<Name>);
+pub struct ForeignImportItem<Name, Ty> {
+    pub foreign_name: ForeignName,
+    pub name: Name,
+    pub type_scheme: TypeScheme<Name>,
+    pub typ: Ty,
+}
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub struct ForeignName(pub &'static str);
