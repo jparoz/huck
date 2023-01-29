@@ -2,10 +2,9 @@ use std::collections::{BTreeMap, VecDeque};
 use std::fmt::{self, Debug, Write};
 use std::iter;
 
-use crate::ast::{self, Assignment, Expr, Lhs, Numeral, Pattern, Term};
-use crate::log;
 use crate::name::{ResolvedName, Source};
 use crate::types::{Primitive, Type, TypeScheme, TypeVar, TypeVarSet};
+use crate::{ast, log};
 
 use super::substitution::{ApplySub, Substitution};
 
@@ -141,7 +140,7 @@ impl ConstraintGenerator {
     }
 
     /// Returns the type of the whole pattern item, as well as emitting constraints for sub-items.
-    fn bind_pattern(&mut self, pat: &Pattern<ResolvedName>) -> Type {
+    fn bind_pattern(&mut self, pat: &ast::Pattern<ResolvedName>) -> Type {
         macro_rules! bind_function_args {
             ($cons_type:expr, $iter:expr) => {
                 $iter.fold($cons_type, |acc, arg| {
@@ -158,13 +157,13 @@ impl ConstraintGenerator {
         }
 
         match pat {
-            Pattern::Bind(name) => {
+            ast::Pattern::Bind(name) => {
                 let beta = self.fresh();
                 self.bind_assumptions_mono(name, &beta);
                 beta
             }
 
-            Pattern::List(pats) => {
+            ast::Pattern::List(pats) => {
                 let beta = self.fresh();
 
                 for pat in pats {
@@ -175,22 +174,22 @@ impl ConstraintGenerator {
 
                 Type::List(Box::new(beta))
             }
-            Pattern::Tuple(pats) => {
+            ast::Pattern::Tuple(pats) => {
                 Type::Tuple(pats.iter().map(|pat| self.bind_pattern(pat)).collect())
             }
 
-            Pattern::Numeral(Numeral::Int(_)) => Type::Primitive(Primitive::Int),
-            Pattern::Numeral(Numeral::Float(_)) => Type::Primitive(Primitive::Float),
-            Pattern::String(_) => Type::Primitive(Primitive::String),
-            Pattern::Unit => Type::Primitive(Primitive::Unit),
+            ast::Pattern::Numeral(ast::Numeral::Int(_)) => Type::Primitive(Primitive::Int),
+            ast::Pattern::Numeral(ast::Numeral::Float(_)) => Type::Primitive(Primitive::Float),
+            ast::Pattern::String(_) => Type::Primitive(Primitive::String),
+            ast::Pattern::Unit => Type::Primitive(Primitive::Unit),
 
-            Pattern::Binop { operator, lhs, rhs } => {
+            ast::Pattern::Binop { operator, lhs, rhs } => {
                 let beta = self.fresh();
                 self.assume(*operator, beta.clone());
                 bind_function_args!(beta, iter::once(lhs).chain(iter::once(rhs)))
             }
 
-            Pattern::UnaryConstructor(name) => {
+            ast::Pattern::UnaryConstructor(name) => {
                 // @Cleanup: is this the only place this can go?
                 if name.source == Source::Builtin && (name.ident == "True" || name.ident == "False")
                 {
@@ -203,7 +202,7 @@ impl ConstraintGenerator {
                     beta
                 }
             }
-            Pattern::Destructure { constructor, args } => {
+            ast::Pattern::Destructure { constructor, args } => {
                 let beta = self.fresh();
                 self.assume(*constructor, beta.clone());
                 bind_function_args!(beta, args.iter())
@@ -331,11 +330,11 @@ impl ConstraintGenerator {
         self.equate_all(typs)
     }
 
-    pub fn generate_assignment(&mut self, assign: &Assignment<ResolvedName>) -> Type {
+    pub fn generate_assignment(&mut self, assign: &ast::Assignment<ResolvedName>) -> Type {
         let (lhs, expr) = assign;
 
         match lhs {
-            Lhs::Func { args, .. } | Lhs::Lambda { args } => {
+            ast::Lhs::Func { args, .. } | ast::Lhs::Lambda { args } => {
                 args.iter()
                     .rev()
                     .fold(self.generate_expr(expr), |acc, arg| {
@@ -343,7 +342,7 @@ impl ConstraintGenerator {
                         Type::Arrow(Box::new(beta), Box::new(acc))
                     })
             }
-            Lhs::Binop { a, b, .. } => {
+            ast::Lhs::Binop { a, b, .. } => {
                 let res = self.generate_expr(expr);
                 let beta_a = self.bind_pattern(a);
                 let beta_b = self.bind_pattern(b);
@@ -356,15 +355,19 @@ impl ConstraintGenerator {
         }
     }
 
-    pub fn generate_expr(&mut self, expr: &Expr<ResolvedName>) -> Type {
+    pub fn generate_expr(&mut self, expr: &ast::Expr<ResolvedName>) -> Type {
         match expr {
-            Expr::Term(Term::Numeral(Numeral::Int(_))) => Type::Primitive(Primitive::Int),
-            Expr::Term(Term::Numeral(Numeral::Float(_))) => Type::Primitive(Primitive::Float),
-            Expr::Term(Term::String(_)) => Type::Primitive(Primitive::String),
-            Expr::Term(Term::Unit) => Type::Primitive(Primitive::Unit),
+            ast::Expr::Term(ast::Term::Numeral(ast::Numeral::Int(_))) => {
+                Type::Primitive(Primitive::Int)
+            }
+            ast::Expr::Term(ast::Term::Numeral(ast::Numeral::Float(_))) => {
+                Type::Primitive(Primitive::Float)
+            }
+            ast::Expr::Term(ast::Term::String(_)) => Type::Primitive(Primitive::String),
+            ast::Expr::Term(ast::Term::Unit) => Type::Primitive(Primitive::Unit),
 
-            Expr::Term(Term::Parens(e)) => self.generate_expr(e),
-            Expr::Term(Term::List(es)) => {
+            ast::Expr::Term(ast::Term::Parens(e)) => self.generate_expr(e),
+            ast::Expr::Term(ast::Term::List(es)) => {
                 let beta = self.fresh();
                 for e in es {
                     let e_type = self.generate_expr(e);
@@ -372,17 +375,17 @@ impl ConstraintGenerator {
                 }
                 Type::List(Box::new(beta))
             }
-            Expr::Term(Term::Tuple(es)) => {
+            ast::Expr::Term(ast::Term::Tuple(es)) => {
                 Type::Tuple(es.iter().map(|e| self.generate_expr(e)).collect())
             }
 
-            Expr::Term(Term::Name(name)) => {
+            ast::Expr::Term(ast::Term::Name(name)) => {
                 let typ = self.fresh();
                 self.assume(*name, typ.clone());
                 typ
             }
 
-            Expr::App { func, argument } => {
+            ast::Expr::App { func, argument } => {
                 let t1 = self.generate_expr(func);
                 let t2 = self.generate_expr(argument);
                 let beta = self.fresh();
@@ -394,7 +397,7 @@ impl ConstraintGenerator {
 
                 beta
             }
-            Expr::Binop { operator, lhs, rhs } => {
+            ast::Expr::Binop { operator, lhs, rhs } => {
                 let t1 = self.fresh();
                 self.assume(*operator, t1.clone());
                 let t2 = self.generate_expr(lhs);
@@ -414,7 +417,7 @@ impl ConstraintGenerator {
                 beta2
             }
 
-            Expr::Let {
+            ast::Expr::Let {
                 definitions,
                 in_expr,
             } => {
@@ -432,7 +435,7 @@ impl ConstraintGenerator {
                 beta
             }
 
-            Expr::If {
+            ast::Expr::If {
                 cond,
                 then_expr,
                 else_expr,
@@ -460,7 +463,7 @@ impl ConstraintGenerator {
                 then_type
             }
 
-            Expr::Case { expr, arms } => {
+            ast::Expr::Case { expr, arms } => {
                 let mut pat_types = Vec::new();
                 let mut arm_types = Vec::new();
                 for (pat, e) in arms {
@@ -488,7 +491,7 @@ impl ConstraintGenerator {
                 self.equate_all(arm_types)
             }
 
-            Expr::Lambda { lhs, rhs } => {
+            ast::Expr::Lambda { lhs, rhs } => {
                 let args = lhs.args();
                 let typevars: Vec<TypeVar> = args.iter().map(|_| self.fresh_var()).collect();
                 let types: Vec<Type> = typevars.iter().map(|v| Type::Var(v.clone())).collect();
@@ -514,12 +517,12 @@ impl ConstraintGenerator {
                 res
             }
 
-            Expr::Lua(_) => Type::App(
+            ast::Expr::Lua(_) => Type::App(
                 Box::new(Type::Primitive(Primitive::IO)),
                 Box::new(self.fresh()),
             ),
 
-            Expr::UnsafeLua(_) => self.fresh(),
+            ast::Expr::UnsafeLua(_) => self.fresh(),
         }
     }
 

@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::ast::{self, Statement};
+use crate::ast;
 use crate::module::ModulePath;
 use crate::name::UnresolvedName;
 use crate::precedence::{Associativity, Precedence};
@@ -18,7 +18,7 @@ fn module_declaration() {
 fn statement_import_qualified() {
     assert_eq!(
         parse::statement(r#"import Foo.Bar;"#),
-        Ok(("", Statement::QualifiedImport(ModulePath("Foo.Bar"))))
+        Ok(("", ast::Statement::QualifiedImport(ModulePath("Foo.Bar"))))
     )
 }
 
@@ -28,7 +28,7 @@ fn statement_import_unqualified() {
         parse::statement(r#"import Foo.Bar (foo, Bar);"#),
         Ok((
             "",
-            Statement::Import(
+            ast::Statement::Import(
                 ModulePath("Foo.Bar"),
                 vec![
                     UnresolvedName::Unqualified("foo"),
@@ -45,7 +45,7 @@ fn statement_import_foreign() {
         parse::statement(r#"foreign import "inspect" (inspect : forall a. a -> String);"#),
         Ok((
             "",
-            Statement::ForeignImport(
+            ast::Statement::ForeignImport(
                 r#""inspect""#,
                 vec![ast::ForeignImportItem(
                     ast::ForeignName("inspect"),
@@ -70,7 +70,7 @@ fn statement_assign_without_type() {
     // AssignmentWithoutType(Assignment<'file>),
     assert_eq!(
         parse::statement("a = 123;").unwrap().1,
-        Statement::AssignmentWithoutType((
+        ast::Statement::AssignmentWithoutType((
             ast::Lhs::Func {
                 name: UnresolvedName::Unqualified("a"),
                 args: vec![]
@@ -85,7 +85,7 @@ fn statement_assign_with_type() {
     // AssignmentWithType(TypeScheme<'file>, Assignment<'file>),
     assert_eq!(
         parse::statement("a: Int = 123;").unwrap().1,
-        Statement::AssignmentWithType(
+        ast::Statement::AssignmentWithType(
             ast::TypeScheme {
                 vars: vec![],
                 typ: ast::TypeExpr::Term(ast::TypeTerm::Concrete(UnresolvedName::Unqualified(
@@ -108,7 +108,7 @@ fn statement_type_annotation() {
     // TypeAnnotation(Name, TypeScheme<'file>),
     assert_eq!(
         parse::statement("a: Int;").unwrap().1,
-        Statement::TypeAnnotation(
+        ast::Statement::TypeAnnotation(
             UnresolvedName::Unqualified("a"),
             ast::TypeScheme {
                 vars: vec![],
@@ -125,7 +125,7 @@ fn statement_precedence() {
     // Precedence(Name, Precedence),
     assert_eq!(
         parse::statement("infixl 5 >>;").unwrap().1,
-        Statement::Precedence(
+        ast::Statement::Precedence(
             UnresolvedName::Unqualified(">>"),
             Precedence {
                 associativity: Associativity::Left,
@@ -140,7 +140,7 @@ fn statement_type_definition() {
     // TypeDefinition(TypeDefinition<'file>),
     assert_eq!(
         parse::statement("type Foo = Bar | Baz Int;").unwrap().1,
-        Statement::TypeDefinition(ast::TypeDefinition {
+        ast::Statement::TypeDefinition(ast::TypeDefinition {
             name: UnresolvedName::Unqualified("Foo"),
             vars: types::TypeVarSet::empty(),
             typ: (),
@@ -194,7 +194,7 @@ fn name_qualified_upper() {
 fn unit() {
     assert_eq!(parse::statement(r#"unit = ();"#).unwrap().1, {
         let name = UnresolvedName::Unqualified("unit");
-        Statement::AssignmentWithoutType((
+        ast::Statement::AssignmentWithoutType((
             ast::Lhs::Func { name, args: vec![] },
             ast::Expr::Term(ast::Term::Unit),
         ))
@@ -205,7 +205,7 @@ fn unit() {
 fn apply_to_unit() {
     assert_eq!(parse::statement(r#"applyToUnit f = f ();"#).unwrap().1, {
         let name = UnresolvedName::Unqualified("applyToUnit");
-        Statement::AssignmentWithoutType((
+        ast::Statement::AssignmentWithoutType((
             ast::Lhs::Func {
                 name,
                 args: vec![ast::Pattern::Bind(UnresolvedName::Unqualified("f"))],
@@ -234,7 +234,7 @@ fn case() {
         .1,
         {
             let name = UnresolvedName::Unqualified("foo");
-            Statement::AssignmentWithoutType((
+            ast::Statement::AssignmentWithoutType((
                 ast::Lhs::Func {
                     name,
                     args: vec![ast::Pattern::Bind(UnresolvedName::Unqualified("x"))],
