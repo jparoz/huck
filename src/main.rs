@@ -1,6 +1,6 @@
 mod ast;
 mod codegen;
-mod context;
+mod compile;
 mod error;
 mod log;
 mod module;
@@ -14,14 +14,15 @@ mod types;
 #[allow(dead_code)]
 mod utils;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Instant;
 
 use clap::builder::TypedValueParser as _;
 use clap::Parser;
 
-use context::Context;
+use compile::compile;
+
 use error::Error as HuckError;
 
 /// Compiler for the Huck programming language
@@ -66,36 +67,30 @@ fn do_main() -> Result<(), HuckError> {
         .format_timestamp(None)
         .init();
 
-    let mut context = Context::new();
-
     log::info!(
         log::METRICS,
         "Initialized compiler, {:?} elapsed",
         compilation_start.elapsed()
     );
 
-    let parse_start = Instant::now();
+    let mut to_compile = Vec::new();
 
-    // Add the Prelude to the context.
-    context.include_file(args.prelude)?;
+    // Add the Prelude to the list to be compiled.
+    to_compile.push(load(&args.prelude)?);
 
-    // Add all the given files to the Context.
-    for filename in args.files {
-        context.include_file(filename)?;
+    // Add all the given files to the list to be compiled.
+    // to_compile.extend(args.files.iter().map(load).collect()?);
+    for file in args.files.iter() {
+        to_compile.push(load(file)?);
     }
 
-    log::info!(
-        log::METRICS,
-        "Loaded and parsed all modules, {:?} elapsed",
-        parse_start.elapsed()
-    );
-
     // We're done adding modules, so now we can compile.
-    for (mut file_path, lua) in context.compile()? {
+    for (stem, lua) in compile(to_compile)? {
         // @Todo: make this optional via command line flag
         let lua = utils::normalize(&lua);
 
         // Write the compiled Lua to a .lua file.
+        let mut file_path = PathBuf::from(stem);
         assert!(file_path.set_extension("lua"));
         log::info!(
             log::CODEGEN,
@@ -112,4 +107,33 @@ fn do_main() -> Result<(), HuckError> {
     );
 
     Ok(())
+}
+
+/// Takes a file path, and loads the file into a format ready to be compiled.
+fn load<P>(path: P) -> Result<(String, &'static str), HuckError>
+where
+    P: AsRef<Path>,
+{
+    let mut path_buf = path.as_ref().to_path_buf();
+    path_buf.set_extension("");
+    let stem = path_buf
+        .into_os_string()
+        .into_string()
+        .map_err(|_| HuckError::BadFilePath(format!("{}", path.as_ref().display())))?;
+    let src = read_to_leaked(path)?;
+
+    Ok((stem, src))
+}
+
+/// Reads a file to a `String`, then leaks it.
+fn read_to_leaked<P>(path: P) -> std::io::Result<&'static str>
+where
+    P: AsRef<Path>,
+{
+    Ok(leak_string(std::fs::read_to_string(path)?))
+}
+
+/// Leak a string, returning a `&'static str` with its contents.
+fn leak_string(s: String) -> &'static str {
+    Box::leak(s.into_boxed_str())
 }

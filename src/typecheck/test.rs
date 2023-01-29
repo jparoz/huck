@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
-use crate::context::Context;
 use crate::module::{Module, ModulePath};
 use crate::name::{ResolvedName, Source, UnresolvedName};
+use crate::parse::parse;
 use crate::precedence::ApplyPrecedence;
 use crate::resolve::Resolver;
 use crate::typecheck::Typechecker;
@@ -18,21 +18,22 @@ macro_rules! name {
     };
 }
 
+const PRELUDE_SRC: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/huck/Prelude.hk"));
+
 /// Typechecks the given module and returns the resulting GeneratableModule.
-fn typ_module(s: &'static str) -> Module<ResolvedName, Type> {
-    let mut ctx = Context::new();
-    ctx.include_file(concat!(env!("CARGO_MANIFEST_DIR"), "/huck/Prelude.hk"))
-        .unwrap();
-    let s = Box::leak(format!("module Test; {s}").into_boxed_str());
+fn typ_module(huck: &'static str) -> Module<ResolvedName, Type> {
+    let module = Box::leak(format!("module Test; {huck}").into_boxed_str());
 
     // Parse
-    ctx.include_string(s).unwrap();
+    let mut parsed = Vec::new();
+    for src in [PRELUDE_SRC, module] {
+        let (module_path, statements) = parse(src).unwrap();
+        parsed.push((module_path, statements));
+    }
 
     // Post-parse processing
     // @XXX @Todo: don't clone
-    let modules = ctx
-        .parsed
-        .clone()
+    let modules = parsed
         .into_iter()
         .map(|(path, stats)| Ok((path, Module::from_statements(path, stats)?)))
         .collect::<Result<BTreeMap<ModulePath, Module<UnresolvedName, ()>>, crate::parse::Error>>()

@@ -1,27 +1,24 @@
 use crate::codegen;
-use crate::context::Context;
+use crate::compile::compile;
 use crate::error::Error as HuckError;
 use crate::utils::normalize;
+
+const PRELUDE_SRC: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/huck/Prelude.hk"));
 
 /// Takes some Huck and turns it into Lua, doing every step in between.
 pub fn transpile(huck: &'static str) -> Result<String, HuckError> {
     // Reset the unique ID counter to get consistent results
     codegen::CodeGenerator::reset_unique();
 
-    // Make a context with one file
-    let mut context = Context::new();
-
     // Include the prelude
-    context
-        .include_file(concat!(env!("CARGO_MANIFEST_DIR"), "/huck/Prelude.hk"))
-        .unwrap();
+    let prelude_stem = "Prelude".to_string();
 
     // Include our module
-    let huck = Box::leak(format!("module Test; {huck}").into_boxed_str());
-    context.include_string(huck)?;
+    let module = Box::leak(format!("module Test; {huck}").into_boxed_str());
+    let module_stem = "test".to_string();
 
     // Compile
-    let lua = &context.compile()?[0].1;
+    let lua = &compile(vec![(prelude_stem, PRELUDE_SRC), (module_stem, module)])?[0].1;
 
     Ok(normalize(lua))
 }

@@ -155,8 +155,9 @@ impl Module<UnresolvedName, ()> {
 
         log::info!(
             log::METRICS,
-            "Post-parsing completed, {:?} elapsed",
-            start_time.elapsed()
+            "Post-parsing module {path} completed, {time:?} elapsed",
+            time = start_time.elapsed(),
+            path = module.path,
         );
 
         Ok(module)

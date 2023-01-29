@@ -3,12 +3,12 @@ mod error;
 #[cfg(test)]
 mod test;
 
-use crate::module::Module;
+use crate::module::{Module, ModulePath};
 use crate::name::{ResolvedName, Source};
 use crate::types::Type;
 use crate::{ast, log};
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 use std::sync::atomic::{self, AtomicU64};
 use std::time::Instant;
@@ -22,10 +22,17 @@ static UNIQUE_COUNTER: AtomicU64 = AtomicU64::new(0);
 const PREFIX: &str = "_HUCK";
 
 /// Generates Lua for the given Huck module.
-pub fn generate(module: &Module<ResolvedName, Type>) -> Result<String> {
+/// `requires` is a mapping from a module's `ModulePath`
+/// to the segment of a filepath to be given to Lua's `require` function to load that module.
+pub fn generate(
+    module: &Module<ResolvedName, Type>,
+    requires: &BTreeMap<ModulePath, String>,
+) -> Result<String> {
     let start_time = Instant::now();
 
-    let generated = CodeGenerator::new(module).generate()?;
+    log::trace!(log::CODEGEN, "Generating code for module {}", module.path);
+
+    let generated = CodeGenerator::new(module, requires).generate()?;
 
     log::trace!(
         log::CODEGEN,
@@ -58,16 +65,19 @@ struct CodeGenerator<'a> {
     generated: BTreeSet<ResolvedName>,
 
     module: &'a Module<ResolvedName, Type>,
+    requires: &'a BTreeMap<ModulePath, String>,
 }
 
 impl<'a> CodeGenerator<'a> {
-    fn new(module: &'a Module<ResolvedName, Type>) -> Self {
+    fn new(
+        module: &'a Module<ResolvedName, Type>,
+        requires: &'a BTreeMap<ModulePath, String>,
+    ) -> Self {
         CodeGenerator {
-            return_entries: String::new(),
-
-            generated: BTreeSet::new(),
-
             module,
+            requires,
+            generated: BTreeSet::new(),
+            return_entries: String::new(),
         }
     }
 
@@ -564,9 +574,10 @@ impl<'a> CodeGenerator<'a> {
             Source::Module(path) => {
                 // It's a top-level definition from a different module,
                 // so we should emit e.g. require("Bar")["var"]
-                //
-                // @Fixme: need to look up the file_stem instead of just using path
-                Ok(format!(r#"require("{}")["{}"]"#, path, name.ident))
+                Ok(format!(
+                    r#"require("{}")["{}"]"#,
+                    self.requires[&path], name.ident
+                ))
             }
 
             Source::Foreign {

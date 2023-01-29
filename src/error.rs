@@ -5,8 +5,8 @@ pub enum Error {
     #[error("IO error: {0}")]
     IO(#[from] std::io::Error),
 
-    #[error("Multiple modules defined with the same name: {0}")]
-    MultipleModules(String),
+    #[error("Invalid file path: `{0}`")]
+    BadFilePath(String),
 
     #[error("Parse error: {0}")]
     Parse(#[from] parse::Error),
