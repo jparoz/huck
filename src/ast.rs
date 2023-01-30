@@ -33,8 +33,6 @@ impl<Name> Default for Definition<Name, ()> {
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum Statement<Name, Ty> {
     Import(ModulePath, Vec<Name>),
-    // @Cleanup: combine with the above enum (Vec::length() == 0)
-    QualifiedImport(ModulePath),
     /// Includes the quotation marks in the require string
     ForeignImport(&'static str, Vec<ForeignImportItem<Name, Ty>>),
 

@@ -63,10 +63,6 @@ impl Module<UnresolvedName, ()> {
                     module.imports.entry(path).or_default().extend(names)
                 }
 
-                ast::Statement::QualifiedImport(path) => {
-                    module.imports.entry(path).or_default();
-                }
-
                 ast::Statement::ForeignImport(require_string, import_items) => module
                     .foreign_imports
                     .entry(require_string)

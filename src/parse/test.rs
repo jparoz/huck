@@ -18,7 +18,10 @@ fn module_declaration() {
 fn statement_import_qualified() {
     assert_eq!(
         parse::statement(r#"import Foo.Bar;"#),
-        Ok(("", ast::Statement::QualifiedImport(ModulePath("Foo.Bar"))))
+        Ok((
+            "",
+            ast::Statement::Import(ModulePath("Foo.Bar"), Vec::new())
+        ))
     )
 }
 

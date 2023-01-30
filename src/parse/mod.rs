@@ -106,7 +106,7 @@ fn statement(input: &'static str) -> IResult<&'static str, Statement<UnresolvedN
         ),
         // Huck import statement (qualified i.e. empty)
         map(delimited(reserved("import"), module_path, semi), |path| {
-            Statement::QualifiedImport(path)
+            Statement::Import(path, vec![])
         }),
         // Foreign (Lua) import statement
         map(
