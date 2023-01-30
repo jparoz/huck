@@ -5,7 +5,7 @@ use crate::name::ResolvedName;
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Type {
-    Var(TypeVar),
+    Var(TypeVar<ResolvedName>),
     Concrete(ResolvedName),
     Primitive(Primitive),
 
@@ -66,7 +66,7 @@ pub enum Primitive {
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct TypeScheme {
-    pub vars: TypeVarSet,
+    pub vars: TypeVarSet<ResolvedName>,
     pub typ: Type,
 }
 
@@ -84,12 +84,12 @@ impl Display for TypeScheme {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
-pub enum TypeVar {
+pub enum TypeVar<Name: Ord> {
     Generated(usize),
-    Explicit(&'static str),
+    Explicit(Name),
 }
 
-impl Display for TypeVar {
+impl<Name: Display + Ord> Display for TypeVar<Name> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             TypeVar::Generated(id) => write!(f, "t{}", id),
@@ -99,34 +99,34 @@ impl Display for TypeVar {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
-pub struct TypeVarSet(BTreeSet<TypeVar>);
+pub struct TypeVarSet<Name: Ord>(BTreeSet<TypeVar<Name>>);
 
-impl TypeVarSet {
-    pub fn empty() -> TypeVarSet {
+impl<Name: Ord + Clone> TypeVarSet<Name> {
+    pub fn empty() -> TypeVarSet<Name> {
         TypeVarSet(BTreeSet::new())
     }
 
-    pub fn single(elem: TypeVar) -> TypeVarSet {
+    pub fn single(elem: TypeVar<Name>) -> TypeVarSet<Name> {
         TypeVarSet(BTreeSet::from([elem]))
     }
 
-    pub fn insert(&mut self, elem: TypeVar) -> bool {
+    pub fn insert(&mut self, elem: TypeVar<Name>) -> bool {
         self.0.insert(elem)
     }
 
-    pub fn union(&self, other: &TypeVarSet) -> TypeVarSet {
+    pub fn union(&self, other: &TypeVarSet<Name>) -> TypeVarSet<Name> {
         self.0.union(&other.0).cloned().collect()
     }
 
-    pub fn intersection(&self, other: &TypeVarSet) -> TypeVarSet {
+    pub fn intersection(&self, other: &TypeVarSet<Name>) -> TypeVarSet<Name> {
         self.0.intersection(&other.0).cloned().collect()
     }
 
-    pub fn difference(&self, other: &TypeVarSet) -> TypeVarSet {
+    pub fn difference(&self, other: &TypeVarSet<Name>) -> TypeVarSet<Name> {
         self.0.difference(&other.0).cloned().collect()
     }
 
-    pub fn contains(&self, elem: &TypeVar) -> bool {
+    pub fn contains(&self, elem: &TypeVar<Name>) -> bool {
         self.0.contains(elem)
     }
 
@@ -134,28 +134,28 @@ impl TypeVarSet {
         self.0.is_empty()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &TypeVar> {
+    pub fn iter(&self) -> impl Iterator<Item = &TypeVar<Name>> {
         self.0.iter()
     }
 
-    pub fn remove(&mut self, k: &TypeVar) -> bool {
+    pub fn remove(&mut self, k: &TypeVar<Name>) -> bool {
         self.0.remove(k)
     }
 }
 
-impl IntoIterator for TypeVarSet {
-    type Item = TypeVar;
-    type IntoIter = <BTreeSet<TypeVar> as IntoIterator>::IntoIter;
+impl<Name: Ord> IntoIterator for TypeVarSet<Name> {
+    type Item = TypeVar<Name>;
+    type IntoIter = <BTreeSet<TypeVar<Name>> as IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
     }
 }
 
-impl Extend<TypeVar> for TypeVarSet {
+impl<Name: Ord + Clone> Extend<TypeVar<Name>> for TypeVarSet<Name> {
     fn extend<T>(&mut self, iter: T)
     where
-        T: IntoIterator<Item = TypeVar>,
+        T: IntoIterator<Item = TypeVar<Name>>,
     {
         for tv in iter {
             self.insert(tv);
@@ -163,13 +163,13 @@ impl Extend<TypeVar> for TypeVarSet {
     }
 }
 
-impl FromIterator<TypeVar> for TypeVarSet {
-    fn from_iter<I: IntoIterator<Item = TypeVar>>(iter: I) -> Self {
+impl<Name: Ord> FromIterator<TypeVar<Name>> for TypeVarSet<Name> {
+    fn from_iter<I: IntoIterator<Item = TypeVar<Name>>>(iter: I) -> Self {
         TypeVarSet(BTreeSet::from_iter(iter))
     }
 }
 
-impl Display for TypeVarSet {
+impl<Name: Ord + Display> Display for TypeVarSet<Name> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{{ ")?;
         for v in self.0.iter() {

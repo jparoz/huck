@@ -31,7 +31,7 @@ impl<Name> Default for Definition<Name, ()> {
 
 /// A Statement is a sum type for any of the top-level Huck constructs.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub enum Statement<Name, Ty> {
+pub enum Statement<Name: Ord, Ty> {
     Import(ModulePath, Vec<Name>),
     /// Includes the quotation marks in the require string
     ForeignImport(&'static str, Vec<ForeignImportItem<Name, Ty>>),
@@ -352,7 +352,7 @@ impl<Name: Display + Copy> Display for Term<Name> {
 /// e.g. in `id : forall a. a;` the TypeScheme represents `forall a. a`.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub struct TypeScheme<Name> {
-    pub vars: Vec<&'static str>,
+    pub vars: Vec<Name>,
     pub typ: TypeExpr<Name>,
 }
 
@@ -367,7 +367,7 @@ pub enum TypeExpr<Name> {
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub enum TypeTerm<Name> {
     Concrete(Name),
-    Var(&'static str),
+    Var(Name),
     Parens(Box<TypeExpr<Name>>),
     List(Box<TypeExpr<Name>>),
     Tuple(Vec<TypeExpr<Name>>),
@@ -376,9 +376,9 @@ pub enum TypeTerm<Name> {
 
 /// Parsed representation of a new type definition (e.g. `type Foo = Bar;`).
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub struct TypeDefinition<Name, Ty> {
+pub struct TypeDefinition<Name: Ord, Ty> {
     pub name: Name,
-    pub vars: types::TypeVarSet,
+    pub vars: types::TypeVarSet<Name>,
     pub constructors: BTreeMap<Name, ConstructorDefinition<Name, Ty>>,
     pub typ: Ty,
 }

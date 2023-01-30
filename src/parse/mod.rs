@@ -251,7 +251,7 @@ fn type_scheme(input: &'static str) -> IResult<&'static str, TypeScheme<Unresolv
         nom_tuple((
             opt(preceded(
                 reserved("forall"),
-                terminated(many1(ws(lower_ident)), ws(tag("."))),
+                terminated(many1(ws(lower_name)), ws(tag("."))),
             )),
             type_expr,
         )),
@@ -292,7 +292,7 @@ fn type_term(input: &'static str) -> IResult<&'static str, TypeTerm<UnresolvedNa
         map(ws(upper_ident), |s| {
             TypeTerm::Concrete(UnresolvedName::Unqualified(s))
         }),
-        map(ws(lower_ident), TypeTerm::Var),
+        map(ws(lower_name), TypeTerm::Var),
         map(delimited(ws(tag("[")), type_expr, ws(tag("]"))), |t| {
             TypeTerm::List(Box::new(t))
         }),
@@ -489,6 +489,10 @@ fn unqualified_name(input: &'static str) -> IResult<&'static str, UnresolvedName
     ws(map(ident, UnresolvedName::Unqualified))(input)
 }
 
+fn lower_name(input: &'static str) -> IResult<&'static str, UnresolvedName> {
+    ws(map(lower_ident, UnresolvedName::Unqualified))(input)
+}
+
 fn upper_name(input: &'static str) -> IResult<&'static str, UnresolvedName> {
     ws(map(upper_ident, UnresolvedName::Unqualified))(input)
 }
@@ -521,14 +525,14 @@ fn constructor_definition(
 
 fn constructor_lhs(
     input: &'static str,
-) -> IResult<&'static str, (UnresolvedName, types::TypeVarSet)> {
+) -> IResult<&'static str, (UnresolvedName, types::TypeVarSet<UnresolvedName>)> {
     nom_tuple((upper_name, type_vars))(input)
 }
 
-fn type_vars(input: &'static str) -> IResult<&'static str, types::TypeVarSet> {
-    map(many0(ws(lower_ident)), |vars| {
+fn type_vars(input: &'static str) -> IResult<&'static str, types::TypeVarSet<UnresolvedName>> {
+    map(many0(ws(lower_name)), |vars| {
         let mut set = types::TypeVarSet::empty();
-        for s in vars.iter() {
+        for s in vars {
             let var = types::TypeVar::Explicit(s);
             set.insert(var);
         }

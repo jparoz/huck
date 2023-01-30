@@ -11,16 +11,16 @@ use super::substitution::{ApplySub, Substitution};
 #[derive(PartialEq, Eq, Clone)]
 pub enum Constraint {
     Equality(Type, Type),
-    ImplicitInstance(Type, Type, TypeVarSet),
+    ImplicitInstance(Type, Type, TypeVarSet<ResolvedName>),
     ExplicitInstance(Type, TypeScheme),
 }
 
 trait ActiveVars {
-    fn active_vars(&self) -> TypeVarSet;
+    fn active_vars(&self) -> TypeVarSet<ResolvedName>;
 }
 
 impl ActiveVars for Constraint {
-    fn active_vars(&self) -> TypeVarSet {
+    fn active_vars(&self) -> TypeVarSet<ResolvedName> {
         match self {
             Constraint::Equality(t1, t2) => t1.free_vars().union(&t2.free_vars()),
             Constraint::ExplicitInstance(t, sigma) => t.free_vars().union(&sigma.free_vars()),
@@ -32,7 +32,7 @@ impl ActiveVars for Constraint {
 }
 
 impl ActiveVars for &[Constraint] {
-    fn active_vars(&self) -> TypeVarSet {
+    fn active_vars(&self) -> TypeVarSet<ResolvedName> {
         self.iter()
             .map(Constraint::active_vars)
             .reduce(|vars1, vars2| vars1.union(&vars2))
@@ -41,7 +41,7 @@ impl ActiveVars for &[Constraint] {
 }
 
 impl ActiveVars for VecDeque<Constraint> {
-    fn active_vars(&self) -> TypeVarSet {
+    fn active_vars(&self) -> TypeVarSet<ResolvedName> {
         let (a, b) = self.as_slices();
         a.active_vars().union(&b.active_vars())
     }
@@ -68,12 +68,12 @@ pub struct ConstraintGenerator {
     /// All the currently assumed types of name uses.
     pub(super) assumptions: BTreeMap<ResolvedName, Vec<Type>>,
 
-    m_stack: Vec<TypeVar>,
+    m_stack: Vec<TypeVar<ResolvedName>>,
 }
 
 impl ConstraintGenerator {
     /// Generates a new and unique TypeVar each time it's called.
-    fn fresh_var(&mut self) -> TypeVar {
+    fn fresh_var(&mut self) -> TypeVar<ResolvedName> {
         use std::sync::atomic::{self, AtomicUsize};
 
         static UNIQUE_COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -234,7 +234,10 @@ impl ConstraintGenerator {
                     "Bound (poly): {} to type {} (M = {})",
                     name,
                     typ,
-                    self.m_stack.iter().cloned().collect::<TypeVarSet>()
+                    self.m_stack
+                        .iter()
+                        .cloned()
+                        .collect::<TypeVarSet<ResolvedName>>()
                 );
             }
         }
@@ -493,7 +496,8 @@ impl ConstraintGenerator {
 
             ast::Expr::Lambda { lhs, rhs } => {
                 let args = lhs.args();
-                let typevars: Vec<TypeVar> = args.iter().map(|_| self.fresh_var()).collect();
+                let typevars: Vec<TypeVar<ResolvedName>> =
+                    args.iter().map(|_| self.fresh_var()).collect();
                 let types: Vec<Type> = typevars.iter().map(|v| Type::Var(v.clone())).collect();
                 let typevar_count = typevars.len();
 
@@ -529,7 +533,8 @@ impl ConstraintGenerator {
     // Type-level generation methods
 
     pub fn generate_type_scheme(&mut self, input: &ast::TypeScheme<ResolvedName>) -> TypeScheme {
-        let vars: TypeVarSet = input.vars.iter().map(|v| TypeVar::Explicit(v)).collect();
+        let vars: TypeVarSet<ResolvedName> =
+            input.vars.iter().map(|v| TypeVar::Explicit(*v)).collect();
 
         let typ = self.generate_type_expr(&input.typ);
 
@@ -635,7 +640,7 @@ impl ConstraintGenerator {
 
             ast::TypeTerm::Concrete(s) => Type::Concrete(*s),
 
-            ast::TypeTerm::Var(v) => Type::Var(TypeVar::Explicit(v)),
+            ast::TypeTerm::Var(v) => Type::Var(TypeVar::Explicit(*v)),
 
             ast::TypeTerm::Parens(e) => self.generate_type_expr(e),
             ast::TypeTerm::List(e) => Type::List(Box::new(self.generate_type_expr(e))),

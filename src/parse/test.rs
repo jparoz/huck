@@ -55,12 +55,14 @@ fn statement_import_foreign() {
                     name: UnresolvedName::Unqualified("inspect"),
                     type_scheme: ast::TypeScheme {
                         typ: ast::TypeExpr::Arrow(
-                            Box::new(ast::TypeExpr::Term(ast::TypeTerm::Var("a"))),
+                            Box::new(ast::TypeExpr::Term(ast::TypeTerm::Var(
+                                UnresolvedName::Unqualified("a")
+                            ))),
                             Box::new(ast::TypeExpr::Term(ast::TypeTerm::Concrete(
                                 UnresolvedName::Unqualified("String")
                             )))
                         ),
-                        vars: vec!["a"]
+                        vars: vec![UnresolvedName::Unqualified("a")]
                     },
                     typ: (),
                 }]

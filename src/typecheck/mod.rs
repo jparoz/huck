@@ -339,7 +339,7 @@ impl Typechecker {
 }
 
 impl Type {
-    fn free_vars(&self) -> TypeVarSet {
+    fn free_vars(&self) -> TypeVarSet<ResolvedName> {
         match self {
             Type::Concrete(_) | Type::Primitive(_) => TypeVarSet::empty(),
 
@@ -353,7 +353,7 @@ impl Type {
     }
 
     /// Takes a Type and quantifies all free type variables, except the ones given in type_set.
-    fn generalize(&self, type_set: &TypeVarSet) -> TypeScheme {
+    fn generalize(&self, type_set: &TypeVarSet<ResolvedName>) -> TypeScheme {
         TypeScheme {
             vars: self.free_vars().difference(type_set),
             typ: self.clone(),
@@ -402,7 +402,7 @@ impl Type {
 }
 
 impl TypeScheme {
-    fn free_vars(&self) -> TypeVarSet {
+    fn free_vars(&self) -> TypeVarSet<ResolvedName> {
         self.typ.free_vars().difference(&self.vars)
     }
 }

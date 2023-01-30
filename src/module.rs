@@ -12,7 +12,7 @@ use crate::{ast, log, parse};
 /// and collecting statements referring to the same function
 /// into a single `Definition` struct for each function name.
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Module<Name, Ty> {
+pub struct Module<Name: Ord, Ty> {
     pub path: ModulePath,
     pub definitions: BTreeMap<Name, ast::Definition<Name, Ty>>,
 
@@ -27,7 +27,7 @@ pub struct Module<Name, Ty> {
     pub foreign_exports: Vec<(&'static str, ast::Expr<Name>)>,
 }
 
-impl<Name, Ty> Module<Name, Ty> {
+impl<Name: Ord, Ty> Module<Name, Ty> {
     pub fn new(path: ModulePath) -> Self {
         Self {
             path,

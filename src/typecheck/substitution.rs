@@ -2,16 +2,17 @@ use std::collections::BTreeMap;
 use std::fmt::{self, Debug};
 
 use super::constraint::Constraint;
+use crate::name::ResolvedName;
 use crate::types::{Type, TypeScheme, TypeVar, TypeVarSet};
 
-pub struct Substitution(BTreeMap<TypeVar, Type>);
+pub struct Substitution(BTreeMap<TypeVar<ResolvedName>, Type>);
 
 impl Substitution {
     pub fn empty() -> Self {
         Substitution(BTreeMap::new())
     }
 
-    pub fn single(fr: TypeVar, to: Type) -> Self {
+    pub fn single(fr: TypeVar<ResolvedName>, to: Type) -> Self {
         Substitution(BTreeMap::from([(fr, to)]))
     }
 
@@ -30,19 +31,19 @@ impl Substitution {
         next
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&TypeVar, &Type)> {
+    pub fn iter(&self) -> impl Iterator<Item = (&TypeVar<ResolvedName>, &Type)> {
         self.0.iter()
     }
 
-    fn get(&self, k: &TypeVar) -> Option<&Type> {
+    fn get(&self, k: &TypeVar<ResolvedName>) -> Option<&Type> {
         self.0.get(k)
     }
 }
 
-impl FromIterator<(TypeVar, Type)> for Substitution {
+impl FromIterator<(TypeVar<ResolvedName>, Type)> for Substitution {
     fn from_iter<T>(iter: T) -> Self
     where
-        T: IntoIterator<Item = (TypeVar, Type)>,
+        T: IntoIterator<Item = (TypeVar<ResolvedName>, Type)>,
     {
         Substitution(BTreeMap::from_iter(iter))
     }
@@ -117,7 +118,7 @@ impl ApplySub for TypeScheme {
     }
 }
 
-impl ApplySub for TypeVarSet {
+impl ApplySub for TypeVarSet<ResolvedName> {
     fn apply(&mut self, sub: &Substitution) {
         let start_set = self.clone();
         for var in start_set {

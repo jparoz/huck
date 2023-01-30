@@ -5,6 +5,7 @@ use std::time::Instant;
 
 use crate::module::{Module, ModulePath};
 use crate::name::{ResolvedName, Source, UnresolvedName};
+use crate::types::TypeVar;
 use crate::{ast, log};
 
 /// This struct manages name resolution in a single module.
@@ -702,6 +703,23 @@ impl Resolver {
     ) -> Result<ast::TypeDefinition<ResolvedName, Ty>, Error> {
         let name = self.resolve_type_name(type_defn.name)?;
 
+        let bindings: Vec<_> = type_defn
+            .vars
+            .iter()
+            .flat_map(|v| {
+                if let TypeVar::Explicit(name) = v {
+                    Some(Binding::local(*name))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Add the type variables from the type definition LHS into the scope
+        for b in bindings.iter() {
+            self.bind_type(*b);
+        }
+
         let mut constructors = BTreeMap::new();
         for unres_constr in type_defn.constructors.into_values() {
             let name = self.resolve_name(unres_constr.name)?;
@@ -722,10 +740,25 @@ impl Resolver {
             );
         }
 
+        let mut vars = Vec::new();
+        for var in type_defn.vars {
+            let res_var = match var {
+                TypeVar::Explicit(name) => TypeVar::Explicit(self.resolve_type_name(name)?),
+                TypeVar::Generated(id) => TypeVar::Generated(id),
+            };
+            vars.push(res_var);
+        }
+        let vars = vars.into_iter().collect();
+
+        // Take the type variables out of scope
+        for b in bindings {
+            self.unbind_type(b);
+        }
+
         Ok(ast::TypeDefinition {
             name,
             constructors,
-            vars: type_defn.vars,
+            vars,
             typ: type_defn.typ,
         })
     }
@@ -734,12 +767,7 @@ impl Resolver {
         &mut self,
         unres_ts: ast::TypeScheme<UnresolvedName>,
     ) -> Result<ast::TypeScheme<ResolvedName>, Error> {
-        let bindings: Vec<_> = unres_ts
-            .vars
-            .iter()
-            // @Cleanup: this doesn't seem like the right place to make it an UnresolvedName...
-            .map(|v| Binding::local(UnresolvedName::Unqualified(v)))
-            .collect();
+        let bindings: Vec<_> = unres_ts.vars.iter().map(|v| Binding::local(*v)).collect();
 
         for b in bindings.iter() {
             self.bind_type(*b);
@@ -747,14 +775,16 @@ impl Resolver {
 
         let typ = self.resolve_type_expr(unres_ts.typ)?;
 
+        let mut vars = Vec::new();
+        for var in unres_ts.vars {
+            vars.push(self.resolve_type_name(var)?);
+        }
+
         for b in bindings {
             self.unbind_type(b);
         }
 
-        Ok(ast::TypeScheme {
-            vars: unres_ts.vars,
-            typ,
-        })
+        Ok(ast::TypeScheme { vars, typ })
     }
 
     fn resolve_type_expr(
@@ -787,14 +817,7 @@ impl Resolver {
                 Ok(ast::TypeTerm::Concrete(res_type_name))
             }
 
-            // @Todo @Checkme: do we need to do something here? Oh well for now
-            // ast::TypeTerm::Var(var_s) => {
-            //     let res_type_name =
-            //         // @Cleanup: This matches the UnresolvedName::Unqualified in resolve_type_scheme
-            //         self.resolve_type_name(UnresolvedName::Unqualified(var_s))?;
-            //     Ok((ast::TypeTerm::Var(res_type_name)))
-            // }
-            ast::TypeTerm::Var(v) => Ok(ast::TypeTerm::Var(v)),
+            ast::TypeTerm::Var(var) => Ok(ast::TypeTerm::Var(self.resolve_type_name(var)?)),
 
             ast::TypeTerm::Parens(type_expr) => Ok(ast::TypeTerm::Parens(Box::new(
                 self.resolve_type_expr(*type_expr)?,
