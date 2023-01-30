@@ -183,7 +183,7 @@ impl<'a> CodeGenerator<'a> {
         }
 
         // Write out the return statement
-        write!(lua, "return {{\n{}}}", self.return_entries)?;
+        writeln!(lua, "return {{\n{}}}", self.return_entries)?;
 
         Ok(lua)
     }
