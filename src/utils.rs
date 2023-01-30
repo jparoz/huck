@@ -42,3 +42,19 @@ pub fn normalize(lua: &str) -> String {
 
     res
 }
+
+#[allow(unused_macros)]
+macro_rules! unwrap_match {
+    ($rhs:expr, $pat:pat => $bound:expr) => {
+        match $rhs {
+            $pat => $bound,
+            _ => panic!(
+                "Tried to unwrap_match {rhs} with pattern {pat}",
+                rhs = $rhs,
+                pat = stringify!($pat)
+            ),
+        }
+    };
+}
+#[allow(unused_imports)]
+pub(crate) use unwrap_match;

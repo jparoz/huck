@@ -7,6 +7,7 @@ use crate::precedence::ApplyPrecedence;
 use crate::resolve::Resolver;
 use crate::typecheck::Typechecker;
 use crate::types::{Primitive, Type};
+use crate::utils::unwrap_match;
 
 /// Shorthand to make a ResolvedName.
 macro_rules! name {
@@ -129,26 +130,13 @@ fn function_id() {
     let typ = typ(r#"id a = a;"#);
 
     assert!(matches!(typ, Type::Arrow(_, _)));
-
-    let (l, r) = if let Type::Arrow(l, r) = typ {
-        (l, r)
-    } else {
-        unreachable!()
-    };
+    let (l, r) = unwrap_match!(typ, Type::Arrow(l, r) => (l, r));
 
     assert!(matches!(*l, Type::Var(_)));
-    let l_var = if let Type::Var(var) = *l {
-        var
-    } else {
-        unreachable!()
-    };
+    let l_var = unwrap_match!(*l, Type::Var(var) => var);
 
     assert!(matches!(*r, Type::Var(_)));
-    let r_var = if let Type::Var(var) = *r {
-        var
-    } else {
-        unreachable!()
-    };
+    let r_var = unwrap_match!(*r, Type::Var(var) => var);
 
     assert_eq!(l_var, r_var);
 }
@@ -159,19 +147,11 @@ fn function_const() {
 
     assert!(matches!(typ, Type::Arrow(_, _)));
 
-    let (l, r) = if let Type::Arrow(l, r) = typ {
-        (l, r)
-    } else {
-        unreachable!()
-    };
+    let (l, r) = unwrap_match!(typ, Type::Arrow(l, r) => (l, r));
     assert!(matches!(*l, Type::Var(_)));
     assert!(matches!(*r, Type::Arrow(_, _)));
 
-    let (r_l, r_r) = if let Type::Arrow(r_l, r_r) = *r {
-        (r_l, r_r)
-    } else {
-        unreachable!()
-    };
+    let (r_l, r_r) = unwrap_match!(*r, Type::Arrow(l, r) => (l, r));
     assert!(matches!(*r_l, Type::Var(_)));
     assert!(matches!(*r_r, Type::Var(_)));
 }
@@ -216,11 +196,7 @@ fn constructor_unary_returned() {
 
     assert!(matches!(val.typ, Type::Arrow(_, _)));
 
-    let (l, r) = if let Type::Arrow(l, r) = val.typ {
-        (l, r)
-    } else {
-        unreachable!()
-    };
+    let (l, r) = unwrap_match!(val.typ, Type::Arrow(l, r) => (l, r));
     assert!(matches!(*l, Type::Var(_)));
     assert!(matches!(*r, Type::Concrete(foo) if foo == name!("Foo")));
 }
@@ -308,19 +284,11 @@ fn constructor_newtype_generic_var() {
 
     assert!(matches!(val.typ, Type::Arrow(_, _)));
 
-    let (l, r) = if let Type::Arrow(l, r) = val.typ {
-        (l, r)
-    } else {
-        unreachable!()
-    };
+    let (l, r) = unwrap_match!(val.typ, Type::Arrow(l, r) => (l, r));
     assert!(matches!(*l, Type::Var(_)));
     assert!(matches!(*r, Type::App(_, _)));
 
-    let (constr, inner) = if let Type::App(constr, inner) = *r {
-        (constr, inner)
-    } else {
-        unreachable!()
-    };
+    let (constr, inner) = unwrap_match!(*r, Type::App(c, i) => (c, i));
     assert!(matches!(*constr, Type::Concrete(foo) if foo == name!("Foo")));
     assert!(matches!(*inner, Type::Var(_)));
 }

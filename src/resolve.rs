@@ -6,6 +6,7 @@ use std::time::Instant;
 use crate::module::{Module, ModulePath};
 use crate::name::{ResolvedName, Source, UnresolvedName};
 use crate::types::TypeVar;
+use crate::utils::unwrap_match;
 use crate::{ast, log};
 
 /// This struct manages name resolution in a single module.
@@ -264,11 +265,7 @@ impl Resolver {
 
         // Assumptions about value-level names
         for assumption in self.scope.assumptions.drain(..) {
-            let path = if let Source::Module(path) = assumption.source {
-                path
-            } else {
-                unreachable!()
-            };
+            let path = unwrap_match!(assumption.source, Source::Module(path) => path);
 
             let module = modules.get(&path).ok_or(Error::NonexistentModule(path))?;
 
@@ -286,11 +283,7 @@ impl Resolver {
 
         // Assumptions about type-level names
         for assumption in self.type_scope.assumptions.drain(..) {
-            let path = if let Source::Module(path) = assumption.source {
-                path
-            } else {
-                unreachable!()
-            };
+            let path = unwrap_match!(assumption.source, Source::Module(path) => path);
 
             let module = modules.get(&path).ok_or(Error::NonexistentModule(path))?;
 
@@ -306,11 +299,7 @@ impl Resolver {
 
         // Assumptions arising from imports (so we don't know if type- or value-level)
         for assumption in self.assumptions.drain(..) {
-            let path = if let Source::Module(path) = assumption.source {
-                path
-            } else {
-                unreachable!()
-            };
+            let path = unwrap_match!(assumption.source, Source::Module(path) => path);
 
             let module = modules.get(&path).ok_or(Error::NonexistentModule(path))?;
 
@@ -1078,11 +1067,7 @@ impl ast::Expr<ResolvedName> {
 
             Expr::Lambda { lhs, rhs } => {
                 assert!(matches!(lhs, Lhs::Lambda { .. }));
-
-                let args = match lhs {
-                    Lhs::Lambda { args } => args,
-                    _ => unreachable!(),
-                };
+                let args = unwrap_match!(lhs, Lhs::Lambda { args } => args);
 
                 let mut sub_deps = BTreeSet::new();
 
