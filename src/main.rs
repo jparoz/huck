@@ -51,11 +51,12 @@ struct Args {
         )]
     log: log_crate::LevelFilter,
 
-    /// Format Lua output using lua-format
+    // normalize
     #[arg(
         name = "normalize",
         long = "normalize",
         alias = "normalise",
+        help = "Format Lua output using lua-format [default]",
         overrides_with_all = ["normalize", "no-normalize"]
     )]
     normalize: bool,
