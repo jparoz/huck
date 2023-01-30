@@ -27,7 +27,12 @@ use error::Error as HuckError;
 
 /// Compiler for the Huck programming language
 #[derive(Parser, Debug)]
-#[command(version, about, arg_required_else_help(true))]
+#[command(
+    version,
+    about,
+    arg_required_else_help(true),
+    group(clap::ArgGroup::new("normalize-group").args(["normalize", "no-normalize"]))
+    )]
 struct Args {
     /// Use this file as the prelude
     #[arg(short = 'P', long, value_name = "FILE", value_hint = clap::ValueHint::DirPath,
@@ -45,6 +50,24 @@ struct Args {
                 .map(|s| log_crate::LevelFilter::from_str(&s).unwrap()),
         )]
     log: log_crate::LevelFilter,
+
+    /// Format Lua output using lua-format
+    #[arg(
+        name = "normalize",
+        long = "normalize",
+        alias = "normalise",
+        overrides_with_all = ["normalize", "no-normalize"]
+    )]
+    normalize: bool,
+
+    /// Don't format Lua output
+    #[arg(
+        name = "no-normalize",
+        long = "no-normalize",
+        alias = "no-normalise",
+        overrides_with_all = ["normalize", "no-normalize"]
+    )]
+    _no_normalize: bool,
 
     /// Input files to be included in compilation
     files: Vec<PathBuf>,
@@ -85,9 +108,10 @@ fn do_main() -> Result<(), HuckError> {
     }
 
     // We're done adding modules, so now we can compile.
-    for (stem, lua) in compile(to_compile)? {
-        // @Todo: make this optional via command line flag
-        let lua = utils::normalize(&lua);
+    for (stem, mut lua) in compile(to_compile)? {
+        if args.normalize {
+            lua = utils::normalize(&lua);
+        }
 
         // Write the compiled Lua to a .lua file.
         let mut file_path = PathBuf::from(stem);
