@@ -1,1 +1,4 @@
-foo a b = lua { a + b };
+module Short;
+
+id : forall a. a -> a;
+id x = x;

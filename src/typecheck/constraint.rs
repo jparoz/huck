@@ -323,6 +323,10 @@ impl ConstraintGenerator {
 
         // If there's an explicit type, include that as well.
         if let Some(ref explicit_type_scheme) = definition.explicit_type {
+            log::trace!(
+                log::TYPECHECK,
+                "Including explicit type scheme: {explicit_type_scheme:?}",
+            );
             let ts = self.generate_type_scheme(explicit_type_scheme);
             typs.push(self.instantiate(ts));
         }

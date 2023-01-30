@@ -59,13 +59,17 @@ impl Typechecker {
 
             // Generate constraints for each definition, while keeping track of inferred types
             for (name, defn) in module.definitions {
+                log::trace!(log::TYPECHECK, "Inferring type for {name}");
+
                 let typ = self.cg.generate_definition(&defn);
+
                 log::trace!(
                     log::TYPECHECK,
                     "Initial inferred type for {}: {}",
                     name,
                     typ
                 );
+
                 let typed_defn = {
                     let ast::Definition {
                         assignments,
