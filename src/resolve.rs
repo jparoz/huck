@@ -700,15 +700,10 @@ impl Resolver {
         &mut self,
         type_defn: ast::TypeDefinition<UnresolvedName, Ty>,
     ) -> Result<ast::TypeDefinition<ResolvedName, Ty>, Error> {
-        // @Checkme: do we need to bind any more names,
-        // or did we do that already in resolve?
-
-        // @Cleanup: do we need to resolve this?
         let name = self.resolve_type_name(type_defn.name)?;
 
         let mut constructors = BTreeMap::new();
         for unres_constr in type_defn.constructors.into_values() {
-            // @Cleanup: do we need to resolve this?
             let name = self.resolve_name(unres_constr.name)?;
 
             let mut args = Vec::new();

@@ -32,7 +32,6 @@ fn typ_module(huck: &'static str) -> Module<ResolvedName, Type> {
     }
 
     // Post-parse processing
-    // @XXX @Todo: don't clone
     let modules = parsed
         .into_iter()
         .map(|(path, stats)| Ok((path, Module::from_statements(path, stats)?)))

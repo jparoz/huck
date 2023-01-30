@@ -103,7 +103,6 @@ fn do_main() -> Result<(), HuckError> {
     to_compile.push(load(&args.prelude)?);
 
     // Add all the given files to the list to be compiled.
-    // to_compile.extend(args.files.iter().map(load).collect()?);
     for file in args.files.iter() {
         to_compile.push(load(file)?);
     }
