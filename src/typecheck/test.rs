@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::module::{Module, ModulePath};
-use crate::name::{ResolvedName, Source, UnresolvedName};
+use crate::name::{ResolvedName, Source};
 use crate::parse::parse;
 use crate::precedence::ApplyPrecedence;
 use crate::resolve::Resolver;
@@ -33,20 +33,27 @@ fn typ_module(huck: &'static str) -> Module<ResolvedName, Type> {
     }
 
     // Post-parse processing
-    let modules = parsed
+    let mut modules: BTreeMap<_, _> = parsed
         .into_iter()
-        .map(|(path, stats)| Ok((path, Module::from_statements(path, stats)?)))
-        .collect::<Result<BTreeMap<ModulePath, Module<UnresolvedName, ()>>, crate::parse::Error>>()
-        .unwrap();
+        .map(|(path, stats)| (path, Module::from_statements(path, stats).unwrap()))
+        .collect();
 
     // Resolve
-    let mut resolved_modules = BTreeMap::new();
     let mut resolver = Resolver::new();
-    for (path, module) in modules {
-        let resolved_module = resolver.resolve(module).unwrap();
-        resolved_modules.insert(path, resolved_module);
-        resolver.clear_scopes();
+
+    // Start with the prelude...
+    let prelude_path = ModulePath("Prelude");
+    if let Some(unresolved_prelude) = modules.remove(&prelude_path) {
+        resolver.resolve_prelude(unresolved_prelude).unwrap();
     }
+
+    // Then resolve all other modules.
+    for module in modules.into_values() {
+        resolver.resolve_module(module).unwrap();
+    }
+
+    // Check that any qualified names used actually exist.
+    let mut resolved_modules = resolver.check_assumptions().unwrap();
 
     // Apply operator precedences
     let mut precs = BTreeMap::new();

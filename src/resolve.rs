@@ -9,22 +9,21 @@ use crate::types::TypeVar;
 use crate::utils::unwrap_match;
 use crate::{ast, log};
 
-/// This struct manages name resolution in a single module.
+/// This struct manages name resolution across all modules.
 /// The following example illustrates which names are held in which `Scope`
 /// (value-level or type-level):
 /// `type Foo a = Bar a Int;`
 /// In this example, `Foo`, `a`, and `Int` are all type-level names;
 /// `Bar` is a value-level name.
-#[derive(Clone)]
 pub struct Resolver {
-    /// The path of the module which the `Scope` represents.
-    module_path: ModulePath,
+    /// The modules which have already been resolved.
+    pub modules: BTreeMap<ModulePath, Module<ResolvedName, ()>>,
 
-    /// The `Scope` used for value-level names.
+    /// The `Scope` used for implicitly-imported value-level names.
     scope: Scope,
 
-    /// The `Scope` used for type-level names.
-    type_scope: Scope,
+    /// The `Scope` used for implicitly-imported type-level names.
+    type_scope: TypeScope,
 
     /// Holds assumptions about imported names,
     /// without knowing whether they're value- or type-level.
@@ -46,7 +45,7 @@ impl Resolver {
             ..Scope::default()
         };
 
-        let type_scope = Scope {
+        let type_scope = TypeScope {
             names: BTreeMap::from([
                 (UnresolvedName::Unqualified("Int"), vec![Source::Builtin]),
                 (UnresolvedName::Unqualified("Float"), vec![Source::Builtin]),
@@ -58,27 +57,187 @@ impl Resolver {
         };
 
         Resolver {
-            // @XXX @Fixme: use an Option or something
-            module_path: ModulePath("XXX"),
             scope,
             type_scope,
+            modules: BTreeMap::new(),
             assumptions: Vec::new(),
             module_assumptions: Vec::new(),
         }
     }
 
-    pub fn resolve(
-        &mut self,
+    /// Resolves the given module as the Prelude, adding it to self.modules.
+    pub fn resolve_prelude(&mut self, module: Module<UnresolvedName, ()>) -> Result<(), Error> {
+        let module_resolver = ModuleResolver::new(self, module.path);
+
+        // Keep the Prelude module's scopes,
+        // because they'll be used in resolving other modules.
+        let (resolved, scope, type_scope) = module_resolver.resolve(module)?;
+        self.modules.insert(resolved.path, resolved);
+
+        // Include the module_resolver's environment into the self,
+        // so that it will be implicitly imported into other modules.
+        self.scope.names.extend(scope.names);
+        self.type_scope.names.extend(type_scope.names);
+
+        Ok(())
+    }
+
+    /// Resolves the given module, adding it to self.modules.
+    pub fn resolve_module(&mut self, module: Module<UnresolvedName, ()>) -> Result<(), Error> {
+        let module_resolver = ModuleResolver::new(self, module.path);
+
+        // Throw away the module's scopes,
+        // because they're not used in resolving other modules.
+        let (resolved, _scope, _type_scope) = module_resolver.resolve(module)?;
+        self.modules.insert(resolved.path, resolved);
+
+        Ok(())
+    }
+
+    /// Checks that any assumptions made in the resolved modules,
+    /// and return the resolved modules.
+    pub fn check_assumptions(
+        mut self,
+    ) -> Result<BTreeMap<ModulePath, Module<ResolvedName, ()>>, Error> {
+        log::trace!(log::RESOLVE, "Checking resolution assumptions");
+
+        // Assumptions about modules
+        for assumption in self.module_assumptions.drain(..) {
+            if !self.modules.contains_key(&assumption) {
+                return Err(Error::NonexistentModule(assumption));
+            }
+        }
+
+        // Assumptions about value-level names
+        for assumption in self.scope.assumptions.drain(..) {
+            let path = unwrap_match!(assumption.source, Source::Module(path) => path);
+
+            let module = self
+                .modules
+                .get(&path)
+                .ok_or(Error::NonexistentModule(path))?;
+
+            if !(module.definitions.contains_key(&assumption)
+                || module.constructors.contains_key(&assumption))
+            {
+                return Err(Error::NonexistentValueName(
+                    assumption.ident,
+                    assumption.source,
+                ));
+            }
+
+            log::trace!(log::RESOLVE, "  Found name {assumption}");
+        }
+
+        // Assumptions about type-level names
+        for assumption in self.type_scope.assumptions.drain(..) {
+            let path = unwrap_match!(assumption.source, Source::Module(path) => path);
+
+            let module = self
+                .modules
+                .get(&path)
+                .ok_or(Error::NonexistentModule(path))?;
+
+            if !(module.type_definitions.contains_key(&assumption)) {
+                return Err(Error::NonexistentTypeName(
+                    assumption.ident,
+                    assumption.source,
+                ));
+            }
+
+            log::trace!(log::RESOLVE, "  Found name {assumption}");
+        }
+
+        // Assumptions arising from imports (so we don't know if type- or value-level)
+        for assumption in self.assumptions.drain(..) {
+            let path = unwrap_match!(assumption.source, Source::Module(path) => path);
+
+            let module = self
+                .modules
+                .get(&path)
+                .ok_or(Error::NonexistentModule(path))?;
+
+            if !(module.definitions.contains_key(&assumption)
+                || module.constructors.contains_key(&assumption)
+                || module.type_definitions.contains_key(&assumption))
+            {
+                return Err(Error::NonexistentName(assumption.ident, assumption.source));
+            }
+
+            log::trace!(log::RESOLVE, "  Found name {assumption}");
+        }
+
+        Ok(self.modules)
+    }
+}
+
+impl fmt::Debug for Resolver {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Resolver:")?;
+        for (name, sources) in self.scope.names.iter() {
+            if sources.is_empty() {
+                // writeln!(f, "  {name}: \t\t[no longer in scope]")?;
+            } else {
+                // @Todo: something better here
+                writeln!(f, "  {name}: \t{sources:?}")?;
+            }
+        }
+
+        for (name, sources) in self.type_scope.names.iter() {
+            if sources.is_empty() {
+                // writeln!(f, "  {name}: \t\t[no longer in scope]")?;
+            } else {
+                // @Todo: something better here
+                writeln!(f, "  type {name}: \t{sources:?}")?;
+            }
+        }
+
+        writeln!(f, "Assumptions: {{")?;
+        for assumption in self.scope.assumptions.iter() {
+            writeln!(f, "  {assumption:?}")?;
+        }
+        for assumption in self.type_scope.assumptions.iter() {
+            writeln!(f, "  {assumption:?}")?;
+        }
+        writeln!(f, "}}")?;
+
+        Ok(())
+    }
+}
+
+pub struct ModuleResolver<'a> {
+    /// The parent `Resolver`, which contains implicit imports (e.g. builtins, Prelude)
+    resolver: &'a mut Resolver,
+
+    /// The path of the module being resolved.
+    module_path: ModulePath,
+
+    /// The `Scope` used for value-level names.
+    scope: Scope,
+
+    /// The `Scope` used for type-level names.
+    type_scope: TypeScope,
+}
+
+impl<'a> ModuleResolver<'a> {
+    fn new(resolver: &'a mut Resolver, module_path: ModulePath) -> Self {
+        ModuleResolver {
+            resolver,
+            module_path,
+            scope: Scope::default(),
+            type_scope: TypeScope::default(),
+        }
+    }
+
+    fn resolve(
+        mut self,
         module: Module<UnresolvedName, ()>,
-    ) -> Result<Module<ResolvedName, ()>, Error> {
+    ) -> Result<(Module<ResolvedName, ()>, Scope, TypeScope), Error> {
         let start_time = Instant::now();
         log::trace!(log::RESOLVE, "Resolving module {}", module.path);
 
         // This is the new module we'll be building as we resolve names.
         let mut resolved_module: Module<ResolvedName, ()> = Module::new(module.path);
-
-        // Set the current module path.
-        self.module_path = module.path;
 
         // Add all the top-level definitions (including type constructors) to the scope
         let defns_iter = module.definitions.keys();
@@ -107,7 +266,7 @@ impl Resolver {
         // Add all the imports to the scope as well as resolving the names.
         for (path, names) in module.imports {
             // Assume that the module exists, to be checked later.
-            self.module_assumptions.push(path);
+            self.resolver.module_assumptions.push(path);
 
             // Handle the imported names.
             for name in names {
@@ -129,7 +288,7 @@ impl Resolver {
 
                 // Assume that the module and the imported name both exist,
                 // to be checked later.
-                self.assumptions.push(resolved);
+                self.resolver.assumptions.push(resolved);
                 log::trace!(log::RESOLVE, "  Assumed name `{resolved}` exists");
 
                 // Replicate into the new module, resolving the import's name.
@@ -239,81 +398,7 @@ impl Resolver {
             start_time.elapsed()
         );
 
-        Ok(resolved_module)
-    }
-
-    /// Clears out any names from the scope which aren't Prelude or builtin names.
-    pub fn clear_scopes(&mut self) {
-        for (_name, sources) in self.scope.names.iter_mut() {
-            sources.retain(|s| s == &Source::Builtin || s == &Source::Module(ModulePath("Prelude")))
-        }
-    }
-
-    /// Checks that any assumptions made in the scope exist in the given map of modules.
-    pub fn check_assumptions(
-        &mut self,
-        modules: &BTreeMap<ModulePath, Module<ResolvedName, ()>>,
-    ) -> Result<(), Error> {
-        log::trace!(log::RESOLVE, "Checking resolution assumptions");
-
-        // Assumptions about modules
-        for assumption in self.module_assumptions.drain(..) {
-            if !modules.contains_key(&assumption) {
-                return Err(Error::NonexistentModule(assumption));
-            }
-        }
-
-        // Assumptions about value-level names
-        for assumption in self.scope.assumptions.drain(..) {
-            let path = unwrap_match!(assumption.source, Source::Module(path) => path);
-
-            let module = modules.get(&path).ok_or(Error::NonexistentModule(path))?;
-
-            if !(module.definitions.contains_key(&assumption)
-                || module.constructors.contains_key(&assumption))
-            {
-                return Err(Error::NonexistentValueName(
-                    assumption.ident,
-                    assumption.source,
-                ));
-            }
-
-            log::trace!(log::RESOLVE, "  Found name {assumption}");
-        }
-
-        // Assumptions about type-level names
-        for assumption in self.type_scope.assumptions.drain(..) {
-            let path = unwrap_match!(assumption.source, Source::Module(path) => path);
-
-            let module = modules.get(&path).ok_or(Error::NonexistentModule(path))?;
-
-            if !(module.type_definitions.contains_key(&assumption)) {
-                return Err(Error::NonexistentTypeName(
-                    assumption.ident,
-                    assumption.source,
-                ));
-            }
-
-            log::trace!(log::RESOLVE, "  Found name {assumption}");
-        }
-
-        // Assumptions arising from imports (so we don't know if type- or value-level)
-        for assumption in self.assumptions.drain(..) {
-            let path = unwrap_match!(assumption.source, Source::Module(path) => path);
-
-            let module = modules.get(&path).ok_or(Error::NonexistentModule(path))?;
-
-            if !(module.definitions.contains_key(&assumption)
-                || module.constructors.contains_key(&assumption)
-                || module.type_definitions.contains_key(&assumption))
-            {
-                return Err(Error::NonexistentName(assumption.ident, assumption.source));
-            }
-
-            log::trace!(log::RESOLVE, "  Found name {assumption}");
-        }
-
-        Ok(())
+        Ok((resolved_module, self.scope, self.type_scope))
     }
 
     /// Adds the given `Binding` to the value scope.
@@ -352,12 +437,24 @@ impl Resolver {
 
     fn resolve_name(&mut self, name: UnresolvedName) -> Result<ResolvedName, Error> {
         log::trace!(log::RESOLVE, "  Attempting to resolve name `{name}`");
-        self.scope.resolve_name(name, self.module_path)
+        // First check the current module...
+        self.scope
+            .resolve_name(name, self.module_path)
+            // then check the parent scope (builtins and Prelude).
+            .or_else(|_| self.resolver.scope.resolve_name(name, self.module_path))
     }
 
     fn resolve_type_name(&mut self, name: UnresolvedName) -> Result<ResolvedName, Error> {
         log::trace!(log::RESOLVE, "  Attempting to resolve type name `{name}`");
-        self.type_scope.resolve_name(name, self.module_path)
+        // First check the current module...
+        self.type_scope
+            .resolve_name(name, self.module_path)
+            // then check the parent type scope (builtins and Prelude).
+            .or_else(|_| {
+                self.resolver
+                    .type_scope
+                    .resolve_name(name, self.module_path)
+            })
     }
 
     fn resolve_definition(
@@ -830,9 +927,9 @@ impl Resolver {
     }
 }
 
-impl fmt::Debug for Resolver {
+impl<'a> fmt::Debug for ModuleResolver<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Resolver (current module {}):", self.module_path)?;
+        writeln!(f, "ModuleResolver (module {}):", self.module_path)?;
         for (name, sources) in self.scope.names.iter() {
             if sources.is_empty() {
                 // writeln!(f, "  {name}: \t\t[no longer in scope]")?;
@@ -875,6 +972,9 @@ struct Scope {
     assumptions: Vec<ResolvedName>,
 }
 
+/// A `TypeScope` is just a `Scope`, but aliased for clearer usage.
+type TypeScope = Scope;
+
 impl Scope {
     /// Adds the given `Binding` to the scope.
     fn bind(&mut self, Binding(source, name): Binding) {
@@ -895,7 +995,7 @@ impl Scope {
     /// Does the work for resolving a name in this scope.
     /// `module_path` is just used for error messages.
     ///
-    /// See also [`Resolver::resolve_name`] and [`Resolver::resolve_type_name`].
+    /// See also [`ModuleResolver::resolve_name`] and [`ModuleResolver::resolve_type_name`].
     fn resolve_name(
         &mut self,
         name: UnresolvedName,

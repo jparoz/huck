@@ -42,28 +42,21 @@ pub fn compile(input: Vec<(String, &'static str)>) -> Result<Vec<(String, String
         .collect::<Result<BTreeMap<ModulePath, Module<UnresolvedName, ()>>, HuckError>>()?;
 
     // Resolve names
-    let mut resolved_modules = BTreeMap::new();
     let mut resolver = resolve::Resolver::new();
 
     // Start with the prelude...
     let prelude_path = ModulePath("Prelude");
     if let Some(unresolved_prelude) = parsed_modules.remove(&prelude_path) {
-        let resolved_prelude = resolver.resolve(unresolved_prelude)?;
-        resolved_modules.insert(prelude_path, resolved_prelude);
+        resolver.resolve_prelude(unresolved_prelude)?;
     }
 
     // Then resolve all other modules.
-    for (path, module) in parsed_modules {
-        let resolved_module = resolver.resolve(module)?;
-        resolved_modules.insert(path, resolved_module);
-
-        // Clear out the scope of variables defined in this module.
-        // Possibly we should do this in a more thoughtful way.
-        resolver.clear_scopes();
+    for module in parsed_modules.into_values() {
+        resolver.resolve_module(module)?;
     }
 
     // Check that any qualified names used actually exist.
-    resolver.check_assumptions(&resolved_modules)?;
+    let mut resolved_modules = resolver.check_assumptions()?;
 
     // Apply operator precedences
     let mut precs = BTreeMap::new();
