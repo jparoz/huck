@@ -127,18 +127,6 @@ impl ConstraintGenerator {
         beta
     }
 
-    /// Takes a TypeScheme and replaces all quantified variables with fresh variables;
-    /// then returns the resulting Type.
-    fn instantiate(&mut self, ts: TypeScheme) -> Type {
-        let TypeScheme { vars, mut typ } = ts;
-        let sub = vars
-            .into_iter()
-            .zip(iter::repeat_with(|| self.fresh()))
-            .collect();
-        typ.apply(&sub);
-        typ
-    }
-
     /// Returns the type of the whole pattern item, as well as emitting constraints for sub-items.
     fn bind_pattern(&mut self, pat: &ast::Pattern<ResolvedName>) -> Type {
         macro_rules! bind_function_args {
@@ -274,7 +262,7 @@ impl ConstraintGenerator {
                 }
 
                 Constraint::ExplicitInstance(t, ts) => {
-                    let new_constraint = Constraint::Equality(t, self.instantiate(ts));
+                    let new_constraint = Constraint::Equality(t, ts.instantiate());
                     write!(new_str, "{new_constraint:?}").unwrap();
                     constraints.push_back(new_constraint)
                 }
@@ -328,7 +316,7 @@ impl ConstraintGenerator {
                 "Including explicit type scheme: {explicit_type_scheme:?}",
             );
             let ts = self.generate_type_scheme(explicit_type_scheme);
-            typs.push(self.instantiate(ts));
+            typs.push(ts.instantiate());
         }
 
         // Constrain that each inferred assignment,

@@ -148,8 +148,7 @@ impl Typechecker {
                         .push(ast::ForeignImportItem {
                             foreign_name,
                             name,
-                            // @XXX @Fixme: this throws away the type variables.
-                            typ: self.cg.generate_type_scheme(&type_scheme).typ,
+                            typ: self.cg.generate_type_scheme(&type_scheme).instantiate(),
                             type_scheme,
                         });
                 }
@@ -258,8 +257,10 @@ impl Typechecker {
                         for assumed_type in assumed_types.iter() {
                             self.cg.explicit_instance(
                                 assumed_type.clone(),
-                                // @XXX @Cleanup: we're just replacing the type variables which are
+                                // @Note: we're just replacing the type variables which are
                                 // thrown away when inserting foreign imports into the scope.
+                                // This could possibly be done in a more sensible way;
+                                // but this is at least consistent and correct.
                                 typ.clone().generalize(&TypeVarSet::empty()),
                             );
                         }
@@ -357,10 +358,10 @@ impl Type {
     }
 
     /// Takes a Type and quantifies all free type variables, except the ones given in type_set.
-    fn generalize(&self, type_set: &TypeVarSet<ResolvedName>) -> TypeScheme {
+    fn generalize(self, type_set: &TypeVarSet<ResolvedName>) -> TypeScheme {
         TypeScheme {
             vars: self.free_vars().difference(type_set),
-            typ: self.clone(),
+            typ: self,
         }
     }
 
@@ -408,6 +409,25 @@ impl Type {
 impl TypeScheme {
     fn free_vars(&self) -> TypeVarSet<ResolvedName> {
         self.typ.free_vars().difference(&self.vars)
+    }
+
+    /// Takes a `TypeScheme` and throws away the quantifier.
+    /// This is equivalent to replacing the quantified variables
+    /// with new free variables,
+    /// but it better preserves variable names.
+    // @Note: The doc comment here used to read:
+    //
+    // Takes a TypeScheme and replaces all quantified variables with fresh variables;
+    // then returns the resulting Type.
+    //
+    // The current implementation doesn't do this;
+    // it simply drops the quantification.
+    // This is equivalent to the previous behaviour,
+    // because it turns all the quantified variables into free variables,
+    // just without renaming them.
+    #[inline]
+    fn instantiate(self) -> Type {
+        self.typ
     }
 }
 
