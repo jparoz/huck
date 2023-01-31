@@ -31,10 +31,9 @@ pub fn normalize(lua: &str) -> Result<String, HuckError> {
         .unwrap();
     write!(child.stdin.take().unwrap(), "{}", lua).unwrap();
 
-    let exit_status = child.wait().unwrap();
     let output = child.wait_with_output().unwrap();
 
-    if !exit_status.success() {
+    if !output.status.success() {
         let stderr = String::from_utf8(output.stdout).expect("lua-format should have utf-8 stderr");
         return Err(HuckError::NormalizeFailed(stderr));
     }

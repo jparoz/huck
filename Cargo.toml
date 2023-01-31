@@ -16,3 +16,4 @@ clap = { version = "4.1", features = ["derive"] }
 
 [dev-dependencies]
 test-log = "0.2.11"
+assert_cmd = "2.0"
