@@ -24,26 +24,36 @@ and is not currently ready for production use!
 - [x] Case expressions
 
 ## 0.2
-- [ ] Imports of Huck modules
-- [ ] Imports of Lua modules (foreign)
-- [ ] Prelude
+- [x] Imports of Huck modules
+- [x] Imports of Lua modules (foreign)
+- [x] Structured name resolution
+- [x] Prelude
+- [ ] More complete testing
+- [ ] More readable and comprehensive example code
 
 ## 0.3
-- [ ] Internal compilerwork: overhaul AST
+- [ ] Internal compiler work: overhaul AST
 - [ ] Tuple function arguments for uncurried functions
 - [ ] Type-level binops
 - [ ] Type constructor binops
 - [ ] Backtick binops (e.g. `3 \`elem\` [1, 2, 3]`)
 
 ## 0.4
+- [ ] Record types
+- [ ] Ability to create mixed Lua tables (i.e. both a map and a list)
+
+## 0.5
 - [ ] Improved errors
 - [ ] Exhaustiveness checking in definitions and case statements
 
-## 0.5
+## 0.6
 - [ ] Lazy values (optional)
 
-## 0.6
+## 0.7
 - [ ] Type classes
 
-## 0.7
+## 0.8
 - [ ] Optimisations
+
+## 0.9
+- [ ] REPL
