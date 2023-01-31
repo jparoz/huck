@@ -219,13 +219,13 @@ pub enum Expr<Name> {
         definitions: BTreeMap<Name, Vec<Assignment<Name>>>,
         in_expr: Box<Expr<Name>>,
     },
-    // @Todo: test this
+    // @CheckMe: test this
     If {
         cond: Box<Expr<Name>>,
         then_expr: Box<Expr<Name>>,
         else_expr: Box<Expr<Name>>,
     },
-    // @Todo: test this
+    // @CheckMe: test this
     Case {
         expr: Box<Expr<Name>>,
         arms: Vec<(Pattern<Name>, Expr<Name>)>,
@@ -234,9 +234,9 @@ pub enum Expr<Name> {
         lhs: Lhs<Name>,
         rhs: Box<Expr<Name>>,
     },
-    // @Todo: test this
+    // @CheckMe: test this
     Lua(&'static str),
-    // @Todo: test this
+    // @CheckMe: test this
     UnsafeLua(&'static str),
 }
 

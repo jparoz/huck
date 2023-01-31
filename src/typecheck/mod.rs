@@ -118,7 +118,7 @@ impl Typechecker {
                     log::IMPORT,
                     "Inserting into scope of {module_path}: import {path} ({names:?})"
                 );
-                // @Todo @Errors: check for name clashes
+                // @Errors: check for name clashes
                 typechecked_module
                     .imports
                     .entry(path)
@@ -140,7 +140,7 @@ impl Typechecker {
                         "Inserting into scope of {module_path}: \
                          foreign import {require_string} ({foreign_name} as {name})"
                     );
-                    // @Todo @Errors: check for name clashes
+                    // @Errors: check for name clashes
                     typechecked_module
                         .foreign_imports
                         .entry(require_string)
@@ -169,7 +169,7 @@ impl Typechecker {
                 );
                 let prelude_gm: &Module<ResolvedName, Type> = &typechecked_modules[&prelude_path];
 
-                // @Todo @Checkme @Errors @Warn: name clashes
+                // @Errors @Warn: name clashes
                 typechecked_module
                     .imports
                     .entry(prelude_path)
@@ -199,8 +199,6 @@ impl Typechecker {
         // Solve the type constraints
         let soln = self.cg.solve()?;
 
-        // @Todo: apply soln to the Module<ResolvedName, Type> directly,
-        // after impl ApplySub for Module<ResolvedName, Type>
         // Apply the solution to each Module<ResolvedName, Type>.
         for module in typechecked_modules.values_mut() {
             log::info!(log::TYPECHECK, "module {}:", module.path);
@@ -330,7 +328,7 @@ impl Typechecker {
                             self.cg.implicit_instance(assumed_type, typ.clone());
                         }
                     } else {
-                        // @Todo @Errors @Warn: emit a warning for unused imports
+                        // @Errors @Warn: emit a warning for unused imports
                         if import_path != &ModulePath("Prelude") {
                             log::warn!(log::IMPORT, "unused: import {import_path} ({import_name})");
                         }

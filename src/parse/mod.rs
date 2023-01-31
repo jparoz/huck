@@ -715,7 +715,7 @@ pub enum Error {
     #[error("Nom error: {0}")]
     Nom(#[from] nom::error::Error<&'static str>),
 
-    // @Todo @Errors: convert this into a parse error which exposes the underlying cause from Nom
+    // @Errors: convert this into a parse error which exposes the underlying cause from Nom
     #[error("Leftover input: {0}")]
     Leftover(String),
 

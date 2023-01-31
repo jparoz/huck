@@ -177,19 +177,13 @@ impl fmt::Debug for Resolver {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Resolver:")?;
         for (name, sources) in self.scope.names.iter() {
-            if sources.is_empty() {
-                // writeln!(f, "  {name}: \t\t[no longer in scope]")?;
-            } else {
-                // @Todo: something better here
+            if !sources.is_empty() {
                 writeln!(f, "  {name}: \t{sources:?}")?;
             }
         }
 
         for (name, sources) in self.type_scope.names.iter() {
-            if sources.is_empty() {
-                // writeln!(f, "  {name}: \t\t[no longer in scope]")?;
-            } else {
-                // @Todo: something better here
+            if !sources.is_empty() {
                 writeln!(f, "  type {name}: \t{sources:?}")?;
             }
         }
@@ -251,7 +245,6 @@ impl<'a> ModuleResolver<'a> {
 
         for name in defns_iter.chain(constrs_iter) {
             log::trace!(log::RESOLVE, "Adding `{name}` to the top-level scope");
-            // @Todo @Checkme @Errors: can we collide here? if so, we should check that first.
             self.bind(Binding::module(module.path, *name));
         }
 
@@ -261,7 +254,6 @@ impl<'a> ModuleResolver<'a> {
                 log::RESOLVE,
                 "Adding `{type_name}` to the top-level type scope"
             );
-            // @Todo @Checkme @Errors: can we collide here? if so, we should check that first.
             self.bind_type(Binding::module(module.path, *type_name));
         }
 
@@ -278,9 +270,9 @@ impl<'a> ModuleResolver<'a> {
                 );
 
                 // Check that it's the right type of name.
-                // @Todo @Errors: this should throw an error
-                // (that is, if this is reachable; maybe it's already a parse error.
-                // Actually, this should definitely be a parse error.)
+                // @Errors: this should throw an error
+                //   (that is, if this is reachable; maybe it's already a parse error.
+                //   Actually, this should definitely be a parse error.)
                 assert!(matches!(name, UnresolvedName::Unqualified(_)));
 
                 let resolved = ResolvedName {
@@ -301,7 +293,6 @@ impl<'a> ModuleResolver<'a> {
                     .push(resolved);
 
                 // Insert it into the scope
-                // @Todo @Checkme @Errors: can we collide here? if so, we should check that first.
                 self.bind(Binding::module(path, name));
             }
         }
@@ -322,9 +313,9 @@ impl<'a> ModuleResolver<'a> {
                 );
 
                 // Check that it's the right type of name.
-                // @Todo @Errors: this should throw an error
-                // (that is, if this is reachable; maybe it's already a parse error.
-                // Actually, this should definitely be a parse error.)
+                // @Errors: this should throw an error
+                //   (that is, if this is reachable; maybe it's already a parse error.
+                //   Actually, this should definitely be a parse error.)
                 assert!(matches!(name, UnresolvedName::Unqualified(_)));
 
                 let source = Source::Foreign {
@@ -348,7 +339,6 @@ impl<'a> ModuleResolver<'a> {
                     });
 
                 // Insert it into the scope
-                // @Todo @Checkme @Errors: can we collide here? if so, we should check that first.
                 self.bind(Binding::foreign(require, foreign_name, name));
             }
         }
@@ -959,19 +949,13 @@ impl<'a> fmt::Debug for ModuleResolver<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "ModuleResolver (module {}):", self.module_path)?;
         for (name, sources) in self.scope.names.iter() {
-            if sources.is_empty() {
-                // writeln!(f, "  {name}: \t\t[no longer in scope]")?;
-            } else {
-                // @Todo: something better here
+            if !sources.is_empty() {
                 writeln!(f, "  {name}: \t{sources:?}")?;
             }
         }
 
         for (name, sources) in self.type_scope.names.iter() {
-            if sources.is_empty() {
-                // writeln!(f, "  {name}: \t\t[no longer in scope]")?;
-            } else {
-                // @Todo: something better here
+            if !sources.is_empty() {
                 writeln!(f, "  type {name}: \t{sources:?}")?;
             }
         }
