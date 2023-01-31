@@ -79,6 +79,8 @@ impl Resolver {
         self.scope.names.extend(scope.names);
         self.type_scope.names.extend(type_scope.names);
 
+        log::trace!(log::RESOLVE, "{self:?}");
+
         Ok(())
     }
 
@@ -390,6 +392,8 @@ impl<'a> ModuleResolver<'a> {
             let res_expr = self.resolve_expr(unres_expr)?;
             resolved_module.foreign_exports.push((lua_lhs, res_expr));
         }
+
+        log::trace!(log::RESOLVE, "{self:?}");
 
         log::info!(
             log::METRICS,
