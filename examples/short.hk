@@ -1,4 +1,4 @@
 module Short;
 
 True && True = True;
-_a && _b = False;
+_ && _ = False;

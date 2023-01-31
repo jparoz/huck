@@ -213,6 +213,7 @@ fn lhs(input: &'static str) -> IResult<&'static str, Lhs<UnresolvedName>> {
 
 fn pattern(input: &'static str) -> IResult<&'static str, Pattern<UnresolvedName>> {
     alt((
+        pattern_underscore,
         map(ws(lower_ident), |v| {
             Pattern::Bind(UnresolvedName::Unqualified(v))
         }),
@@ -239,6 +240,13 @@ fn pattern_binop(input: &'static str) -> IResult<&'static str, Pattern<Unresolve
             lhs: Box::new(lhs),
             rhs: Box::new(rhs),
         },
+    )(input)
+}
+
+fn pattern_underscore(input: &'static str) -> IResult<&'static str, Pattern<UnresolvedName>> {
+    value(
+        Pattern::Underscore,
+        ws(terminated(tag("_"), peek(not(satisfy(is_name_char))))),
     )(input)
 }
 
@@ -442,7 +450,7 @@ fn lower_ident(input: &'static str) -> IResult<&'static str, &'static str> {
             satisfy(is_var_start_char),
             many0(satisfy(is_name_char)),
         ))),
-        |s| !is_reserved(s),
+        |s| !(is_reserved(s) || s == "_"),
     )(input)
 }
 

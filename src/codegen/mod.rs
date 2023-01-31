@@ -633,6 +633,10 @@ fn pattern_match(
             bindings.push(format!("local {} = {}\n", lua_local(s.ident), lua_arg_name));
         }
 
+        // Because underscore is not a legal identifier,
+        // we don't need to bind anything at all.
+        ast::Pattern::Underscore => (),
+
         // @Note: the Lua logic is identical for Huck lists and tuples.
         // This is because they have the same representation in Lua: a heterogenous list!
         ast::Pattern::List(list) | ast::Pattern::Tuple(list) => {

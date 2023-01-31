@@ -122,6 +122,7 @@ impl<Name: Display> Display for Lhs<Name> {
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub enum Pattern<Name> {
     Bind(Name),
+    Underscore,
     List(Vec<Pattern<Name>>),
     Tuple(Vec<Pattern<Name>>),
     Numeral(Numeral),
@@ -158,7 +159,8 @@ impl<Name: Copy> Pattern<Name> {
             Pattern::Numeral(_)
             | Pattern::String(_)
             | Pattern::UnaryConstructor(_)
-            | Pattern::Unit => Vec::new(),
+            | Pattern::Unit
+            | Pattern::Underscore => Vec::new(),
         }
     }
 }
@@ -167,7 +169,8 @@ impl<Name: Display> Display for Pattern<Name> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use Pattern::*;
         match self {
-            Bind(n) => write!(f, "{}", n),
+            Bind(n) => write!(f, "{n}"),
+            Underscore => write!(f, "_"),
             List(v) => write!(
                 f,
                 "[{}]",
@@ -184,18 +187,17 @@ impl<Name: Display> Display for Pattern<Name> {
                     .collect::<Vec<std::string::String>>()
                     .join(", ")
             ),
-            Numeral(n) => write!(f, "{}", n),
-            String(s) => write!(f, "{}", s),
-            Binop { operator, lhs, rhs } => {
-                write!(f, "({} {} {})", lhs, operator, rhs)
-            }
-            UnaryConstructor(name) => write!(f, "{}", name),
+            Numeral(n) => write!(f, "{n}"),
+            String(s) => write!(f, "{s}"),
+            Binop { operator, lhs, rhs } => write!(f, "({lhs} {operator} {rhs})"),
+
+            UnaryConstructor(name) => write!(f, "{name}"),
             Unit => write!(f, "()"),
             Destructure { constructor, args } => {
                 write!(f, "(")?;
-                write!(f, "{}", constructor)?;
+                write!(f, "{constructor}")?;
                 for arg in args {
-                    write!(f, " {}", arg)?;
+                    write!(f, " {arg}")?;
                 }
                 write!(f, ")")
             }

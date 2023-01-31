@@ -110,7 +110,7 @@ fn function_not() {
 #[test]
 fn function_and() {
     assert_eq!(
-        transpile(r#"True && True = True; _a && _b = False;"#).unwrap(),
+        transpile(r#"True && True = True; _ && _ = False;"#).unwrap(),
         normalize(wrap!(
             "&&",
             r#"
@@ -120,8 +120,6 @@ fn function_and() {
                             (_HUCK_1 == true) then
                                 return true
                             end
-                            local _a = _HUCK_0
-                            local _b = _HUCK_1
                             return false
                     end
                 end
