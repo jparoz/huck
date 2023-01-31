@@ -41,8 +41,8 @@ mod test {
     fn error_bad_file_path() {
         use std::{ffi::OsString, os::unix::prelude::OsStringExt};
 
-        //                              invalid UTF-8     .     h     k
-        let path = OsString::from_vec(vec![0xC3, 0x28, 0x2E, 0x68, 0x6B]);
+        // \xC3\x28 is invalid UTF-8
+        let path = OsString::from_vec(Vec::from(&b"\xC3\x28.hk"[..]));
         assert!(matches!(
             dbg!(crate::load(&path)),
             Err(Error::BadFilePath(_))
