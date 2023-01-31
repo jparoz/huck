@@ -10,14 +10,10 @@ use crate::{ast, log};
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
-use std::sync::atomic::{self, AtomicU64};
 use std::time::Instant;
 
 pub use error::Error;
 use error::Error as CodegenError;
-
-/// Used for generating unique variable IDs.
-static UNIQUE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 const PREFIX: &str = "_HUCK";
 
@@ -66,6 +62,9 @@ struct CodeGenerator<'a> {
 
     module: &'a Module<ResolvedName, Type>,
     requires: &'a BTreeMap<ModulePath, String>,
+
+    /// Used for generating unique variable IDs.
+    unique_counter: u64,
 }
 
 impl<'a> CodeGenerator<'a> {
@@ -78,6 +77,7 @@ impl<'a> CodeGenerator<'a> {
             requires,
             generated: BTreeSet::new(),
             return_entries: String::new(),
+            unique_counter: 0,
         }
     }
 
@@ -320,7 +320,7 @@ impl<'a> CodeGenerator<'a> {
 
         let mut has_unconditional_branch = false;
 
-        let id = Self::unique();
+        let id = self.unique();
 
         // Start a new scope.
         writeln!(lua, "(function()")?;
@@ -392,7 +392,7 @@ impl<'a> CodeGenerator<'a> {
 
         // Start the functions
         for i in 0..arg_count {
-            let id = Self::unique();
+            let id = self.unique();
             ids.push(id);
 
             writeln!(lua, "function({}_{})", PREFIX, ids[i])?;
@@ -532,7 +532,7 @@ impl<'a> CodeGenerator<'a> {
 
         // Start the functions
         while let Type::Arrow(_a, b) = constr_type {
-            let id = Self::unique();
+            let id = self.unique();
             ids.push(id);
 
             writeln!(lua, "function({}_{})", PREFIX, id)?;
@@ -606,14 +606,10 @@ impl<'a> CodeGenerator<'a> {
     }
 
     /// Generates a new and unique u64 each time it's called.
-    fn unique() -> u64 {
-        UNIQUE_COUNTER.fetch_add(1, atomic::Ordering::Relaxed)
-    }
-
-    /// Resets the unique ID counter.
-    #[cfg(test)]
-    pub fn reset_unique() {
-        UNIQUE_COUNTER.store(0, atomic::Ordering::Relaxed);
+    fn unique(&mut self) -> u64 {
+        let id = self.unique_counter;
+        self.unique_counter += 1;
+        id
     }
 }
 

@@ -1,4 +1,4 @@
 module Short;
 
-id : forall a. a -> a;
-id x = x;
+True && True = True;
+_a && _b = False;

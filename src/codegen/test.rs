@@ -1,4 +1,3 @@
-use crate::codegen;
 use test_log::test;
 
 use crate::compile::compile;
@@ -9,9 +8,6 @@ const PRELUDE_SRC: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/huc
 
 /// Takes some Huck and turns it into Lua, doing every step in between.
 pub fn transpile(huck: &'static str) -> Result<String, HuckError> {
-    // Reset the unique ID counter to get consistent results
-    codegen::CodeGenerator::reset_unique();
-
     // Include the prelude
     let prelude_stem = "Prelude".to_string();
 
@@ -20,9 +16,15 @@ pub fn transpile(huck: &'static str) -> Result<String, HuckError> {
     let module_stem = "test".to_string();
 
     // Compile
-    let lua = &compile(vec![(prelude_stem, PRELUDE_SRC), (module_stem, module)])?[0].1;
-
-    Ok(normalize(lua))
+    for (stem, lua) in compile(vec![
+        (prelude_stem, PRELUDE_SRC),
+        (module_stem.clone(), module),
+    ])? {
+        if stem == module_stem {
+            return Ok(normalize(&lua));
+        }
+    }
+    unreachable!()
 }
 
 macro_rules! wrap {
@@ -49,8 +51,6 @@ fn lambda_equals_function() {
     )
 }
 
-// @Todo @XXX @Test: figure out a better way to test this post-Prelude
-#[ignore]
 #[test]
 fn function_const() {
     assert_eq!(
@@ -70,8 +70,6 @@ fn function_const() {
     )
 }
 
-// @Todo @XXX @Test: figure out a better way to test this post-Prelude
-#[ignore]
 #[test]
 fn function_id() {
     assert_eq!(
@@ -88,8 +86,6 @@ fn function_id() {
     )
 }
 
-// @Prelude
-#[ignore]
 #[test]
 fn function_not() {
     assert_eq!(
@@ -98,37 +94,35 @@ fn function_not() {
             "not",
             r#"
                 function(_HUCK_0)
-                    if (getmetatable(_HUCK_0).__variant == "True") then
-                        return False
+                    if (_HUCK_0 == true) then
+                        return false
                     end
-                    if (getmetatable(_HUCK_0).__variant == "False") then
-                        return True
+                    if (_HUCK_0 == false) then
+                        return true
                     end
-                    error("Unmatched pattern in function `not`")
+                    error("Unmatched pattern in function `Test.not`")
                 end
             "#
         ))
     )
 }
 
-// @Prelude
-#[ignore]
 #[test]
 fn function_and() {
     assert_eq!(
-        transpile(r#"True && True = True; _ && _ = False;"#).unwrap(),
+        transpile(r#"True && True = True; _a && _b = False;"#).unwrap(),
         normalize(wrap!(
             "&&",
             r#"
                 function(_HUCK_0)
                     return function(_HUCK_1)
-                        if (getmetatable(_HUCK_0).__variant == "True") and
-                            (getmetatable(_HUCK_1).__variant == "True") then
-                                return True
+                        if (_HUCK_0 == true) and
+                            (_HUCK_1 == true) then
+                                return true
                             end
-                            local _ = _HUCK_0
-                            local _ = _HUCK_1
-                            return False
+                            local _a = _HUCK_0
+                            local _b = _HUCK_1
+                            return false
                     end
                 end
             "#
@@ -136,8 +130,6 @@ fn function_and() {
     )
 }
 
-// @Todo @XXX @Test: figure out a better way to test this post-Prelude
-#[ignore]
 #[test]
 fn literal_list() {
     assert_eq!(
@@ -146,8 +138,6 @@ fn literal_list() {
     )
 }
 
-// @Todo @XXX @Test: figure out a better way to test this post-Prelude
-#[ignore]
 #[test]
 fn string_escape() {
     assert_eq!(
@@ -159,8 +149,6 @@ fn string_escape() {
     )
 }
 
-// @Todo @XXX @Test: figure out a better way to test this post-Prelude
-#[ignore]
 #[test]
 fn tuple() {
     assert_eq!(

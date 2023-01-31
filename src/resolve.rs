@@ -648,7 +648,7 @@ impl<'a> ModuleResolver<'a> {
         unres_lhs: ast::Lhs<UnresolvedName>,
     ) -> Result<(Vec<Binding>, ast::Lhs<ResolvedName>), Error> {
         // These are the variables bound in this LHS.
-        let mut bindings = Vec::new();
+        let mut bindings = BTreeMap::new();
 
         let res_lhs = match unres_lhs {
             ast::Lhs::Func {
@@ -664,8 +664,14 @@ impl<'a> ModuleResolver<'a> {
 
                 let mut args = Vec::new();
                 for unres_pat in unres_args {
-                    let (bound, res_pat) = self.resolve_pattern(unres_pat)?;
-                    bindings.extend(bound);
+                    let (pat_bindings, res_pat) = self.resolve_pattern(unres_pat)?;
+                    for bound @ Binding(_bound_source, bound_ident) in pat_bindings {
+                        if let Some(Binding(_source, existing_name)) =
+                            bindings.insert(bound_ident, bound)
+                        {
+                            return Err(Error::DuplicateBinding(existing_name, name));
+                        }
+                    }
                     args.push(res_pat);
                 }
 
@@ -679,11 +685,23 @@ impl<'a> ModuleResolver<'a> {
             } => {
                 let op = self.resolve_name(unres_op)?;
 
-                let (bound_a, a) = self.resolve_pattern(unres_a)?;
-                bindings.extend(bound_a);
+                let (a_bindings, a) = self.resolve_pattern(unres_a)?;
+                for bound @ Binding(_bound_source, bound_ident) in a_bindings {
+                    if let Some(Binding(_source, existing_name)) =
+                        bindings.insert(bound_ident, bound)
+                    {
+                        return Err(Error::DuplicateBinding(existing_name, op));
+                    }
+                }
 
-                let (bound_b, b) = self.resolve_pattern(unres_b)?;
-                bindings.extend(bound_b);
+                let (b_bindings, b) = self.resolve_pattern(unres_b)?;
+                for bound @ Binding(_bound_source, bound_ident) in b_bindings {
+                    if let Some(Binding(_source, existing_name)) =
+                        bindings.insert(bound_ident, bound)
+                    {
+                        return Err(Error::DuplicateBinding(existing_name, op));
+                    }
+                }
 
                 ast::Lhs::Binop { a, op, b }
             }
@@ -692,8 +710,14 @@ impl<'a> ModuleResolver<'a> {
                 let mut args = Vec::new();
 
                 for unres_pat in unres_args {
-                    let (bound, res_pat) = self.resolve_pattern(unres_pat)?;
-                    bindings.extend(bound);
+                    let (pat_bindings, res_pat) = self.resolve_pattern(unres_pat)?;
+                    for bound @ Binding(_bound_source, bound_ident) in pat_bindings {
+                        if let Some(Binding(_source, existing_name)) =
+                            bindings.insert(bound_ident, bound)
+                        {
+                            return Err(Error::DuplicateBindingLambda(existing_name));
+                        }
+                    }
                     args.push(res_pat);
                 }
 
@@ -701,7 +725,7 @@ impl<'a> ModuleResolver<'a> {
             }
         };
 
-        Ok((bindings, res_lhs))
+        Ok((bindings.into_values().collect(), res_lhs))
     }
 
     /// Returns a `Vec` of bound variables which have been added to the scope,
@@ -1215,4 +1239,10 @@ pub enum Error {
 
     #[error("Identifier `{0}` doesn't exist in module `{1}`")]
     NonexistentName(&'static str, Source),
+
+    #[error("Identifier `{0}` is bound twice in the same pattern in `{1}`")]
+    DuplicateBinding(UnresolvedName, ResolvedName),
+
+    #[error("Identifier `{0}` is bound twice in the same pattern in a lambda expression")]
+    DuplicateBindingLambda(UnresolvedName),
 }
