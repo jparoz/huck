@@ -54,6 +54,7 @@ struct Args {
     // normalize
     #[arg(
         name = "normalize",
+        default_value_t = true,
         long = "normalize",
         alias = "normalise",
         help = "Format Lua output using lua-format [default]",
