@@ -13,3 +13,6 @@ log_crate = { package = "log", version = "0.4" }
 env_logger = "0.9"
 thiserror = "1.0"
 clap = { version = "4.1", features = ["derive"] }
+
+[dev-dependencies]
+test-log = "0.2.11"

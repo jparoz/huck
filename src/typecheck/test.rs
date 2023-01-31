@@ -1,3 +1,5 @@
+use test_log::test;
+
 use std::collections::BTreeMap;
 
 use crate::module::{Module, ModulePath};

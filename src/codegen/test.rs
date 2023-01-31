@@ -1,4 +1,6 @@
 use crate::codegen;
+use test_log::test;
+
 use crate::compile::compile;
 use crate::error::Error as HuckError;
 use crate::utils::normalize;
