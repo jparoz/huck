@@ -111,7 +111,7 @@ fn do_main() -> Result<(), HuckError> {
     // We're done adding modules, so now we can compile.
     for (stem, mut lua) in compile(to_compile)? {
         if args.normalize {
-            lua = utils::normalize(&lua);
+            lua = utils::normalize(&lua)?;
         }
 
         // Write the compiled Lua to a .lua file.

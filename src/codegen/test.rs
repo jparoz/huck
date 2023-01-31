@@ -21,7 +21,7 @@ pub fn transpile(huck: &'static str) -> Result<String, HuckError> {
         (module_stem.clone(), module),
     ])? {
         if stem == module_stem {
-            return Ok(normalize(&lua));
+            return normalize(&lua);
         }
     }
     unreachable!()
@@ -67,6 +67,7 @@ fn function_const() {
                 end
             "#
         ))
+        .unwrap()
     )
 }
 
@@ -83,6 +84,7 @@ fn function_id() {
                 end
             "#
         ))
+        .unwrap()
     )
 }
 
@@ -104,6 +106,7 @@ fn function_not() {
                 end
             "#
         ))
+        .unwrap()
     )
 }
 
@@ -125,6 +128,7 @@ fn function_and() {
                 end
             "#
         ))
+        .unwrap()
     )
 }
 
@@ -132,7 +136,7 @@ fn function_and() {
 fn literal_list() {
     assert_eq!(
         transpile(r#"list = [1, 2, 3];"#).unwrap(),
-        normalize(wrap!("list", "{1, 2, 3}"))
+        normalize(wrap!("list", "{1, 2, 3}")).unwrap()
     )
 }
 
@@ -144,6 +148,7 @@ fn string_escape() {
             "string",
             r#""Hello\nworld!\nThis is a quote: `\"`.""#
         ))
+        .unwrap()
     )
 }
 
@@ -151,6 +156,6 @@ fn string_escape() {
 fn tuple() {
     assert_eq!(
         transpile(r#"tuple = (1, "hi");"#).unwrap(),
-        normalize(wrap!("tuple", r#"{1, "hi"}"#))
+        normalize(wrap!("tuple", r#"{1, "hi"}"#)).unwrap()
     )
 }

@@ -8,6 +8,9 @@ pub enum Error {
     #[error("Invalid characters in file path: `{0}`")]
     BadFilePath(String),
 
+    #[error("Failed when normalizing Lua output, with lua-format stderr: {0}")]
+    NormalizeFailed(String),
+
     #[error("Parse error: {0}")]
     Parse(#[from] parse::Error),
 
