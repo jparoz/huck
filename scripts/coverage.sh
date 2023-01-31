@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 
+if [[ $(rustup show active-toolchain) != nightly* ]]
+then
+    echo "Warning: not on nightly toolchain!"
+    echo "Generating coverage report will cause all artefacts to be cleaned."
+    echo "Stopping."
+    exit 1
+fi
+
 env RUSTFLAGS="-C instrument-coverage" cargo +nightly test --tests
 
 cargo +nightly profdata -- merge -sparse default_*.profraw -o test.profdata
