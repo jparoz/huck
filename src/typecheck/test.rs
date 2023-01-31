@@ -165,8 +165,6 @@ fn function_const() {
     assert!(matches!(*r_r, Type::Var(_)));
 }
 
-// @Prelude
-#[ignore]
 #[test]
 fn function_add() {
     assert_eq!(
