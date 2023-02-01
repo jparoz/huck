@@ -72,9 +72,3 @@ id x = x;
 
 const : forall a b. a -> b -> a;
 const x _ = x;
-
-
-
-(* @XXX @Fixme: *)
-(* definedTwice = 123; *)
-(* definedTwice = 456; *)

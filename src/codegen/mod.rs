@@ -461,12 +461,39 @@ impl<'a> CodeGenerator<'a> {
             writeln!(lua, "end")?;
         }
 
+        // Check if there are multiple unconditional branches.
+        //
+        // @Cleanup @Errors @Exhaustiveness:
+        // When we do exhaustiveness checking,
+        // this error should be caught in that process;
+        // then this can be changed to `assert_eq!(unconditional.len(), 1);`.
+        if unconditional.len() > 1 {
+            // This can't be generated,
+            // because either:
+            //     - It's a value,
+            //       and so can't have two values;
+            //     - It's a function,
+            //       and so can't have two return statements in the same block.
+            log::error!(
+                log::CODEGEN,
+                "Multiple unconditional branches in a definition!"
+            );
+            // @Errors: Would be better to have the name than all the RHSs
+            return Err(Error::DuplicateUnconditional(
+                unconditional
+                    .into_iter()
+                    .map(|(_, _, expr)| expr.clone())
+                    .collect(),
+            ));
+        }
+
         // conds.is_empty()
         for (_conds, binds, expr) in unconditional {
-            // If we have no Huck arguments,
-            // then we should be a Lua value, not a Lua function;
-            // so we don't return, we just are.
-            if arg_count > 0 {
+            if arg_count == 0 {
+                // If we have no Huck arguments,
+                // then we should be a Lua value, not a Lua function;
+                // so we don't return, we just are.
+            } else {
                 // First bind the bindings
                 for b in binds {
                     lua.write_str(&b)?;
