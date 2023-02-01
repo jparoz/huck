@@ -1,0 +1,80 @@
+(* This statement gives this module its name. *)
+(* Each module is required to have one of these at the top of the file. *)
+module Basic;
+
+(* Variables can be defined in any order. *)
+five = 5;
+hello = "world";
+
+(* Assignments can have a type signature attached, *)
+(* either inline: *)
+theBestNumber : Int = 123;
+myList : [Float] = [1.23, 4.56];
+
+(* or free-standing: *)
+myName : String;
+myName = "Jeff";
+
+myList' : [Float];
+myList' = [1.23, 4.56];
+
+(* The right-hand-side of an assignment can be more complex: *)
+thirteenSquared : Int = (8 + 5) ^ 2;
+
+(* We can also use tuples: *)
+tuple : (Int, String) = (123, "wazzaap");
+
+(* We can define functions by introducing arguments on the left-hand-side: *)
+double : Int -> Int;
+double x = x + x;
+
+(* These arguments can pattern match, *)
+(* and multiple assignments combine for different cases. *)
+isHello "Hello!" = True;
+isHello _ = False;
+
+(* We can define our own data structures: *)
+type LinkedList a = Cons a (LinkedList a) | Nil;
+
+myLinkedList : LinkedList Int = Cons 1 (Cons 2 (Cons 3 Nil));
+
+(* We can define functions that accept other functions: *)
+map : forall a. (a -> a) -> LinkedList a -> LinkedList a;
+map f (Cons x xs) = Cons (f x) (map f xs);
+map _ Nil = Nil;
+
+(* And pass lambdas into them: *)
+mapped = map (\x -> x*2) myLinkedList;
+
+(* Or any other functions: *)
+mapped' = map double myLinkedList;
+
+(* We can define custom binary operators: *)
+(+++) : String -> String -> String;
+l +++ r = l <> l <> r <> r;
+
+(* We can define mutually-recursive functions: *)
+isEven 0 = True;
+isEven 1 = False;
+isEven n = isOdd (n-1);
+
+isOdd 0 = False;
+isOdd 1 = True;
+isOdd n = isEven (n-1);
+
+(* Some more useful functions: *)
+not : Bool -> Bool;
+not True = False;
+not False = True;
+
+id : forall a. a -> a;
+id x = x;
+
+const : forall a b. a -> b -> a;
+const x _ = x;
+
+
+
+(* @XXX @Fixme: *)
+(* definedTwice = 123; *)
+(* definedTwice = 456; *)

@@ -82,8 +82,9 @@ a >= b = unsafe lua { a >= b };
 
 
 (* String concatenation operator *)
-concat : String -> String -> String;
-concat a b = unsafe lua { a .. b };
+(<>) : String -> String -> String;
+infixr 5 <>;
+a <> b = unsafe lua { a .. b };
 
 (* Length operator *)
 length : forall a. [a] -> Int;
