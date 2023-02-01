@@ -69,7 +69,7 @@ struct Args {
         alias = "no-normalise",
         overrides_with_all = ["normalize", "no-normalize"]
     )]
-    _no_normalize: bool,
+    no_normalize: bool,
 
     /// Instead of writing file.hk's output to file.lua, print it to stdout
     #[arg(long)]
@@ -119,7 +119,7 @@ fn do_main() -> Result<(), HuckError> {
 
     // We're done adding modules, so now we can compile.
     'compiled: for (stem, mut lua) in compile(to_compile)? {
-        if args.normalize {
+        if args.normalize && !args.no_normalize {
             lua = utils::normalize(&lua)?;
         }
 
