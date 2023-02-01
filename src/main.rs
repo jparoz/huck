@@ -71,6 +71,10 @@ struct Args {
     )]
     _no_normalize: bool,
 
+    /// Instead of writing file.hk's output to file.lua, print it to stdout
+    #[arg(long)]
+    write_to_stdout: Vec<PathBuf>,
+
     /// Input files to be included in compilation
     files: Vec<PathBuf>,
 }
@@ -85,7 +89,7 @@ fn main() {
 fn do_main() -> Result<(), HuckError> {
     let compilation_start = Instant::now();
 
-    let args = Args::parse();
+    let mut args = Args::parse();
 
     env_logger::Builder::new()
         .filter(None, args.log)
@@ -108,10 +112,26 @@ fn do_main() -> Result<(), HuckError> {
         to_compile.push(load(file)?);
     }
 
+    // Remove the .hk extensions from the write_to_stdout paths
+    for path in args.write_to_stdout.iter_mut() {
+        path.set_extension("");
+    }
+
     // We're done adding modules, so now we can compile.
-    for (stem, mut lua) in compile(to_compile)? {
+    'compiled: for (stem, mut lua) in compile(to_compile)? {
         if args.normalize {
             lua = utils::normalize(&lua)?;
+        }
+
+        // Check if we should write to stdout instead of a file.
+        let compiled_path = PathBuf::from(&stem);
+        for path in args.write_to_stdout.iter() {
+            if path == &compiled_path {
+                // Write the compiled Lua to stdout.
+                log::info!(log::CODEGEN, "Writing generated output to stdout");
+                print!("{}", lua);
+                continue 'compiled;
+            }
         }
 
         // Write the compiled Lua to a .lua file.
