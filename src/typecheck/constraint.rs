@@ -412,6 +412,9 @@ impl ConstraintGenerator {
         let vars: TypeVarSet<ResolvedName> =
             input.vars.iter().map(|v| TypeVar::Explicit(*v)).collect();
 
+        // Recursively generate arity assumptions for this type expression.
+        self.generate_type_expr_arities(&input.typ, 0);
+
         let typ = self.generate_type_expr(&input.typ);
 
         TypeScheme { vars, typ }
@@ -475,6 +478,51 @@ impl ConstraintGenerator {
             // Each of the types in the tuple should have arity 0.
             ast::TypeTerm::Tuple(exprs) => {
                 Type::Tuple(exprs.iter().map(|e| self.generate_type_expr(e)).collect())
+            }
+        }
+    }
+
+    fn generate_type_expr_arities(
+        &mut self,
+        input: &ast::TypeExpr<ResolvedName>,
+        assumed_arity: usize,
+    ) {
+        match input {
+            ast::TypeExpr::Term(term) => self.generate_type_term_arities(term, assumed_arity),
+            ast::TypeExpr::App(f, x) => {
+                self.generate_type_expr_arities(f, assumed_arity + 1);
+                self.generate_type_expr_arities(x, 0);
+            }
+            ast::TypeExpr::Arrow(a, b) => {
+                self.generate_type_expr_arities(a, 0);
+                self.generate_type_expr_arities(b, 0);
+            }
+        }
+    }
+
+    fn generate_type_term_arities(
+        &mut self,
+        input: &ast::TypeTerm<ResolvedName>,
+        assumed_arity: usize,
+    ) {
+        match input {
+            ast::TypeTerm::Var(name) | ast::TypeTerm::Concrete(name) => {
+                self.assume_arity(*name, assumed_arity)
+            }
+
+            // @Todo @XXX @Errors: This should probably be a proper error
+            ast::TypeTerm::Unit => assert_eq!(assumed_arity, 0),
+
+            ast::TypeTerm::Parens(expr) => self.generate_type_expr_arities(expr, assumed_arity),
+
+            // The type in the list should have arity 0.
+            ast::TypeTerm::List(expr) => self.generate_type_expr_arities(expr, 0),
+
+            // Each of the types in the tuple should have arity 0.
+            ast::TypeTerm::Tuple(exprs) => {
+                for expr in exprs {
+                    self.generate_type_expr_arities(expr, 0);
+                }
             }
         }
     }

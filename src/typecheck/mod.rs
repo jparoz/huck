@@ -356,17 +356,63 @@ impl Typechecker {
                     type_defn.vars.len()
                 }
 
+                Source::Local(_id) => {
+                    // @Typeclasses: this code will need to change when implementing type classes
+
+                    // Check that all the assumptions are for the same arity.
+                    {
+                        let mut iter = assumed_arities.iter();
+                        // @Note: Safe unwrap:
+                        // Whenever we add a Vec to the entry in arity_assumptions,
+                        // we always push an element to the Vec straight afterwards.
+                        // i.e., these Vecs are never empty.
+                        let first = iter.next().unwrap();
+
+                        let all_equal = iter.all(|x| x == first);
+
+                        if !all_equal {
+                            // @Errors
+                            log::error!(
+                                log::TYPECHECK,
+                                "Not all uses of type variable {name} have the same arity!"
+                            );
+                            todo!()
+                        }
+                    }
+
+                    // Check that all the assumptions have arity of 0.
+                    //
+                    // @Typeclasses:
+                    // Instead of checking that arity == 0,
+                    // we'll have to check that the arity of the type variable (name)
+                    // matches the definition of the type class.
+                    // This will require a bunch more bookkeeping.
+                    {
+                        let all_zero = assumed_arities.iter().all(|x| x == &0);
+                        if !all_zero {
+                            // @Errors
+                            log::error!(
+                                log::TYPECHECK,
+                                "Not all uses of type variable {name} have the arity 0!"
+                            );
+                            todo!()
+                        }
+                    }
+
+                    continue;
+                }
+
                 // @Cleanup: we should never need to assume the arity of any builtin types,
                 // so we should possibly change this whole match
                 // into an if let Source::Module(path) = name.source
                 Source::Builtin => match name.ident {
                     "Int" | "Float" | "String" | "Bool" => 0,
                     "IO" => 1,
-                    _ => unreachable!(),
+                    _ => unreachable!("must have added new builtin types"),
                 },
 
-                // Type names can't come from either of these sources.
-                Source::Foreign { .. } | Source::Local(..) => unreachable!(),
+                // Type names can't come from foreign sources.
+                Source::Foreign { .. } => unreachable!(),
             };
 
             log::trace!(
