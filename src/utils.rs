@@ -53,12 +53,12 @@ pub fn normalize(lua: &str) -> Result<String, HuckError> {
 
 #[allow(unused_macros)]
 macro_rules! unwrap_match {
-    ($rhs:expr, $pat:pat => $bound:expr) => {
-        match $rhs {
+    ($matched:expr, $pat:pat => $bound:expr) => {
+        match $matched {
             $pat => $bound,
             _ => panic!(
-                "Tried to unwrap_match {rhs} with pattern {pat}",
-                rhs = $rhs,
+                "Tried to unwrap_match {matched:?} with pattern {pat}",
+                matched = $matched,
                 pat = stringify!($pat)
             ),
         }

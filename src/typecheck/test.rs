@@ -7,9 +7,11 @@ use crate::name::{ResolvedName, Source};
 use crate::parse::parse;
 use crate::precedence::ApplyPrecedence;
 use crate::resolve::Resolver;
-use crate::typecheck::Typechecker;
+use crate::typecheck::{Error as TypeError, Typechecker};
 use crate::types::{Primitive, Type};
 use crate::utils::unwrap_match;
+
+use crate::error::Error as HuckError;
 
 /// Shorthand to make a ResolvedName.
 macro_rules! name {
@@ -24,21 +26,21 @@ macro_rules! name {
 const PRELUDE_SRC: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/huck/Prelude.hk"));
 
 /// Typechecks the given module and returns the resulting GeneratableModule.
-fn typ_module(huck: &'static str) -> Module<ResolvedName, Type> {
+fn typ_module(huck: &'static str) -> Result<Module<ResolvedName, Type>, HuckError> {
     let module = Box::leak(format!("module Test; {huck}").into_boxed_str());
 
     // Parse
     let mut parsed = Vec::new();
     for src in [PRELUDE_SRC, module] {
-        let (module_path, statements) = parse(src).unwrap();
+        let (module_path, statements) = parse(src)?;
         parsed.push((module_path, statements));
     }
 
     // Post-parse processing
-    let mut modules: BTreeMap<_, _> = parsed
-        .into_iter()
-        .map(|(path, stats)| (path, Module::from_statements(path, stats).unwrap()))
-        .collect();
+    let mut modules = BTreeMap::new();
+    for (path, stats) in parsed {
+        modules.insert(path, Module::from_statements(path, stats)?);
+    }
 
     // Resolve
     let mut resolver = Resolver::new();
@@ -46,16 +48,16 @@ fn typ_module(huck: &'static str) -> Module<ResolvedName, Type> {
     // Start with the prelude...
     let prelude_path = ModulePath("Prelude");
     if let Some(unresolved_prelude) = modules.remove(&prelude_path) {
-        resolver.resolve_prelude(unresolved_prelude).unwrap();
+        resolver.resolve_prelude(unresolved_prelude)?;
     }
 
     // Then resolve all other modules.
     for module in modules.into_values() {
-        resolver.resolve_module(module).unwrap();
+        resolver.resolve_module(module)?;
     }
 
     // Check that any qualified names used actually exist.
-    let mut resolved_modules = resolver.check_assumptions().unwrap();
+    let mut resolved_modules = resolver.check_assumptions()?;
 
     // Apply operator precedences
     let mut precs = BTreeMap::new();
@@ -71,50 +73,53 @@ fn typ_module(huck: &'static str) -> Module<ResolvedName, Type> {
 
     // Typecheck
     let mut typechecker = Typechecker::new();
-    let mut gen_mods = typechecker.typecheck(resolved_modules).unwrap();
-    gen_mods.remove(&ModulePath("Test")).unwrap()
+    let mut gen_mods = typechecker.typecheck(resolved_modules)?;
+    Ok(gen_mods.remove(&ModulePath("Test")).unwrap())
 }
 
 /// Infers the type of the given definition.
-fn typ(s: &'static str) -> Type {
-    typ_module(s).definitions.into_values().next().unwrap().typ
+fn typ(s: &'static str) -> Result<Type, HuckError> {
+    Ok(typ_module(s)?.definitions.into_values().next().unwrap().typ)
 }
 
 #[test]
 fn tuple_is_ordered() {
-    let the_typ = typ(r#"a = (1, "hi");"#);
-    assert_eq!(the_typ, typ(r#"a = (3, "hello");"#));
-    assert_ne!(the_typ, typ(r#"a = ("hello", 3);"#));
-    assert_ne!(the_typ, typ(r#"a = (3, "hello", 1);"#));
+    let the_typ = typ(r#"a = (1, "hi");"#).unwrap();
+    assert_eq!(the_typ, typ(r#"a = (3, "hello");"#).unwrap());
+    assert_ne!(the_typ, typ(r#"a = ("hello", 3);"#).unwrap());
+    assert_ne!(the_typ, typ(r#"a = (3, "hello", 1);"#).unwrap());
 }
 
 #[test]
 fn literal_int() {
-    assert_eq!(typ(r#"a = 123;"#), Type::Primitive(Primitive::Int));
+    assert_eq!(typ(r#"a = 123;"#).unwrap(), Type::Primitive(Primitive::Int));
 }
 
 #[test]
 fn literal_float() {
-    assert_eq!(typ(r#"a = 1.23;"#), Type::Primitive(Primitive::Float));
+    assert_eq!(
+        typ(r#"a = 1.23;"#).unwrap(),
+        Type::Primitive(Primitive::Float)
+    );
 }
 
 #[test]
 fn literal_string() {
     assert_eq!(
-        typ(r#"a = "Hello, world!";"#),
+        typ(r#"a = "Hello, world!";"#).unwrap(),
         Type::Primitive(Primitive::String)
     );
 }
 
 #[test]
 fn literal_unit() {
-    assert_eq!(typ(r#"a = ();"#), Type::Primitive(Primitive::Unit));
+    assert_eq!(typ(r#"a = ();"#).unwrap(), Type::Primitive(Primitive::Unit));
 }
 
 #[test]
 fn literal_tuple_int_string() {
     assert_eq!(
-        typ(r#"a = (123, "Hello, world!");"#),
+        typ(r#"a = (123, "Hello, world!");"#).unwrap(),
         Type::Tuple(vec![
             Type::Primitive(Primitive::Int),
             Type::Primitive(Primitive::String)
@@ -125,7 +130,7 @@ fn literal_tuple_int_string() {
 #[test]
 fn literal_list_int() {
     assert_eq!(
-        typ(r#"a = [123, 456];"#),
+        typ(r#"a = [123, 456];"#).unwrap(),
         Type::List(Box::new(Type::Primitive(Primitive::Int)))
     );
 }
@@ -136,7 +141,7 @@ fn literal_list_int() {
 // Also true for lots of other tests.
 #[test]
 fn function_id() {
-    let typ = typ(r#"id a = a;"#);
+    let typ = typ(r#"id a = a;"#).unwrap();
 
     assert!(matches!(typ, Type::Arrow(_, _)));
     let (l, r) = unwrap_match!(typ, Type::Arrow(l, r) => (l, r));
@@ -152,7 +157,7 @@ fn function_id() {
 
 #[test]
 fn function_const() {
-    let typ = typ(r#"const a b = a;"#);
+    let typ = typ(r#"const a b = a;"#).unwrap();
 
     assert!(matches!(typ, Type::Arrow(_, _)));
 
@@ -168,7 +173,7 @@ fn function_const() {
 #[test]
 fn function_add() {
     assert_eq!(
-        typ(r#"f x = x + 5;"#),
+        typ(r#"f x = x + 5;"#).unwrap(),
         Type::Arrow(
             Box::new(Type::Primitive(Primitive::Int)),
             Box::new(Type::Primitive(Primitive::Int))
@@ -183,7 +188,8 @@ fn constructor_unary() {
             type Foo = Bar;
             val = Bar;
         "#,
-    );
+    )
+    .unwrap();
 
     let val = module.definitions.get(&name!("val")).unwrap();
 
@@ -197,7 +203,8 @@ fn constructor_unary_returned() {
             type Foo = Bar;
             val a = Bar;
         "#,
-    );
+    )
+    .unwrap();
 
     let val = module.definitions.get(&name!("val")).unwrap().clone();
 
@@ -215,7 +222,8 @@ fn constructor_unary_argument() {
             type Foo = Bar;
             val Bar = 123;
         "#,
-    );
+    )
+    .unwrap();
 
     let val = module.definitions.get(&name!("val")).unwrap();
 
@@ -235,7 +243,8 @@ fn constructor_newtype_int() {
             type Foo = Foo Int;
             val = Foo 123;
         "#,
-    );
+    )
+    .unwrap();
 
     let val = module.definitions.get(&name!("val")).unwrap();
 
@@ -251,7 +260,8 @@ fn constructor_newtype_unwrap_int() {
             unwrap (Foo x) = x;
             val = unwrap toBeUnwrapped;
         "#,
-    );
+    )
+    .unwrap();
 
     let val = module.definitions.get(&name!("val")).unwrap();
 
@@ -265,7 +275,8 @@ fn constructor_newtype_generic_int() {
             type Foo a = Foo a;
             val = Foo 123;
         "#,
-    );
+    )
+    .unwrap();
 
     let val = module.definitions.get(&name!("val")).unwrap();
 
@@ -285,7 +296,8 @@ fn constructor_newtype_generic_var() {
             type Foo a = Foo a;
             val x = Foo x;
         "#,
-    );
+    )
+    .unwrap();
 
     let val = module.definitions.get(&name!("val")).unwrap().clone();
 
@@ -309,7 +321,8 @@ fn constructor_newtype_generic_unwrap_int() {
             unwrap (Foo x) = x;
             val = unwrap toBeUnwrapped;
         "#,
-    );
+    )
+    .unwrap();
 
     let val = module.definitions.get(&name!("val")).unwrap();
 
@@ -323,7 +336,8 @@ fn function_apply_to_literal() {
             foo 123 = 234;
             val = foo 1;
         "#,
-    );
+    )
+    .unwrap();
 
     let val = module.definitions.get(&name!("val")).unwrap();
 
@@ -338,7 +352,8 @@ fn function_apply_to_variable() {
             anInt = 3;
             val = foo anInt;
         "#,
-    );
+    )
+    .unwrap();
 
     let val = module.definitions.get(&name!("val")).unwrap();
 
@@ -354,9 +369,43 @@ fn function_apply_to_variable_indirect() {
             anInt = 3;
             val = foo anInt;
         "#,
-    );
+    )
+    .unwrap();
 
     let val = module.definitions.get(&name!("val")).unwrap();
 
     assert_eq!(val.typ, Type::Primitive(Primitive::Int))
+}
+
+#[test]
+fn arity_int() {
+    assert!(matches!(
+        typ("foo : Int;"),
+        Ok(Type::Primitive(Primitive::Int))
+    ));
+    assert!(matches!(
+        typ("foo : Int ();"),
+        Err(HuckError::Type(TypeError::IncorrectArity(_, 1, 0)))
+    ));
+}
+
+#[test]
+fn arity_io() {
+    let the_typ = typ("foo : IO ();");
+
+    assert!(matches!(the_typ, Ok(Type::App(..))));
+
+    let (l, r) = unwrap_match!(the_typ, Ok(Type::App(l, r)) => (l, r));
+    assert!(matches!(*l, Type::Primitive(Primitive::IO)));
+    assert!(matches!(*r, Type::Primitive(Primitive::Unit)));
+
+    assert!(matches!(
+        typ("foo : IO;"),
+        Err(HuckError::Type(TypeError::IncorrectArity(_, 0, 1)))
+    ));
+
+    assert!(matches!(
+        typ("foo : IO () Int;"),
+        Err(HuckError::Type(TypeError::IncorrectArity(_, 2, 1)))
+    ));
 }
