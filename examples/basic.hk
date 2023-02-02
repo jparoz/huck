@@ -33,6 +33,10 @@ double x = x + x;
 isHello "Hello!" = True;
 isHello _ = False;
 
+hasOneOrTwo [x] = True;
+hasOneOrTwo [x, y] = True;
+hasOneOrTwo _ = False;
+
 (* We can define our own data structures: *)
 type LinkedList a = Cons a (LinkedList a) | Nil;
 
@@ -72,3 +76,8 @@ id x = x;
 
 const : forall a b. a -> b -> a;
 const x _ = x;
+
+(* We can import functions from Lua, too! *)
+foreign import "inspect" (inspect : forall a. a -> String);
+
+callsInspect : String = inspect myList;
