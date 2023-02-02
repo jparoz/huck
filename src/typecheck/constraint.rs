@@ -15,38 +15,6 @@ pub enum Constraint {
     ExplicitInstance(Type, TypeScheme),
 }
 
-trait ActiveVars {
-    fn active_vars(&self) -> TypeVarSet<ResolvedName>;
-}
-
-impl ActiveVars for Constraint {
-    fn active_vars(&self) -> TypeVarSet<ResolvedName> {
-        match self {
-            Constraint::Equality(t1, t2) => t1.free_vars().union(&t2.free_vars()),
-            Constraint::ExplicitInstance(t, sigma) => t.free_vars().union(&sigma.free_vars()),
-            Constraint::ImplicitInstance(t1, t2, m) => {
-                t1.free_vars().union(&m.intersection(&t2.free_vars()))
-            }
-        }
-    }
-}
-
-impl ActiveVars for &[Constraint] {
-    fn active_vars(&self) -> TypeVarSet<ResolvedName> {
-        self.iter()
-            .map(Constraint::active_vars)
-            .reduce(|vars1, vars2| vars1.union(&vars2))
-            .unwrap_or_else(TypeVarSet::empty)
-    }
-}
-
-impl ActiveVars for VecDeque<Constraint> {
-    fn active_vars(&self) -> TypeVarSet<ResolvedName> {
-        let (a, b) = self.as_slices();
-        a.active_vars().union(&b.active_vars())
-    }
-}
-
 impl Debug for Constraint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -528,15 +496,6 @@ impl ConstraintGenerator {
 
     // Type-level generation methods
 
-    pub fn generate_type_scheme(&mut self, input: &ast::TypeScheme<ResolvedName>) -> TypeScheme {
-        let vars: TypeVarSet<ResolvedName> =
-            input.vars.iter().map(|v| TypeVar::Explicit(*v)).collect();
-
-        let typ = self.generate_type_expr(&input.typ);
-
-        TypeScheme { vars, typ }
-    }
-
     pub fn generate_type_definition(
         &mut self,
         type_defn: ast::TypeDefinition<ResolvedName, ()>,
@@ -589,6 +548,15 @@ impl ConstraintGenerator {
             typ,
             constructors,
         }
+    }
+
+    pub fn generate_type_scheme(&mut self, input: &ast::TypeScheme<ResolvedName>) -> TypeScheme {
+        let vars: TypeVarSet<ResolvedName> =
+            input.vars.iter().map(|v| TypeVar::Explicit(*v)).collect();
+
+        let typ = self.generate_type_expr(&input.typ);
+
+        TypeScheme { vars, typ }
     }
 
     pub fn generate_type_expr(&mut self, input: &ast::TypeExpr<ResolvedName>) -> Type {
@@ -644,5 +612,37 @@ impl ConstraintGenerator {
                 Type::Tuple(exprs.iter().map(|e| self.generate_type_expr(e)).collect())
             }
         }
+    }
+}
+
+trait ActiveVars {
+    fn active_vars(&self) -> TypeVarSet<ResolvedName>;
+}
+
+impl ActiveVars for Constraint {
+    fn active_vars(&self) -> TypeVarSet<ResolvedName> {
+        match self {
+            Constraint::Equality(t1, t2) => t1.free_vars().union(&t2.free_vars()),
+            Constraint::ExplicitInstance(t, sigma) => t.free_vars().union(&sigma.free_vars()),
+            Constraint::ImplicitInstance(t1, t2, m) => {
+                t1.free_vars().union(&m.intersection(&t2.free_vars()))
+            }
+        }
+    }
+}
+
+impl ActiveVars for &[Constraint] {
+    fn active_vars(&self) -> TypeVarSet<ResolvedName> {
+        self.iter()
+            .map(Constraint::active_vars)
+            .reduce(|vars1, vars2| vars1.union(&vars2))
+            .unwrap_or_else(TypeVarSet::empty)
+    }
+}
+
+impl ActiveVars for VecDeque<Constraint> {
+    fn active_vars(&self) -> TypeVarSet<ResolvedName> {
+        let (a, b) = self.as_slices();
+        a.active_vars().union(&b.active_vars())
     }
 }
