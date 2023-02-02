@@ -308,15 +308,20 @@ impl Typechecker {
         );
 
         for module in modules.values() {
+            // Constrain the types of all assumed types to the inferred type of the name.
             for (import_path, import_names) in module.imports.iter() {
-                // Find the inferred type.
+                // Get the imported module.
                 // @Note: this should be infallable,
-                // because we've already confirmed everything exists in the resolve step.
+                // because we've already confirmed that this module exists in the resolve step.
                 let import_module = modules
                     .get(import_path)
                     .expect("should already be resolved");
 
+                // Constrain that each assumed type is an instance of the name's inferred type.
                 for import_name in import_names {
+                    // Find the inferred type.
+                    // @Note: this should be infallable,
+                    // because we've already confirmed everything exists in the resolve step.
                     let typ = import_module
                         .get_type(import_name)
                         .expect("should already be resolved and typechecked");
@@ -333,6 +338,45 @@ impl Typechecker {
                             log::warn!(log::IMPORT, "unused: import {import_path} ({import_name})");
                         }
                     }
+                }
+            }
+        }
+
+        // Check that all the assumed arities match the arity from the type definitions.
+        let mut arity_assumptions = BTreeMap::new();
+        mem::swap(&mut arity_assumptions, &mut self.cg.arity_assumptions);
+        for (name, assumed_arities) in arity_assumptions {
+            let actual_arity = match name.source {
+                Source::Module(path) => {
+                    let module = modules.get(&path).expect("should already be resolved");
+                    let type_defn = module
+                        .type_definitions
+                        .get(&name)
+                        .expect("should already be resolved");
+                    type_defn.vars.len()
+                }
+
+                // @Cleanup: we should never need to assume the arity of any builtin types,
+                // so we should possibly change this whole match
+                // into an if let Source::Module(path) = name.source
+                Source::Builtin => match name.ident {
+                    "Int" | "Float" | "String" | "Bool" => 0,
+                    "IO" => 1,
+                    _ => unreachable!(),
+                },
+
+                // Type names can't come from either of these sources.
+                Source::Foreign { .. } | Source::Local(..) => unreachable!(),
+            };
+
+            log::trace!(
+                log::TYPECHECK,
+                "Checking that all assumed arities of {name} matches the actual arity {actual_arity}"
+            );
+
+            for assumed_arity in assumed_arities {
+                if assumed_arity != actual_arity {
+                    return Err(Error::IncorrectArity(name, assumed_arity, actual_arity));
                 }
             }
         }
@@ -437,4 +481,8 @@ pub enum Error {
 
     #[error("Could not unify type '{0}' with type '{1}' (recursive type)")]
     CouldNotUnifyRecursive(Type, Type),
+
+    // @Errors: this name/message is probably not that helpful
+    #[error("Usage of type `{0}` with incorrect arity {1} (actual arity {2})")]
+    IncorrectArity(ResolvedName, usize, usize),
 }

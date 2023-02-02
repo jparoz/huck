@@ -36,36 +36,13 @@ pub struct ConstraintGenerator {
     /// All the currently assumed types of name uses.
     pub(super) assumptions: BTreeMap<ResolvedName, Vec<Type>>,
 
+    /// All the currently assumed arities of type name uses.
+    pub(super) arity_assumptions: BTreeMap<ResolvedName, Vec<usize>>,
+
     m_stack: Vec<TypeVar<ResolvedName>>,
 }
 
 impl ConstraintGenerator {
-    /// Generates a new and unique TypeVar each time it's called.
-    fn fresh_var(&mut self) -> TypeVar<ResolvedName> {
-        use std::sync::atomic::{self, AtomicUsize};
-
-        static UNIQUE_COUNTER: AtomicUsize = AtomicUsize::new(0);
-        let id = UNIQUE_COUNTER.fetch_add(1, atomic::Ordering::Relaxed);
-        TypeVar::Generated(id)
-    }
-
-    fn fresh(&mut self) -> Type {
-        Type::Var(self.fresh_var())
-    }
-
-    fn assume(&mut self, name: ResolvedName, typ: Type) {
-        log::trace!(log::TYPECHECK, "Assuming type: {} : {}", name, typ);
-        self.assumptions
-            .entry(name)
-            .or_insert_with(|| Vec::with_capacity(1))
-            .push(typ);
-    }
-
-    fn constrain(&mut self, constraint: Constraint) {
-        log::trace!(log::TYPECHECK, "Emitting constraint: {:?}", constraint);
-        self.constraints.push(constraint);
-    }
-
     pub fn equate(&mut self, a: Type, b: Type) {
         self.constrain(Constraint::Equality(a, b));
     }
@@ -82,127 +59,8 @@ impl ConstraintGenerator {
         self.constrain(Constraint::ExplicitInstance(tau, sigma));
     }
 
-    /// Constrains all types in the given Vec to be equal, and returns that type.
-    fn equate_all(&mut self, typs: Vec<Type>) -> Type {
-        if typs.len() == 1 {
-            return typs[0].clone();
-        }
-
-        let beta = self.fresh();
-        for typ in typs {
-            self.constrain(Constraint::Equality(beta.clone(), typ.clone()));
-        }
-        beta
-    }
-
-    /// Returns the type of the whole pattern item, as well as emitting constraints for sub-items.
-    fn bind_pattern(&mut self, pat: &ast::Pattern<ResolvedName>) -> Type {
-        macro_rules! bind_function_args {
-            ($cons_type:expr, $iter:expr) => {
-                $iter.fold($cons_type, |acc, arg| {
-                    let arg_type = self.bind_pattern(arg);
-                    let partial_res_type = self.fresh();
-                    let partial_cons_type =
-                        Type::Arrow(Box::new(arg_type), Box::new(partial_res_type.clone()));
-
-                    self.constrain(Constraint::Equality(acc, partial_cons_type));
-
-                    partial_res_type
-                })
-            };
-        }
-
-        match pat {
-            ast::Pattern::Bind(name) => {
-                let beta = self.fresh();
-                self.bind_assumptions_mono(name, &beta);
-                beta
-            }
-
-            // Don't need to bind anything for underscores,
-            // because they're not legal identifiers and can't be used again.
-            ast::Pattern::Underscore => self.fresh(),
-
-            ast::Pattern::List(pats) => {
-                let beta = self.fresh();
-
-                for pat in pats {
-                    let typ = self.bind_pattern(pat);
-                    self.constraints
-                        .push(Constraint::Equality(beta.clone(), typ));
-                }
-
-                Type::List(Box::new(beta))
-            }
-            ast::Pattern::Tuple(pats) => {
-                Type::Tuple(pats.iter().map(|pat| self.bind_pattern(pat)).collect())
-            }
-
-            ast::Pattern::Numeral(ast::Numeral::Int(_)) => Type::Primitive(Primitive::Int),
-            ast::Pattern::Numeral(ast::Numeral::Float(_)) => Type::Primitive(Primitive::Float),
-            ast::Pattern::String(_) => Type::Primitive(Primitive::String),
-            ast::Pattern::Unit => Type::Primitive(Primitive::Unit),
-
-            ast::Pattern::Binop { operator, lhs, rhs } => {
-                let beta = self.fresh();
-                self.assume(*operator, beta.clone());
-                bind_function_args!(beta, iter::once(lhs).chain(iter::once(rhs)))
-            }
-
-            ast::Pattern::UnaryConstructor(name) => {
-                // @Cleanup: is this the only place this can go?
-                if name.source == Source::Builtin && (name.ident == "True" || name.ident == "False")
-                {
-                    let typ = Type::Primitive(Primitive::Bool);
-                    self.assume(*name, typ.clone());
-                    typ
-                } else {
-                    let beta = self.fresh();
-                    self.assume(*name, beta.clone());
-                    beta
-                }
-            }
-            ast::Pattern::Destructure { constructor, args } => {
-                let beta = self.fresh();
-                self.assume(*constructor, beta.clone());
-                bind_function_args!(beta, args.iter())
-            }
-        }
-    }
-
-    /// Binds (monomorphically) any assumptions about the given name to the given type.
-    fn bind_assumptions_mono(&mut self, name: &ResolvedName, typ: &Type) {
-        if let Some(assumptions) = self.assumptions.remove(name) {
-            for assumed in assumptions {
-                self.constrain(Constraint::Equality(assumed, typ.clone()));
-                log::trace!(log::TYPECHECK, "Bound (mono): {} to type {}", name, typ);
-            }
-        }
-    }
-
-    /// Binds (polymorphically) any assumptions about the given name to the given type.
-    fn bind_assumptions_poly(&mut self, name: &ResolvedName, typ: &Type) {
-        if let Some(assumptions) = self.assumptions.remove(name) {
-            for assumed in assumptions {
-                self.constrain(Constraint::ImplicitInstance(
-                    assumed,
-                    typ.clone(),
-                    self.m_stack.iter().cloned().collect(),
-                ));
-                log::trace!(
-                    log::TYPECHECK,
-                    "Bound (poly): {} to type {} (M = {})",
-                    name,
-                    typ,
-                    self.m_stack
-                        .iter()
-                        .cloned()
-                        .collect::<TypeVarSet<ResolvedName>>()
-                );
-            }
-        }
-    }
-
+    /// Solves the constraints which have been generated,
+    /// and return the solution `Substitution`.
     pub fn solve(&mut self) -> Result<Substitution, crate::typecheck::Error> {
         log::trace!(
             log::TYPECHECK,
@@ -563,10 +421,13 @@ impl ConstraintGenerator {
         match input {
             ast::TypeExpr::Term(term) => self.generate_type_term(term),
             ast::TypeExpr::App(f, x) => Type::App(
+                // x should have arity 0;
+                // f should have arity >= 1.
                 Box::new(self.generate_type_expr(f)),
                 Box::new(self.generate_type_expr(x)),
             ),
             ast::TypeExpr::Arrow(a, b) => Type::Arrow(
+                // Each of these should have arity 0.
                 Box::new(self.generate_type_expr(a)),
                 Box::new(self.generate_type_expr(b)),
             ),
@@ -607,9 +468,175 @@ impl ConstraintGenerator {
             ast::TypeTerm::Var(v) => Type::Var(TypeVar::Explicit(*v)),
 
             ast::TypeTerm::Parens(e) => self.generate_type_expr(e),
+
+            // The type in the list should have arity 0.
             ast::TypeTerm::List(e) => Type::List(Box::new(self.generate_type_expr(e))),
+
+            // Each of the types in the tuple should have arity 0.
             ast::TypeTerm::Tuple(exprs) => {
                 Type::Tuple(exprs.iter().map(|e| self.generate_type_expr(e)).collect())
+            }
+        }
+    }
+
+    // Internal methods
+
+    /// Generates a new and unique TypeVar each time it's called.
+    fn fresh_var(&mut self) -> TypeVar<ResolvedName> {
+        use std::sync::atomic::{self, AtomicUsize};
+
+        static UNIQUE_COUNTER: AtomicUsize = AtomicUsize::new(0);
+        let id = UNIQUE_COUNTER.fetch_add(1, atomic::Ordering::Relaxed);
+        TypeVar::Generated(id)
+    }
+
+    fn fresh(&mut self) -> Type {
+        Type::Var(self.fresh_var())
+    }
+
+    fn assume(&mut self, name: ResolvedName, typ: Type) {
+        log::trace!(log::TYPECHECK, "Assuming type: {} : {}", name, typ);
+        self.assumptions
+            .entry(name)
+            .or_insert_with(|| Vec::with_capacity(1))
+            .push(typ);
+    }
+
+    fn assume_arity(&mut self, name: ResolvedName, arity: usize) {
+        log::trace!(
+            log::TYPECHECK,
+            "Assuming type name {} has arity {}",
+            name,
+            arity
+        );
+        self.arity_assumptions
+            .entry(name)
+            .or_insert_with(|| Vec::with_capacity(1))
+            .push(arity);
+    }
+
+    fn constrain(&mut self, constraint: Constraint) {
+        log::trace!(log::TYPECHECK, "Emitting constraint: {:?}", constraint);
+        self.constraints.push(constraint);
+    }
+
+    /// Constrains all types in the given Vec to be equal, and returns that type.
+    fn equate_all(&mut self, typs: Vec<Type>) -> Type {
+        if typs.len() == 1 {
+            return typs[0].clone();
+        }
+
+        let beta = self.fresh();
+        for typ in typs {
+            self.constrain(Constraint::Equality(beta.clone(), typ.clone()));
+        }
+        beta
+    }
+
+    /// Returns the type of the whole pattern item, as well as emitting constraints for sub-items.
+    fn bind_pattern(&mut self, pat: &ast::Pattern<ResolvedName>) -> Type {
+        macro_rules! bind_function_args {
+            ($cons_type:expr, $iter:expr) => {
+                $iter.fold($cons_type, |acc, arg| {
+                    let arg_type = self.bind_pattern(arg);
+                    let partial_res_type = self.fresh();
+                    let partial_cons_type =
+                        Type::Arrow(Box::new(arg_type), Box::new(partial_res_type.clone()));
+
+                    self.constrain(Constraint::Equality(acc, partial_cons_type));
+
+                    partial_res_type
+                })
+            };
+        }
+
+        match pat {
+            ast::Pattern::Bind(name) => {
+                let beta = self.fresh();
+                self.bind_assumptions_mono(name, &beta);
+                beta
+            }
+
+            // Don't need to bind anything for underscores,
+            // because they're not legal identifiers and can't be used again.
+            ast::Pattern::Underscore => self.fresh(),
+
+            ast::Pattern::List(pats) => {
+                let beta = self.fresh();
+
+                for pat in pats {
+                    let typ = self.bind_pattern(pat);
+                    self.constraints
+                        .push(Constraint::Equality(beta.clone(), typ));
+                }
+
+                Type::List(Box::new(beta))
+            }
+            ast::Pattern::Tuple(pats) => {
+                Type::Tuple(pats.iter().map(|pat| self.bind_pattern(pat)).collect())
+            }
+
+            ast::Pattern::Numeral(ast::Numeral::Int(_)) => Type::Primitive(Primitive::Int),
+            ast::Pattern::Numeral(ast::Numeral::Float(_)) => Type::Primitive(Primitive::Float),
+            ast::Pattern::String(_) => Type::Primitive(Primitive::String),
+            ast::Pattern::Unit => Type::Primitive(Primitive::Unit),
+
+            ast::Pattern::Binop { operator, lhs, rhs } => {
+                let beta = self.fresh();
+                self.assume(*operator, beta.clone());
+                bind_function_args!(beta, iter::once(lhs).chain(iter::once(rhs)))
+            }
+
+            ast::Pattern::UnaryConstructor(name) => {
+                // @Cleanup: is this the only place this can go?
+                if name.source == Source::Builtin && (name.ident == "True" || name.ident == "False")
+                {
+                    let typ = Type::Primitive(Primitive::Bool);
+                    self.assume(*name, typ.clone());
+                    typ
+                } else {
+                    let beta = self.fresh();
+                    self.assume(*name, beta.clone());
+                    beta
+                }
+            }
+            ast::Pattern::Destructure { constructor, args } => {
+                let beta = self.fresh();
+                self.assume(*constructor, beta.clone());
+                bind_function_args!(beta, args.iter())
+            }
+        }
+    }
+
+    /// Binds (monomorphically) any assumptions about the given name to the given type.
+    fn bind_assumptions_mono(&mut self, name: &ResolvedName, typ: &Type) {
+        if let Some(assumptions) = self.assumptions.remove(name) {
+            for assumed in assumptions {
+                self.constrain(Constraint::Equality(assumed, typ.clone()));
+                log::trace!(log::TYPECHECK, "Bound (mono): {} to type {}", name, typ);
+            }
+        }
+    }
+
+    /// Binds (polymorphically) any assumptions about the given name to the given type.
+    fn bind_assumptions_poly(&mut self, name: &ResolvedName, typ: &Type) {
+        if let Some(assumptions) = self.assumptions.remove(name) {
+            for assumed in assumptions {
+                self.constrain(Constraint::ImplicitInstance(
+                    assumed,
+                    typ.clone(),
+                    self.m_stack.iter().cloned().collect(),
+                ));
+                log::trace!(
+                    log::TYPECHECK,
+                    "Bound (poly): {} to type {} (M = {})",
+                    name,
+                    typ,
+                    self.m_stack
+                        .iter()
+                        .cloned()
+                        .collect::<TypeVarSet<ResolvedName>>()
+                );
             }
         }
     }

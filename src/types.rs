@@ -141,6 +141,10 @@ impl<Name: Ord + Clone> TypeVarSet<Name> {
     pub fn remove(&mut self, k: &TypeVar<Name>) -> bool {
         self.0.remove(k)
     }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
 }
 
 impl<Name: Ord> IntoIterator for TypeVarSet<Name> {
