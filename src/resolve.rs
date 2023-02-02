@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::atomic::{self, AtomicUsize};
 use std::time::Instant;
@@ -201,7 +201,7 @@ impl fmt::Debug for Resolver {
     }
 }
 
-pub struct ModuleResolver<'a> {
+struct ModuleResolver<'a> {
     /// The parent `Resolver`, which contains implicit imports (e.g. builtins, Prelude)
     resolver: &'a mut Resolver,
 
@@ -1092,119 +1092,6 @@ impl From<Binding> for ResolvedName {
 impl From<ResolvedName> for Binding {
     fn from(name: ResolvedName) -> Self {
         Binding(name.source, UnresolvedName::Unqualified(name.ident))
-    }
-}
-
-impl<Ty> ast::Definition<ResolvedName, Ty> {
-    pub fn dependencies(&mut self) -> BTreeSet<ResolvedName> {
-        let mut deps = BTreeSet::new();
-
-        for (_lhs, expr) in self.assignments.iter() {
-            expr.dependencies(&mut deps);
-        }
-
-        deps
-    }
-}
-
-impl ast::Expr<ResolvedName> {
-    pub fn dependencies(&self, deps: &mut BTreeSet<ResolvedName>) {
-        use ast::*;
-        match self {
-            Expr::Term(Term::List(es)) | Expr::Term(Term::Tuple(es)) => {
-                es.iter().for_each(|e| e.dependencies(deps));
-            }
-            Expr::Term(Term::Name(name)) => {
-                deps.insert(*name);
-            }
-            Expr::Term(Term::Parens(e)) => e.dependencies(deps),
-            Expr::Term(_) => (),
-
-            Expr::App { func, argument } => {
-                func.dependencies(deps);
-                argument.dependencies(deps);
-            }
-
-            Expr::Binop { operator, lhs, rhs } => {
-                deps.insert(*operator);
-                lhs.dependencies(deps);
-                rhs.dependencies(deps);
-            }
-
-            Expr::Let {
-                definitions,
-                in_expr,
-            } => {
-                let mut sub_deps = BTreeSet::new();
-
-                in_expr.dependencies(&mut sub_deps);
-
-                // Remove variables bound in the definitions
-                for name in definitions.keys() {
-                    // @Note: if .remove() returns false,
-                    // the definition isn't referenced in the in_expr;
-                    // therefore it's dead code.
-                    // Maybe emit a warning about this.
-                    sub_deps.remove(name);
-                }
-
-                deps.extend(sub_deps);
-            }
-
-            Expr::If {
-                cond,
-                then_expr,
-                else_expr,
-            } => {
-                cond.dependencies(deps);
-                then_expr.dependencies(deps);
-                else_expr.dependencies(deps);
-            }
-
-            Expr::Case { expr, arms } => {
-                // Always include the dependencies of the scrutinised expression.
-                expr.dependencies(deps);
-
-                for (arm_pat, arm_expr) in arms {
-                    let mut sub_deps = BTreeSet::new();
-                    arm_expr.dependencies(&mut sub_deps);
-
-                    // Remove variables bound in the arm pattern
-                    for name in arm_pat.names_bound() {
-                        sub_deps.remove(&name);
-                    }
-
-                    deps.extend(sub_deps);
-                }
-            }
-
-            Expr::Lambda { lhs, rhs } => {
-                assert!(matches!(lhs, Lhs::Lambda { .. }));
-                let args = unwrap_match!(lhs, Lhs::Lambda { args } => args);
-
-                let mut sub_deps = BTreeSet::new();
-
-                rhs.dependencies(&mut sub_deps);
-
-                // Remove variables bound in the lambda LHS
-                for pat in args.iter() {
-                    for name in pat.names_bound() {
-                        // @Note: if .remove() returns false,
-                        // the definition isn't referenced in the in_expr;
-                        // therefore it's dead code.
-                        // Maybe emit a warning about this.
-                        sub_deps.remove(&name);
-                    }
-                }
-
-                deps.extend(sub_deps);
-            }
-
-            // Lua inline expressions can't depend on Huck values,
-            // or at least we can't (i.e. won't) check inside Lua for dependencies;
-            // so we do nothing.
-            Expr::Lua(_) | Expr::UnsafeLua(_) => (),
-        }
     }
 }
 
