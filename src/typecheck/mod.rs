@@ -1012,16 +1012,6 @@ impl TypeScheme {
     /// This is equivalent to replacing the quantified variables
     /// with new free variables,
     /// but it better preserves variable names.
-    // @Note: The doc comment here used to read:
-    //
-    // Takes a TypeScheme and replaces all quantified variables with fresh variables;
-    // then returns the resulting Type.
-    //
-    // The current implementation doesn't do this;
-    // it simply drops the quantification.
-    // This is equivalent to the previous behaviour,
-    // because it turns all the quantified variables into free variables,
-    // just without renaming them.
     #[inline]
     fn instantiate(self) -> Type {
         self.typ
