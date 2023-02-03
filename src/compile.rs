@@ -6,7 +6,8 @@ use crate::module::{Module, ModulePath};
 use crate::name::UnresolvedName;
 use crate::parse::{self, parse};
 use crate::precedence::ApplyPrecedence;
-use crate::{codegen, resolve, typecheck};
+use crate::typecheck::typecheck;
+use crate::{codegen, resolve};
 
 /// Does every step necessary to take the added modules to compiled state.
 /// Takes a `Vec` of (filepath stem, source code)
@@ -71,8 +72,7 @@ pub fn compile(input: Vec<(String, &'static str)>) -> Result<Vec<(String, String
     }
 
     // Typecheck
-    let mut typechecker = typecheck::Typechecker::new();
-    let typechecked_modules = typechecker.typecheck(resolved_modules)?;
+    let typechecked_modules = typecheck(resolved_modules)?;
 
     // Generate code
     let mut generated = Vec::new();

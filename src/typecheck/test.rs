@@ -7,7 +7,7 @@ use crate::name::{ResolvedName, Source};
 use crate::parse::parse;
 use crate::precedence::ApplyPrecedence;
 use crate::resolve::Resolver;
-use crate::typecheck::{Error as TypeError, Typechecker};
+use crate::typecheck::{typecheck, Error as TypeError};
 use crate::types::{Primitive, Type};
 use crate::utils::unwrap_match;
 
@@ -79,8 +79,7 @@ fn typ_module(huck: &'static str) -> Result<Module<ResolvedName, Type>, HuckErro
     }
 
     // Typecheck
-    let mut typechecker = Typechecker::new();
-    let mut gen_mods = typechecker.typecheck(resolved_modules)?;
+    let mut gen_mods = typecheck(resolved_modules)?;
     Ok(gen_mods.remove(&ModulePath("Test")).unwrap())
 }
 
