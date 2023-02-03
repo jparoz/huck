@@ -3,6 +3,12 @@ fail_fast: true
 repos:
   - repo: local
     hooks:
+      - id: no-empty-files
+        name: Check if any files are empty
+        description: Check if any committed files are empty
+        entry: scripts/empty.sh
+        language: script
+        pass_filenames: true
       - id: nocommit
         name: Check for `nocommit` instances
         description: Check if any committed files contain the string `nocommit`
