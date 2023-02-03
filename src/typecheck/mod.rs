@@ -507,16 +507,6 @@ impl Typechecker {
                 let then_type = self.generate_expr(then_expr);
                 let else_type = self.generate_expr(else_expr);
 
-                // @Note: This constraint elevates the type Bool to being a part of the compiler.
-                // This may or may not be what we want;
-                // possibly we should remain agnostic about the concrete type,
-                // by simply converting `if`s to `case`s by syntactic sugar;
-                // then (in theory) the Bool type can be redefined as appropriate.
-                // All that said, what is the possibly utility this can provide?
-                // It's not as though we can remain morally superior
-                // by avoiding elevating any types to compiler status
-                // (see Int, Float);
-                // so perhaps it's fine to just add Bool to that list.
                 self.constrain(Constraint::Equality(
                     cond_type,
                     Type::Primitive(Primitive::Bool),
