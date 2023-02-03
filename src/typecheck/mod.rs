@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, time::Instant};
 
 use crate::module::{Module, ModulePath};
 use crate::name::{ResolvedName, Source};
-use crate::types::{self, Primitive, Type, TypeScheme, TypeVar, TypeVarSet};
+use crate::types::{Primitive, Type, TypeScheme, TypeVar, TypeVarSet};
 use crate::{ast, log};
 
 mod arity;
@@ -108,12 +108,23 @@ impl Typechecker {
         Type::Var(self.fresh_var())
     }
 
-    fn assume(&mut self, name: ResolvedName, typ: Type) {
-        log::trace!(log::TYPECHECK, "Assuming type: {} : {}", name, typ);
-        self.assumptions
-            .entry(name)
-            .or_insert_with(|| Vec::with_capacity(1))
-            .push(typ);
+    /// If the given name is a builtin, then returns that builtin's type.
+    /// Otherwise, emits an assumption binding the name to a fresh type variable.
+    fn assume(&mut self, name: ResolvedName) -> Type {
+        if name.source == Source::Builtin {
+            match name.ident {
+                "True" | "False" => Type::Primitive(Primitive::Bool),
+                _ => unreachable!("missing a compiler builtin type"),
+            }
+        } else {
+            let typ = self.fresh();
+            log::trace!(log::TYPECHECK, "Assuming type: {} : {}", name, typ);
+            self.assumptions
+                .entry(name)
+                .or_insert_with(|| Vec::with_capacity(1))
+                .push(typ.clone());
+            typ
+        }
     }
 
     fn constrain(&mut self, constraint: Constraint) {
@@ -436,11 +447,7 @@ impl Typechecker {
                 Type::Tuple(es.iter().map(|e| self.generate_expr(e)).collect())
             }
 
-            ast::Expr::Term(ast::Term::Name(name)) => {
-                let typ = self.fresh();
-                self.assume(*name, typ.clone());
-                typ
-            }
+            ast::Expr::Term(ast::Term::Name(name)) => self.assume(*name),
 
             ast::Expr::App { func, argument } => {
                 let t1 = self.generate_expr(func);
@@ -455,8 +462,7 @@ impl Typechecker {
                 beta
             }
             ast::Expr::Binop { operator, lhs, rhs } => {
-                let t1 = self.fresh();
-                self.assume(*operator, t1.clone());
+                let t1 = self.assume(*operator);
                 let t2 = self.generate_expr(lhs);
                 let t3 = self.generate_expr(rhs);
                 let beta1 = self.fresh();
@@ -764,27 +770,13 @@ impl Typechecker {
             ast::Pattern::Unit => Type::Primitive(Primitive::Unit),
 
             ast::Pattern::Binop { operator, lhs, rhs } => {
-                let beta = self.fresh();
-                self.assume(*operator, beta.clone());
+                let beta = self.assume(*operator);
                 bind_function_args!(beta, iter::once(lhs).chain(iter::once(rhs)))
             }
 
-            ast::Pattern::UnaryConstructor(name) => {
-                // @Cleanup: is this the only place this can go?
-                if name.source == Source::Builtin && (name.ident == "True" || name.ident == "False")
-                {
-                    let typ = Type::Primitive(Primitive::Bool);
-                    self.assume(*name, typ.clone());
-                    typ
-                } else {
-                    let beta = self.fresh();
-                    self.assume(*name, beta.clone());
-                    beta
-                }
-            }
+            ast::Pattern::UnaryConstructor(name) => self.assume(*name),
             ast::Pattern::Destructure { constructor, args } => {
-                let beta = self.fresh();
-                self.assume(*constructor, beta.clone());
+                let beta = self.assume(*constructor);
                 bind_function_args!(beta, args.iter())
             }
         }
@@ -906,32 +898,10 @@ impl Typechecker {
             }
         }
 
-        // Constrain assumptions about builtin types.
-        // @Cleanup: this probably shouldn't be necessary;
-        // we could instead constrain builtin names to their types
-        // when we would have emitted an assumption;
-        // and here just do:
-        // assert!(self.assumptions.is_empty());
-        for (assumed_name, assumed_types) in self.assumptions.iter_mut() {
-            // @Todo @XXX @Errors: throw an actual error (possibly only internal?)
-            assert_eq!(assumed_name.source, Source::Builtin); // @XXX
+        // We should have removed all assumptions by now.
+        assert!(self.assumptions.is_empty());
 
-            // @Cleanup: @DRY with Pattern::UnaryConstructor branch
-            // in ConstraintGenerator::bind_pattern
-
-            // This means that it's a compiler builtin.
-            match assumed_name.ident {
-                "True" | "False" => assumed_types.iter().cloned().for_each(|t| {
-                    let constraint =
-                        Constraint::Equality(t, Type::Primitive(types::Primitive::Bool));
-                    log::trace!(log::TYPECHECK, "Emitting constraint: {:?}", constraint);
-                    self.constraints.push(constraint);
-                }),
-                _ => unreachable!("missing a compiler builtin type"),
-            }
-        }
-
-        // Checks all the assumptions are true within the given modules.
+        // Checks all the arity assumptions are true within the given modules.
         self.arity_checker.finish(&self.modules)?;
 
         Ok(())
