@@ -2,8 +2,7 @@ use std::collections::BTreeMap;
 use std::fmt::{self, Display};
 use std::time::Instant;
 
-use crate::name::{ResolvedName, UnresolvedName};
-use crate::types::Type;
+use crate::name::UnresolvedName;
 use crate::{ast, log, parse};
 
 /// A `Module` is a dictionary of Huck function definitions.
@@ -157,15 +156,6 @@ impl Module<UnresolvedName, ()> {
         );
 
         Ok(module)
-    }
-}
-
-impl Module<ResolvedName, Type> {
-    pub fn get_type(&self, name: &ResolvedName) -> Option<Type> {
-        self.constructors
-            .get(name)
-            .map(|constr_defn| constr_defn.typ.clone())
-            .or_else(|| self.definitions.get(name).map(|defn| defn.typ.clone()))
     }
 }
 

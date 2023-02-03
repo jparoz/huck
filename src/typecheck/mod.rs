@@ -852,7 +852,15 @@ impl Typechecker {
                 for import_name in import_names {
                     // Find the inferred type.
                     let typ = import_module
-                        .get_type(import_name)
+                        .constructors
+                        .get(import_name)
+                        .map(|constr_defn| constr_defn.typ.clone())
+                        .or_else(|| {
+                            import_module
+                                .definitions
+                                .get(import_name)
+                                .map(|defn| defn.typ.clone())
+                        })
                         .expect("should already be resolved and typechecked");
 
                     // If there are any assumptions about the variable, bind them.
