@@ -3,11 +3,12 @@ mod error;
 #[cfg(test)]
 mod test;
 
-use crate::module::{Module, ModulePath};
+use crate::ast::{self, Module};
+use crate::log;
+use crate::name::ModulePath;
 use crate::name::{ResolvedName, Source};
 use crate::types::Type;
 use crate::utils::unwrap_match;
-use crate::{ast, log};
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;

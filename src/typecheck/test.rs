@@ -2,8 +2,8 @@ use test_log::test;
 
 use std::collections::BTreeMap;
 
-use crate::module::{Module, ModulePath};
-use crate::name::{ResolvedName, Source};
+use crate::ast::Module;
+use crate::name::{ModulePath, ResolvedName, Source};
 use crate::parse::parse;
 use crate::precedence::ApplyPrecedence;
 use crate::resolve::Resolver;

@@ -1,7 +1,16 @@
 use std::fmt::{self, Display};
 
 use crate::ast;
-use crate::module::ModulePath;
+
+/// A ModulePath is a path to a Huck module, as defined within that module.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ModulePath(pub &'static str);
+
+impl Display for ModulePath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 /// An `UnresolvedName` is a Huck identifier
 /// which may or may not exist,

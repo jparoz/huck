@@ -1,8 +1,9 @@
 use std::collections::BTreeMap;
 use std::iter;
 
+use crate::ast::Module;
 use crate::error::Error as HuckError;
-use crate::module::{Module, ModulePath};
+use crate::name::ModulePath;
 use crate::name::UnresolvedName;
 use crate::parse::{self, parse};
 use crate::precedence::ApplyPrecedence;

@@ -1,10 +1,10 @@
 use std::collections::BTreeMap;
 use std::mem;
 
-use crate::module::{Module, ModulePath};
-use crate::name::{ResolvedName, Source};
+use crate::ast::{self, Module};
+use crate::log;
+use crate::name::{ModulePath, ResolvedName, Source};
 use crate::types::Type;
-use crate::{ast, log};
 
 use super::Error;
 

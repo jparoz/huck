@@ -3,8 +3,8 @@ use std::fmt;
 use std::sync::atomic::{self, AtomicUsize};
 use std::time::Instant;
 
-use crate::module::{Module, ModulePath};
-use crate::name::{ResolvedName, Source, UnresolvedName};
+use crate::ast::Module;
+use crate::name::{ModulePath, ResolvedName, Source, UnresolvedName};
 use crate::types::TypeVar;
 use crate::utils::unwrap_match;
 use crate::{ast, log};

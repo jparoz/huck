@@ -1,9 +1,44 @@
 use std::collections::BTreeMap;
 use std::fmt::{self, Display};
 
-use crate::module::ModulePath;
+use crate::name::ModulePath;
 use crate::precedence::Precedence;
 use crate::types;
+
+/// A `Module` is a dictionary of Huck function definitions.
+/// This is produced from a `Vec<Statement>`,
+/// by using the parsed precedence rules to reshape the AST,
+/// and collecting statements referring to the same function
+/// into a single `Definition` struct for each function name.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Module<Name: Ord, Ty> {
+    pub path: ModulePath,
+    pub definitions: BTreeMap<Name, Definition<Name, Ty>>,
+
+    pub type_definitions: BTreeMap<Name, TypeDefinition<Name, Ty>>,
+
+    /// Note that all the members of this field can also be found
+    /// in the values of the `type_definitions` field.
+    pub constructors: BTreeMap<Name, ConstructorDefinition<Name, Ty>>,
+
+    pub imports: BTreeMap<ModulePath, Vec<Name>>,
+    pub foreign_imports: BTreeMap<&'static str, Vec<ForeignImportItem<Name, Ty>>>,
+    pub foreign_exports: Vec<(&'static str, Expr<Name>)>,
+}
+
+impl<Name: Ord, Ty> Module<Name, Ty> {
+    pub fn new(path: ModulePath) -> Self {
+        Self {
+            path,
+            definitions: BTreeMap::new(),
+            type_definitions: BTreeMap::new(),
+            constructors: BTreeMap::new(),
+            imports: BTreeMap::new(),
+            foreign_imports: BTreeMap::new(),
+            foreign_exports: Vec::new(),
+        }
+    }
+}
 
 /// A definition is the correct AST for a given Huck definition,
 /// combined from any statements concerning the same Name.

@@ -1,5 +1,4 @@
-use crate::module::ModulePath;
-use crate::name::UnresolvedName;
+use crate::name::{ModulePath, UnresolvedName};
 use crate::precedence::Precedence;
 
 #[derive(thiserror::Error, Debug)]

@@ -1,8 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::ast;
-use crate::module::ModulePath;
-use crate::name::UnresolvedName;
+use crate::name::{ModulePath, UnresolvedName};
 use crate::precedence::{Associativity, Precedence};
 use crate::{parse, types};
 

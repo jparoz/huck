@@ -3,7 +3,6 @@ mod codegen;
 mod compile;
 mod error;
 mod log;
-mod module;
 mod name;
 mod parse;
 mod precedence;

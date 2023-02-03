@@ -8,8 +8,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::ast;
-use crate::module::Module;
+use crate::ast::{self, Module};
 use crate::name::ResolvedName;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
@@ -107,7 +106,7 @@ impl ApplyPrecedence for ast::Pattern<ResolvedName> {
                         && l.associativity == Associativity::None
                         && r.associativity == Associativity::None
                     {
-                        // @Errors: throw a proper parse error
+                        // @Errors: throw a proper error
                         panic!(
                             "Can't combine infix operators of same precedence and no associativity"
                         );
@@ -160,7 +159,7 @@ impl ApplyPrecedence for ast::Expr<ResolvedName> {
                         && l.associativity == Associativity::None
                         && r.associativity == Associativity::None
                     {
-                        // @Errors: throw a proper parse error
+                        // @Errors: throw a proper error
                         panic!(
                             "Can't combine infix operators of same precedence and no associativity"
                         );

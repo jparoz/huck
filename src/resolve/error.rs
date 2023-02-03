@@ -1,5 +1,4 @@
-use crate::module::ModulePath;
-use crate::name::{ResolvedName, Source, UnresolvedName};
+use crate::name::{ModulePath, ResolvedName, Source, UnresolvedName};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {

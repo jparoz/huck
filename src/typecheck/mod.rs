@@ -3,10 +3,10 @@ use std::fmt::{self, Debug, Write};
 use std::iter;
 use std::{collections::BTreeMap, time::Instant};
 
-use crate::module::{Module, ModulePath};
-use crate::name::{ResolvedName, Source};
+use crate::ast::{self, Module};
+use crate::log;
+use crate::name::{ModulePath, ResolvedName, Source};
 use crate::types::{Primitive, Type, TypeScheme, TypeVar, TypeVarSet};
-use crate::{ast, log};
 
 mod arity;
 mod substitution;

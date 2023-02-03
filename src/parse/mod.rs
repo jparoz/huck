@@ -12,8 +12,7 @@ use nom::{Finish, IResult};
 use std::collections::BTreeMap;
 use std::time::Instant;
 
-use crate::module::ModulePath;
-use crate::name::UnresolvedName;
+use crate::name::{ModulePath, UnresolvedName};
 use crate::precedence::{Associativity, Precedence};
 use crate::{ast::*, log, types};
 
@@ -49,6 +48,125 @@ pub fn parse(
 
     Ok((path, statements))
 }
+
+impl Module<UnresolvedName, ()> {
+    /// Takes the `Vec<Statement>` from parsing
+    /// and turns it into a `Module`.
+    pub fn from_statements(
+        path: ModulePath,
+        statements: Vec<Statement<UnresolvedName, ()>>,
+        // @Cleanup: maybe not parse error
+    ) -> Result<Self, Error> {
+        // Start the timer to measure how long post-parsing takes.
+        let start_time = Instant::now();
+
+        let mut module = Module::new(path);
+
+        // Process all parsed statements,
+        // and insert them into the Module.
+        log::trace!(log::RESOLVE, "Processing parsed statements");
+        for stat in statements {
+            match stat {
+                Statement::Import(path, names) => {
+                    module.imports.entry(path).or_default().extend(names)
+                }
+
+                Statement::ForeignImport(require_string, import_items) => module
+                    .foreign_imports
+                    .entry(require_string)
+                    .or_default()
+                    .extend(import_items.into_iter()),
+
+                Statement::Precedence(name, prec) => {
+                    // If there was already a precedence for this name, that's an error.
+                    if let Some(previous_prec) = module
+                        .definitions
+                        .entry(name)
+                        .or_default()
+                        .precedence
+                        .replace(prec)
+                    {
+                        return Err(Error::MultiplePrecs(name, prec, previous_prec));
+                    }
+                }
+
+                Statement::AssignmentWithoutType(assign) => {
+                    module
+                        .definitions
+                        .entry(*assign.0.name())
+                        .or_default()
+                        .assignments
+                        .push(assign);
+                }
+
+                Statement::AssignmentWithType(ts, assign) => {
+                    let defn = module.definitions.entry(*assign.0.name()).or_default();
+
+                    // If there was already an explicit for this name, that's an error.
+                    if let Some(previous_ts) = defn.explicit_type.replace(ts.clone()) {
+                        return Err(Error::MultipleTypes(
+                            *assign.0.name(),
+                            // @Cleanup: don't have this dodgy whitespace
+                            format!("\n    {:?}\n    {:?}", ts, previous_ts),
+                        ));
+                    }
+
+                    defn.assignments.push(assign);
+                }
+
+                Statement::TypeAnnotation(name, ts) => {
+                    // @Future @TypeBinops: handle precedence here as well
+
+                    // If there was already an explicit for this name, that's an error.
+                    if let Some(previous_ts) = module
+                        .definitions
+                        .entry(name)
+                        .or_default()
+                        .explicit_type
+                        .replace(ts.clone())
+                    {
+                        return Err(Error::MultipleTypes(
+                            name,
+                            // @Cleanup @Errors: don't have this dodgy whitespace
+                            format!("\n    {:?}\n    {:?}", ts, previous_ts),
+                        ));
+                    }
+                }
+
+                Statement::TypeDefinition(type_defn) => {
+                    for constr in type_defn.constructors.values().cloned() {
+                        if let Some(existing_constr) =
+                            module.constructors.insert(constr.name, constr)
+                        {
+                            return Err(Error::MultipleTypeConstructors(existing_constr.name));
+                        }
+                    }
+
+                    if let Some(first_defn) =
+                        module.type_definitions.insert(type_defn.name, type_defn)
+                    {
+                        return Err(Error::MultipleTypeDefinitions(first_defn.name));
+                    }
+                }
+
+                Statement::ForeignExport(lua_lhs, expr) => {
+                    module.foreign_exports.push((lua_lhs, expr))
+                }
+            }
+        }
+
+        log::info!(
+            log::METRICS,
+            "Post-parsing module {path} completed, {time:?} elapsed",
+            time = start_time.elapsed(),
+            path = module.path,
+        );
+
+        Ok(module)
+    }
+}
+
+// Parser functions below
 
 fn module_declaration(input: &'static str) -> IResult<&'static str, ModulePath> {
     delimited(reserved("module"), module_path, semi)(input)
