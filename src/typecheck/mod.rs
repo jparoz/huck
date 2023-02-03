@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::fmt::{self, Debug, Write};
+use std::iter;
 use std::{collections::BTreeMap, time::Instant};
-use std::{iter, mem};
 
 use crate::module::{Module, ModulePath};
 use crate::name::{ResolvedName, Source};
@@ -39,8 +39,6 @@ pub fn typecheck(
         .remove(&prelude_path)
         .into_iter()
         .map(|m| (prelude_path, m));
-
-    let mut typechecked_modules = BTreeMap::new();
 
     for (module_path, module) in prelude.chain(modules.into_iter()) {
         log::trace!(log::TYPECHECK, "Typechecking: module {module_path};");
@@ -157,7 +155,7 @@ pub fn typecheck(
                 log::IMPORT,
                 "Importing contents of Prelude into {module_path}"
             );
-            let prelude_gm: &Module<ResolvedName, Type> = &typechecked_modules[&prelude_path];
+            let prelude = &typechecker.modules[&prelude_path];
 
             // @Errors @Warn: name clashes
             typechecked_module
@@ -165,42 +163,22 @@ pub fn typecheck(
                 .entry(prelude_path)
                 .or_default()
                 .extend(
-                    prelude_gm
+                    prelude
                         .definitions
                         .keys()
-                        .chain(prelude_gm.constructors.keys()),
+                        .chain(prelude.constructors.keys()),
                 );
         }
 
-        // Polymorphically bind all top-level names.
-        // If any assumptions were found to be imported,
-        // their assumptions are promoted to cross-module level by this method.
-        typechecker.bind_all_module_assumptions(&typechecked_module)?;
-
-        // Add the Module<ResolvedName, Type> to the context.
-        assert!(typechecked_modules
+        // Add the Module<ResolvedName, Type> to the typechecker's context.
+        assert!(typechecker
+            .modules
             .insert(module_path, typechecked_module)
             .is_none());
     }
 
-    // Constrain any names which were promoted to the cross-module level (i.e. imported names).
-    typechecker.bind_all_import_assumptions(&typechecked_modules)?;
-
     // Solve the type constraints
-    let soln = typechecker.solve()?;
-
-    // Apply the solution to each Module<ResolvedName, Type>.
-    for module in typechecked_modules.values_mut() {
-        log::info!(log::TYPECHECK, "module {}:", module.path);
-        for (name, ref mut definition) in module.definitions.iter_mut() {
-            definition.typ.apply(&soln);
-            log::info!(
-                log::TYPECHECK,
-                "  Inferred type for {name} : {}",
-                definition.typ
-            );
-        }
-    }
+    let typechecked_modules = typechecker.solve()?;
 
     log::info!(
         log::METRICS,
@@ -235,15 +213,15 @@ impl Debug for Constraint {
 /// Manages typechecking of a group of modules.
 #[derive(Debug, Default)]
 struct Typechecker {
+    /// The modules for which constraints have so far been generated.
+    modules: BTreeMap<ModulePath, Module<ResolvedName, Type>>,
+
     /// All of the emitted constraints about the modules being typechecked.
     /// These are solved in [`Typechecker::solve`].
     constraints: Vec<Constraint>,
 
     /// All the currently assumed types of name uses.
     assumptions: BTreeMap<ResolvedName, Vec<Type>>,
-
-    /// Assumptions which need to cross module boundaries to be checked.
-    import_assumptions: BTreeMap<ResolvedName, Vec<Type>>,
 
     // @Todo @Cleanup: this has nothing to do with constraints, it's just here for convenience.
     arity_checker: ArityChecker,
@@ -278,22 +256,6 @@ impl Typechecker {
         self.constraints.push(constraint);
     }
 
-    fn equate(&mut self, a: Type, b: Type) {
-        self.constrain(Constraint::Equality(a, b));
-    }
-
-    fn implicit_instance(&mut self, a: Type, b: Type) {
-        self.constrain(Constraint::ImplicitInstance(
-            a,
-            b,
-            self.m_stack.iter().cloned().collect(),
-        ));
-    }
-
-    fn explicit_instance(&mut self, tau: Type, sigma: TypeScheme) {
-        self.constrain(Constraint::ExplicitInstance(tau, sigma));
-    }
-
     /// Constrains all types in the given Vec to be equal, and returns that type.
     fn equate_all(&mut self, typs: Vec<Type>) -> Type {
         if typs.len() == 1 {
@@ -308,12 +270,14 @@ impl Typechecker {
     }
 
     /// Solves the constraints which have been generated,
-    /// and return the solution `Substitution`.
-    fn solve(&mut self) -> Result<Substitution, crate::typecheck::Error> {
-        log::trace!(
-            log::TYPECHECK,
-            "Called ConstraintGenerator::solve, starting constraints:"
-        );
+    /// and return the typechecked modules.
+    fn solve(
+        mut self,
+    ) -> Result<BTreeMap<ModulePath, Module<ResolvedName, Type>>, crate::typecheck::Error> {
+        // Before we can solve, we still need to bind all assumptions.
+        self.bind_assumptions_top_level()?;
+
+        log::trace!(log::TYPECHECK, "Starting constraint solving, constraints:");
         for constraint in self.constraints.iter() {
             log::trace!(log::TYPECHECK, "  {:?}", constraint);
         }
@@ -321,7 +285,7 @@ impl Typechecker {
         log::trace!(log::TYPECHECK, "{:-^100}", " START SOLVING ");
         let mut solution = Substitution::empty();
 
-        let mut constraints = VecDeque::from(self.constraints.clone());
+        let mut constraints = VecDeque::from(self.constraints);
 
         while let Some(constraint) = constraints.pop_front() {
             let constraint_str = format!("{constraint:?}");
@@ -374,7 +338,20 @@ impl Typechecker {
             log::trace!(log::TYPECHECK, "  {} ↦ {}", fr, to);
         }
 
-        Ok(solution)
+        // Apply the solution to each Module<ResolvedName, Type>.
+        for module in self.modules.values_mut() {
+            log::info!(log::TYPECHECK, "module {}:", module.path);
+            for (name, ref mut definition) in module.definitions.iter_mut() {
+                definition.typ.apply(&solution);
+                log::info!(
+                    log::TYPECHECK,
+                    "  Inferred type for {name} : {}",
+                    definition.typ
+                );
+            }
+        }
+
+        Ok(self.modules)
     }
 
     // Generation methods
@@ -806,132 +783,6 @@ impl Typechecker {
         }
     }
 
-    /// Binds all top level assumptions to the types found in their definition.
-    ///
-    /// If the name isn't defined in this module, check if it's imported;
-    /// if it is, then this assumption is promoted to cross-module level.
-    fn bind_all_module_assumptions(
-        &mut self,
-        module: &Module<ResolvedName, Type>,
-    ) -> Result<(), Error> {
-        log::trace!(log::TYPECHECK, "Emitting constraints about assumptions:");
-
-        let mut assumptions = BTreeMap::new();
-        mem::swap(&mut assumptions, &mut self.assumptions);
-
-        for (assumed_name, assumed_types) in assumptions {
-            if let Some(typ) = module.get_type(&assumed_name) {
-                // This means that it was defined in this module.
-                for assumed_type in assumed_types {
-                    self.implicit_instance(assumed_type, typ.clone());
-                }
-            } else if let Source::Foreign { require, .. } = assumed_name.source {
-                // This means that the name was imported from a foreign (Lua) module;
-                // this means that the Huck author gave an explicit type signature at the import.
-
-                let imports = module
-                    .foreign_imports
-                    .get(require)
-                    .expect("should already be resolved");
-
-                for ast::ForeignImportItem { name, typ, .. } in imports {
-                    if name == &assumed_name {
-                        for assumed_type in assumed_types.iter() {
-                            self.explicit_instance(
-                                assumed_type.clone(),
-                                // @Note: we're just replacing the type variables which are
-                                // thrown away when inserting foreign imports into the scope.
-                                // This could possibly be done in a more sensible way;
-                                // but this is at least consistent and correct.
-                                typ.clone().generalize(&TypeVarSet::empty()),
-                            );
-                        }
-                    }
-                }
-            } else if assumed_name.source == Source::Builtin {
-                // @Cleanup: @DRY with Pattern::UnaryConstructor branch
-                // in ConstraintGenerator::bind_pattern
-
-                // This means that it's a compiler builtin.
-                match assumed_name.ident {
-                    "True" | "False" => assumed_types
-                        .into_iter()
-                        .for_each(|t| self.equate(t, Type::Primitive(types::Primitive::Bool))),
-                    _ => unreachable!("missing a compiler builtin type"),
-                }
-            } else {
-                // This means that the name was imported from another Huck module;
-                // so we need to resolve it at cross-module level later.
-                // We do this by pushing it into self.import_assumptions.
-                self.import_assumptions
-                    .entry(assumed_name)
-                    .or_default()
-                    .extend(assumed_types);
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Binds all cross-module-level assumptions (i.e. from imported names).
-    //
-    // @Note:
-    // We used to do this in a similar way to bind_all_module_level_assumptions,
-    // by iterating over self.assumptions and binding the names as they appear there.
-    // However, this didn't catch the error where
-    // an import was unused and also didn't exist in the imported module.
-    // By instead iterating over each modules's imported names,
-    // we ensure that all imports exist, whether they're used or not.
-    fn bind_all_import_assumptions(
-        &mut self,
-        modules: &BTreeMap<ModulePath, Module<ResolvedName, Type>>,
-    ) -> Result<(), Error> {
-        log::trace!(
-            log::TYPECHECK,
-            "Emitting constraints about context-level assumptions:"
-        );
-
-        for module in modules.values() {
-            // Constrain the types of all assumed types to the inferred type of the name.
-            for (import_path, import_names) in module.imports.iter() {
-                // Get the imported module.
-                // @Note: this should be infallable,
-                // because we've already confirmed that this module exists in the resolve step.
-                let import_module = modules
-                    .get(import_path)
-                    .expect("should already be resolved");
-
-                // Constrain that each assumed type is an instance of the name's inferred type.
-                for import_name in import_names {
-                    // Find the inferred type.
-                    // @Note: this should be infallable,
-                    // because we've already confirmed everything exists in the resolve step.
-                    let typ = import_module
-                        .get_type(import_name)
-                        .expect("should already be resolved and typechecked");
-
-                    // If there are any assumptions about the variable, bind them.
-                    if let Some(assumed_types) = self.import_assumptions.remove(import_name) {
-                        // Constrain that the assumed types are instances of the inferred type.
-                        for assumed_type in assumed_types {
-                            self.implicit_instance(assumed_type, typ.clone());
-                        }
-                    } else {
-                        // @Errors @Warn: emit a warning for unused imports
-                        if import_path != &ModulePath("Prelude") {
-                            log::warn!(log::IMPORT, "unused: import {import_path} ({import_name})");
-                        }
-                    }
-                }
-            }
-        }
-
-        // Checks all the assumptions are true within the given modules.
-        self.arity_checker.finish(modules)?;
-
-        Ok(())
-    }
-
     /// Binds (monomorphically) any assumptions about the given name to the given type.
     fn bind_assumptions_mono(&mut self, name: &ResolvedName, typ: &Type) {
         if let Some(assumptions) = self.assumptions.remove(name) {
@@ -963,6 +814,120 @@ impl Typechecker {
                 );
             }
         }
+    }
+
+    /// Binds all assumptions left at the end of typechecking (e.g. from imported names).
+    fn bind_assumptions_top_level(&mut self) -> Result<(), Error> {
+        log::trace!(log::TYPECHECK, "Emitting constraints about assumptions:");
+
+        for module in self.modules.values() {
+            // Constrain assumptions about names defined in this module.
+            for (name, defn) in module.definitions.iter() {
+                if let Some(assumed_types) = self.assumptions.remove(name) {
+                    for assumed_type in assumed_types {
+                        let constraint = Constraint::ImplicitInstance(
+                            assumed_type,
+                            defn.typ.clone(),
+                            TypeVarSet::empty(),
+                        );
+                        log::trace!(log::TYPECHECK, "Emitting constraint: {:?}", constraint);
+                        self.constraints.push(constraint);
+                    }
+                } else {
+                    // @Note: If a definition isn't used in any of the typechecked code,
+                    // we'll find out about it here.
+                    // This could be useful for dead code analysis,
+                    // although this will currently fire for all definitions,
+                    // even if the point of the defninition is to be used from Lua.
+                    // Would probably need to have explicit exports for this to be useful.
+                    // log::debug!("Possibly unused name: {name}");
+                }
+            }
+
+            // Constrain assumptions about Huck imports.
+            for (import_path, import_names) in module.imports.iter() {
+                // Get the imported module.
+                let import_module = &self.modules[import_path];
+
+                // Constrain that each assumed type is an instance of the name's inferred type.
+                for import_name in import_names {
+                    // Find the inferred type.
+                    let typ = import_module
+                        .get_type(import_name)
+                        .expect("should already be resolved and typechecked");
+
+                    // If there are any assumptions about the variable, bind them.
+                    if let Some(assumed_types) = self.assumptions.remove(import_name) {
+                        // Constrain that the assumed types are instances of the inferred type.
+                        for assumed_type in assumed_types {
+                            let constraint = Constraint::ImplicitInstance(
+                                assumed_type,
+                                typ.clone(),
+                                TypeVarSet::empty(),
+                            );
+                            log::trace!(log::TYPECHECK, "Emitting constraint: {:?}", constraint);
+                            self.constraints.push(constraint);
+                        }
+                    } else {
+                        // @Errors @Warn: emit a warning for unused imports
+                        if import_path != &ModulePath("Prelude") {
+                            log::warn!(log::IMPORT, "unused: import {import_path} ({import_name})");
+                        }
+                    }
+                }
+            }
+
+            // Constrain assumptions about foreign imports.
+            for imports in module.foreign_imports.values() {
+                for ast::ForeignImportItem { name, typ, .. } in imports {
+                    if let Some(assumed_types) = self.assumptions.remove(name) {
+                        for assumed_type in assumed_types.iter() {
+                            let tau = assumed_type.clone();
+
+                            // @Note: we're just replacing the type variables which are
+                            // thrown away when inserting foreign imports into the scope.
+                            // This could possibly be done in a more sensible way;
+                            // but this is at least consistent and correct.
+                            let sigma = typ.clone().generalize(&TypeVarSet::empty());
+
+                            let constraint = Constraint::ExplicitInstance(tau, sigma);
+                            log::trace!(log::TYPECHECK, "Emitting constraint: {:?}", constraint);
+                            self.constraints.push(constraint);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Constrain assumptions about builtin types.
+        // @Cleanup: this probably shouldn't be necessary;
+        // we could instead constrain builtin names to their types
+        // when we would have emitted an assumption;
+        // and here just do:
+        // assert!(self.assumptions.is_empty());
+        for (assumed_name, assumed_types) in self.assumptions.iter_mut() {
+            // @Todo @XXX @Errors: throw an actual error (possibly only internal?)
+            assert_eq!(assumed_name.source, Source::Builtin); // @XXX
+
+            // @Cleanup: @DRY with Pattern::UnaryConstructor branch
+            // in ConstraintGenerator::bind_pattern
+
+            // This means that it's a compiler builtin.
+            match assumed_name.ident {
+                "True" | "False" => assumed_types.iter().cloned().for_each(|t| {
+                    let constraint =
+                        Constraint::Equality(t, Type::Primitive(types::Primitive::Bool));
+                    log::trace!(log::TYPECHECK, "Emitting constraint: {:?}", constraint);
+                    self.constraints.push(constraint);
+                }),
+                _ => unreachable!("missing a compiler builtin type"),
+            }
+        }
+
+        // Checks all the assumptions are true within the given modules.
+        self.arity_checker.finish(&self.modules)?;
+
+        Ok(())
     }
 }
 
