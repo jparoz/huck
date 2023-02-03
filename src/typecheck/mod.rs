@@ -35,146 +35,11 @@ pub fn typecheck(
     // so that the implicit Prelude import statement
     // can be imported into other modules.
     let prelude_path = ModulePath("Prelude");
-    let prelude = modules
-        .remove(&prelude_path)
-        .into_iter()
-        .map(|m| (prelude_path, m));
+    let prelude = modules.remove(&prelude_path).into_iter();
 
-    for (module_path, module) in prelude.chain(modules.into_iter()) {
-        log::trace!(log::TYPECHECK, "Typechecking: module {module_path};");
-        // Set the new `Module`'s path.
-        let mut typechecked_module = Module::new(module_path);
-
-        // Generate constraints for each definition, while keeping track of inferred types
-        for (name, defn) in module.definitions {
-            log::trace!(log::TYPECHECK, "Inferring type for {name}");
-
-            let typ = typechecker.generate_definition(&defn);
-
-            log::trace!(
-                log::TYPECHECK,
-                "Initial inferred type for {}: {}",
-                name,
-                typ
-            );
-
-            let typed_defn = {
-                let ast::Definition {
-                    assignments,
-                    explicit_type,
-                    precedence,
-                    typ: (),
-                } = defn;
-
-                ast::Definition {
-                    assignments,
-                    explicit_type,
-                    precedence,
-                    typ,
-                }
-            };
-
-            // @Note: guaranteed to be None,
-            // because we're iterating over a BTreeMap.
-            assert!(typechecked_module
-                .definitions
-                .insert(name, typed_defn)
-                .is_none());
-        }
-
-        // Generate constraints for each type definition
-        for (_name, ast_type_defn) in module.type_definitions {
-            let type_defn = typechecker.generate_type_definition(ast_type_defn);
-
-            for (constr_name, constr_defn) in type_defn.constructors.iter() {
-                typechecked_module
-                    .constructors
-                    .insert(*constr_name, constr_defn.clone());
-            }
-
-            // @Note: guaranteed to be None,
-            // because we're iterating over a BTreeMap.
-            assert!(typechecked_module
-                .type_definitions
-                .insert(type_defn.name, type_defn)
-                .is_none());
-        }
-
-        // Insert all imported names into the scope.
-        for (path, names) in module.imports {
-            log::trace!(
-                log::IMPORT,
-                "Inserting into scope of {module_path}: import {path} ({names:?})"
-            );
-            // @Errors: check for name clashes
-            typechecked_module
-                .imports
-                .entry(path)
-                .or_default()
-                .extend(names);
-        }
-
-        // Insert all (foreign) imported names into the scope.
-        for (require_string, imports) in module.foreign_imports {
-            for ast::ForeignImportItem {
-                foreign_name,
-                name,
-                type_scheme,
-                typ: (),
-            } in imports
-            {
-                log::trace!(
-                    log::IMPORT,
-                    "Inserting into scope of {module_path}: \
-                         foreign import {require_string} ({foreign_name} as {name})"
-                );
-                // @Errors: check for name clashes
-                typechecked_module
-                    .foreign_imports
-                    .entry(require_string)
-                    .or_default()
-                    .push(ast::ForeignImportItem {
-                        foreign_name,
-                        name,
-                        typ: typechecker.generate_type_scheme(&type_scheme).instantiate(),
-                        type_scheme,
-                    });
-            }
-        }
-
-        // Insert all foreign exports into the scope.
-        typechecked_module
-            .foreign_exports
-            .extend(module.foreign_exports);
-
-        // If there is no explicit Prelude import already,
-        // import everything in Prelude.
-        let prelude_path = ModulePath("Prelude");
-        if module_path != prelude_path {
-            log::trace!(
-                log::IMPORT,
-                "Importing contents of Prelude into {module_path}"
-            );
-            let prelude = &typechecker.modules[&prelude_path];
-
-            // @Errors @Warn: name clashes
-            typechecked_module
-                .imports
-                .entry(prelude_path)
-                .or_default()
-                .extend(
-                    prelude
-                        .definitions
-                        .keys()
-                        .chain(prelude.constructors.keys()),
-                );
-        }
-
-        // Add the Module<ResolvedName, Type> to the typechecker's context.
-        assert!(typechecker
-            .modules
-            .insert(module_path, typechecked_module)
-            .is_none());
+    // Typecheck each module
+    for module in prelude.chain(modules.into_values()) {
+        typechecker.typecheck_module(module)?;
     }
 
     // Solve the type constraints
@@ -267,6 +132,148 @@ impl Typechecker {
             self.constrain(Constraint::Equality(beta.clone(), typ.clone()));
         }
         beta
+    }
+
+    fn typecheck_module(&mut self, module: Module<ResolvedName, ()>) -> Result<(), Error> {
+        log::trace!(log::TYPECHECK, "Typechecking: module {};", module.path);
+        // Set the new `Module`'s path.
+        let mut typechecked_module = Module::new(module.path);
+
+        // Generate constraints for each definition, while keeping track of inferred types
+        for (name, defn) in module.definitions {
+            log::trace!(log::TYPECHECK, "Inferring type for {name}");
+
+            let typ = self.generate_definition(&defn);
+
+            log::trace!(
+                log::TYPECHECK,
+                "Initial inferred type for {}: {}",
+                name,
+                typ
+            );
+
+            let typed_defn = {
+                let ast::Definition {
+                    assignments,
+                    explicit_type,
+                    precedence,
+                    typ: (),
+                } = defn;
+
+                ast::Definition {
+                    assignments,
+                    explicit_type,
+                    precedence,
+                    typ,
+                }
+            };
+
+            // @Note: guaranteed to be None,
+            // because we're iterating over a BTreeMap.
+            assert!(typechecked_module
+                .definitions
+                .insert(name, typed_defn)
+                .is_none());
+        }
+
+        // Generate constraints for each type definition
+        for (_name, ast_type_defn) in module.type_definitions {
+            let type_defn = self.generate_type_definition(ast_type_defn);
+
+            for (constr_name, constr_defn) in type_defn.constructors.iter() {
+                typechecked_module
+                    .constructors
+                    .insert(*constr_name, constr_defn.clone());
+            }
+
+            // @Note: guaranteed to be None,
+            // because we're iterating over a BTreeMap.
+            assert!(typechecked_module
+                .type_definitions
+                .insert(type_defn.name, type_defn)
+                .is_none());
+        }
+
+        // Insert all imported names into the scope.
+        for (path, names) in module.imports {
+            log::trace!(
+                log::IMPORT,
+                "Inserting into scope of {insert_path}: import {path} ({names:?})",
+                insert_path = module.path
+            );
+            // @Errors: check for name clashes
+            typechecked_module
+                .imports
+                .entry(path)
+                .or_default()
+                .extend(names);
+        }
+
+        // Insert all (foreign) imported names into the scope.
+        for (require_string, imports) in module.foreign_imports {
+            for ast::ForeignImportItem {
+                foreign_name,
+                name,
+                type_scheme,
+                typ: (),
+            } in imports
+            {
+                log::trace!(
+                    log::IMPORT,
+                    "Inserting into scope of {module_path}: \
+                         foreign import {require_string} ({foreign_name} as {name})",
+                    module_path = module.path
+                );
+                // @Errors: check for name clashes
+                typechecked_module
+                    .foreign_imports
+                    .entry(require_string)
+                    .or_default()
+                    .push(ast::ForeignImportItem {
+                        foreign_name,
+                        name,
+                        typ: self.generate_type_scheme(&type_scheme).instantiate(),
+                        type_scheme,
+                    });
+            }
+        }
+
+        // Insert all foreign exports into the scope.
+        typechecked_module
+            .foreign_exports
+            .extend(module.foreign_exports);
+
+        // If there is no explicit Prelude import already,
+        // import everything in Prelude.
+        let prelude_path = ModulePath("Prelude");
+        if module.path != prelude_path {
+            log::trace!(
+                log::IMPORT,
+                "Importing contents of Prelude into {}",
+                module.path
+            );
+            let prelude = &self.modules[&prelude_path];
+
+            // @Errors @Warn: name clashes
+            typechecked_module
+                .imports
+                .entry(prelude_path)
+                .or_default()
+                .extend(
+                    prelude
+                        .definitions
+                        .keys()
+                        .chain(prelude.constructors.keys()),
+                );
+        }
+
+        // Add the Module<ResolvedName, Type> to the typechecker.
+        assert!(self
+            .modules
+            .insert(module.path, typechecked_module)
+            .is_none());
+
+        Ok(())
     }
 
     /// Solves the constraints which have been generated,
