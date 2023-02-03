@@ -6,6 +6,7 @@ use crate::name::{ResolvedName, Source};
 use crate::types::{Primitive, Type, TypeScheme, TypeVar, TypeVarSet};
 use crate::{ast, log};
 
+use super::arity::ArityChecker;
 use super::substitution::{ApplySub, Substitution};
 
 #[derive(PartialEq, Eq, Clone)]
@@ -36,8 +37,8 @@ pub struct ConstraintGenerator {
     /// All the currently assumed types of name uses.
     pub(super) assumptions: BTreeMap<ResolvedName, Vec<Type>>,
 
-    /// All the currently assumed arities of type name uses.
-    pub(super) arity_assumptions: BTreeMap<ResolvedName, Vec<usize>>,
+    // @Todo @Cleanup: this has nothing to do with constraints, it's just here for convenience.
+    pub(super) arity_checker: ArityChecker,
 
     m_stack: Vec<TypeVar<ResolvedName>>,
 }
@@ -409,11 +410,17 @@ impl ConstraintGenerator {
     }
 
     pub fn generate_type_scheme(&mut self, input: &ast::TypeScheme<ResolvedName>) -> TypeScheme {
+        // Recursively generate arity assumptions for this type expression.
+        //
+        // @Cleanup:
+        // This doesn't really need to be here,
+        // it's just convenient to call this here
+        // while we're already traversing the AST.
+        // It might be neater to place this outside of `constraint`.
+        self.arity_checker.type_expr(&input.typ, 0);
+
         let vars: TypeVarSet<ResolvedName> =
             input.vars.iter().map(|v| TypeVar::Explicit(*v)).collect();
-
-        // Recursively generate arity assumptions for this type expression.
-        self.generate_type_expr_arities(&input.typ, 0);
 
         let typ = self.generate_type_expr(&input.typ);
 
@@ -424,13 +431,10 @@ impl ConstraintGenerator {
         match input {
             ast::TypeExpr::Term(term) => self.generate_type_term(term),
             ast::TypeExpr::App(f, x) => Type::App(
-                // x should have arity 0;
-                // f should have arity >= 1.
                 Box::new(self.generate_type_expr(f)),
                 Box::new(self.generate_type_expr(x)),
             ),
             ast::TypeExpr::Arrow(a, b) => Type::Arrow(
-                // Each of these should have arity 0.
                 Box::new(self.generate_type_expr(a)),
                 Box::new(self.generate_type_expr(b)),
             ),
@@ -472,57 +476,10 @@ impl ConstraintGenerator {
 
             ast::TypeTerm::Parens(e) => self.generate_type_expr(e),
 
-            // The type in the list should have arity 0.
             ast::TypeTerm::List(e) => Type::List(Box::new(self.generate_type_expr(e))),
 
-            // Each of the types in the tuple should have arity 0.
             ast::TypeTerm::Tuple(exprs) => {
                 Type::Tuple(exprs.iter().map(|e| self.generate_type_expr(e)).collect())
-            }
-        }
-    }
-
-    fn generate_type_expr_arities(
-        &mut self,
-        input: &ast::TypeExpr<ResolvedName>,
-        assumed_arity: usize,
-    ) {
-        match input {
-            ast::TypeExpr::Term(term) => self.generate_type_term_arities(term, assumed_arity),
-            ast::TypeExpr::App(f, x) => {
-                self.generate_type_expr_arities(f, assumed_arity + 1);
-                self.generate_type_expr_arities(x, 0);
-            }
-            ast::TypeExpr::Arrow(a, b) => {
-                self.generate_type_expr_arities(a, 0);
-                self.generate_type_expr_arities(b, 0);
-            }
-        }
-    }
-
-    fn generate_type_term_arities(
-        &mut self,
-        input: &ast::TypeTerm<ResolvedName>,
-        assumed_arity: usize,
-    ) {
-        match input {
-            ast::TypeTerm::Var(name) | ast::TypeTerm::Concrete(name) => {
-                self.assume_arity(*name, assumed_arity)
-            }
-
-            // @Todo @XXX @Errors: This should probably be a proper error
-            ast::TypeTerm::Unit => assert_eq!(assumed_arity, 0),
-
-            ast::TypeTerm::Parens(expr) => self.generate_type_expr_arities(expr, assumed_arity),
-
-            // The type in the list should have arity 0.
-            ast::TypeTerm::List(expr) => self.generate_type_expr_arities(expr, 0),
-
-            // Each of the types in the tuple should have arity 0.
-            ast::TypeTerm::Tuple(exprs) => {
-                for expr in exprs {
-                    self.generate_type_expr_arities(expr, 0);
-                }
             }
         }
     }
@@ -548,19 +505,6 @@ impl ConstraintGenerator {
             .entry(name)
             .or_insert_with(|| Vec::with_capacity(1))
             .push(typ);
-    }
-
-    fn assume_arity(&mut self, name: ResolvedName, arity: usize) {
-        log::trace!(
-            log::TYPECHECK,
-            "Assuming type name {} has arity {}",
-            name,
-            arity
-        );
-        self.arity_assumptions
-            .entry(name)
-            .or_insert_with(|| Vec::with_capacity(1))
-            .push(arity);
     }
 
     fn constrain(&mut self, constraint: Constraint) {

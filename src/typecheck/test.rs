@@ -23,6 +23,13 @@ macro_rules! name {
     };
 }
 
+/// Shorthand to assert that a value matches a pattern, with extra debug printing.
+macro_rules! assert_matches {
+    ($val:expr, $($pat:tt)+) => {
+        assert!(matches!(dbg!(&$val), $($pat)+))
+    };
+}
+
 const PRELUDE_SRC: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/huck/Prelude.hk"));
 
 /// Typechecks the given module and returns the resulting GeneratableModule.
@@ -143,13 +150,13 @@ fn literal_list_int() {
 fn function_id() {
     let typ = typ(r#"id a = a;"#).unwrap();
 
-    assert!(matches!(typ, Type::Arrow(_, _)));
+    assert_matches!(typ, Type::Arrow(_, _));
     let (l, r) = unwrap_match!(typ, Type::Arrow(l, r) => (l, r));
 
-    assert!(matches!(*l, Type::Var(_)));
+    assert_matches!(*l, Type::Var(_));
     let l_var = unwrap_match!(*l, Type::Var(var) => var);
 
-    assert!(matches!(*r, Type::Var(_)));
+    assert_matches!(*r, Type::Var(_));
     let r_var = unwrap_match!(*r, Type::Var(var) => var);
 
     assert_eq!(l_var, r_var);
@@ -159,15 +166,15 @@ fn function_id() {
 fn function_const() {
     let typ = typ(r#"const a b = a;"#).unwrap();
 
-    assert!(matches!(typ, Type::Arrow(_, _)));
+    assert_matches!(typ, Type::Arrow(_, _));
 
     let (l, r) = unwrap_match!(typ, Type::Arrow(l, r) => (l, r));
-    assert!(matches!(*l, Type::Var(_)));
-    assert!(matches!(*r, Type::Arrow(_, _)));
+    assert_matches!(*l, Type::Var(_));
+    assert_matches!(*r, Type::Arrow(_, _));
 
     let (r_l, r_r) = unwrap_match!(*r, Type::Arrow(l, r) => (l, r));
-    assert!(matches!(*r_l, Type::Var(_)));
-    assert!(matches!(*r_r, Type::Var(_)));
+    assert_matches!(*r_l, Type::Var(_));
+    assert_matches!(*r_r, Type::Var(_));
 }
 
 #[test]
@@ -208,11 +215,11 @@ fn constructor_unary_returned() {
 
     let val = module.definitions.get(&name!("val")).unwrap().clone();
 
-    assert!(matches!(val.typ, Type::Arrow(_, _)));
+    assert_matches!(val.typ, Type::Arrow(_, _));
 
     let (l, r) = unwrap_match!(val.typ, Type::Arrow(l, r) => (l, r));
-    assert!(matches!(*l, Type::Var(_)));
-    assert!(matches!(*r, Type::Concrete(foo) if foo == name!("Foo")));
+    assert_matches!(*l, Type::Var(_));
+    assert_matches!(*r, Type::Concrete(foo) if foo == &name!("Foo"));
 }
 
 #[test]
@@ -301,15 +308,15 @@ fn constructor_newtype_generic_var() {
 
     let val = module.definitions.get(&name!("val")).unwrap().clone();
 
-    assert!(matches!(val.typ, Type::Arrow(_, _)));
+    assert_matches!(val.typ, Type::Arrow(_, _));
 
     let (l, r) = unwrap_match!(val.typ, Type::Arrow(l, r) => (l, r));
-    assert!(matches!(*l, Type::Var(_)));
-    assert!(matches!(*r, Type::App(_, _)));
+    assert_matches!(*l, Type::Var(_));
+    assert_matches!(*r, Type::App(_, _));
 
     let (constr, inner) = unwrap_match!(*r, Type::App(c, i) => (c, i));
-    assert!(matches!(*constr, Type::Concrete(foo) if foo == name!("Foo")));
-    assert!(matches!(*inner, Type::Var(_)));
+    assert_matches!(*constr, Type::Concrete(foo) if foo == &name!("Foo"));
+    assert_matches!(*inner, Type::Var(_));
 }
 
 #[test]
@@ -393,11 +400,11 @@ fn arity_int() {
 fn arity_io() {
     let the_typ = typ("foo : IO ();");
 
-    assert!(matches!(the_typ, Ok(Type::App(..))));
+    assert_matches!(the_typ, Ok(Type::App(..)));
 
     let (l, r) = unwrap_match!(the_typ, Ok(Type::App(l, r)) => (l, r));
-    assert!(matches!(*l, Type::Primitive(Primitive::IO)));
-    assert!(matches!(*r, Type::Primitive(Primitive::Unit)));
+    assert_matches!(*l, Type::Primitive(Primitive::IO));
+    assert_matches!(*r, Type::Primitive(Primitive::Unit));
 
     assert!(matches!(
         typ("foo : IO;"),
@@ -408,4 +415,22 @@ fn arity_io() {
         typ("foo : IO () Int;"),
         Err(HuckError::Type(TypeError::IncorrectArity(_, 2, 1)))
     ));
+}
+
+#[test]
+fn arity_custom() {
+    assert_matches!(
+        typ("type Foo a b c = Bar a | Baz b c; foo : Foo Int;"),
+        Err(HuckError::Type(TypeError::IncorrectArity(_, 1, 3)))
+    );
+
+    assert_matches!(
+        typ("type Foo a b c = Bar a | Baz b c; foo : Foo Int () () Float;"),
+        Err(HuckError::Type(TypeError::IncorrectArity(_, 4, 3)))
+    );
+
+    assert_matches!(
+        typ("type Foo a b c = Bar a | Baz b c; foo : Foo Int () Float;"),
+        Ok(_)
+    );
 }
