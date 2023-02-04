@@ -29,4 +29,8 @@ pub enum Error {
     // @Cleanup @Errors: this should print the source locations of the two definitions
     #[error("Multiple type constructors with the same name ({0})")]
     MultipleTypeConstructors(UnresolvedName),
+
+    // @Errors: this should print the thing which caused a Definition to be made
+    #[error("No assignment defining the name `{0}`")]
+    MissingAssignment(UnresolvedName),
 }

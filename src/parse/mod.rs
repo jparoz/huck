@@ -155,6 +155,13 @@ impl Module<UnresolvedName, ()> {
             }
         }
 
+        // Check that each Definition has at least one assignment
+        for (name, defn) in module.definitions.iter() {
+            if defn.assignments.is_empty() {
+                return Err(Error::MissingAssignment(*name));
+            }
+        }
+
         log::info!(
             log::METRICS,
             "Post-parsing module {path} completed, {time:?} elapsed",

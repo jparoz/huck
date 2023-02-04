@@ -67,6 +67,16 @@ macro_rules! unwrap_match {
 #[allow(unused_imports)]
 pub(crate) use unwrap_match;
 
+/// Shorthand to assert that a value matches a pattern, with extra debug printing.
+#[allow(unused_macros)]
+macro_rules! assert_matches {
+    ($val:expr, $($pat:tt)+) => {
+        assert!(matches!(dbg!(&$val), $($pat)+))
+    };
+}
+#[allow(unused_imports)]
+pub(crate) use assert_matches;
+
 #[cfg(test)]
 mod test {
     use super::*;

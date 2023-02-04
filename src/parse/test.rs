@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
 
-use crate::ast;
 use crate::name::{ModulePath, UnresolvedName};
+use crate::parse::{self, Error as ParseError};
 use crate::precedence::{Associativity, Precedence};
-use crate::{parse, types};
+use crate::utils::assert_matches;
+use crate::{ast, types};
 
 #[test]
 fn module_declaration() {
@@ -266,4 +267,16 @@ fn case() {
             ))
         }
     )
+}
+
+#[test]
+fn empty_definition() {
+    let (path, stats) = parse::parse("module Test; foo : Int;").unwrap();
+    let module = ast::Module::from_statements(path, stats);
+    assert_matches!(
+        module,
+        Err(ParseError::MissingAssignment(UnresolvedName::Unqualified(
+            "foo"
+        )))
+    );
 }

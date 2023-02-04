@@ -9,7 +9,7 @@ use crate::precedence::ApplyPrecedence;
 use crate::resolve::Resolver;
 use crate::typecheck::{typecheck, Error as TypeError};
 use crate::types::{Primitive, Type};
-use crate::utils::unwrap_match;
+use crate::utils::{assert_matches, unwrap_match};
 
 use crate::error::Error as HuckError;
 
@@ -20,13 +20,6 @@ macro_rules! name {
             source: Source::Module(ModulePath("Test")),
             ident: $name,
         }
-    };
-}
-
-/// Shorthand to assert that a value matches a pattern, with extra debug printing.
-macro_rules! assert_matches {
-    ($val:expr, $($pat:tt)+) => {
-        assert!(matches!(dbg!(&$val), $($pat)+))
     };
 }
 
@@ -386,18 +379,18 @@ fn function_apply_to_variable_indirect() {
 #[test]
 fn arity_int() {
     assert!(matches!(
-        typ("foo : Int;"),
+        typ("foo : Int; foo = unsafe lua {};"),
         Ok(Type::Primitive(Primitive::Int))
     ));
     assert!(matches!(
-        typ("foo : Int ();"),
+        typ("foo : Int (); foo = unsafe lua {};"),
         Err(HuckError::Type(TypeError::IncorrectArity(_, 1, 0)))
     ));
 }
 
 #[test]
 fn arity_io() {
-    let the_typ = typ("foo : IO ();");
+    let the_typ = typ("foo : IO (); foo = unsafe lua {};");
 
     assert_matches!(the_typ, Ok(Type::App(..)));
 
@@ -406,12 +399,12 @@ fn arity_io() {
     assert_matches!(*r, Type::Primitive(Primitive::Unit));
 
     assert!(matches!(
-        typ("foo : IO;"),
+        typ("foo : IO; foo = unsafe lua {};"),
         Err(HuckError::Type(TypeError::IncorrectArity(_, 0, 1)))
     ));
 
     assert!(matches!(
-        typ("foo : IO () Int;"),
+        typ("foo : IO () Int; foo = unsafe lua {};"),
         Err(HuckError::Type(TypeError::IncorrectArity(_, 2, 1)))
     ));
 }
@@ -419,17 +412,17 @@ fn arity_io() {
 #[test]
 fn arity_custom() {
     assert_matches!(
-        typ("type Foo a b c = Bar a | Baz b c; foo : Foo Int;"),
+        typ("type Foo a b c = Bar a | Baz b c; foo : Foo Int; foo = unsafe lua {};"),
         Err(HuckError::Type(TypeError::IncorrectArity(_, 1, 3)))
     );
 
     assert_matches!(
-        typ("type Foo a b c = Bar a | Baz b c; foo : Foo Int () () Float;"),
+        typ("type Foo a b c = Bar a | Baz b c; foo : Foo Int () () Float; foo = unsafe lua {};"),
         Err(HuckError::Type(TypeError::IncorrectArity(_, 4, 3)))
     );
 
     assert_matches!(
-        typ("type Foo a b c = Bar a | Baz b c; foo : Foo Int () Float;"),
+        typ("type Foo a b c = Bar a | Baz b c; foo : Foo Int () Float; foo = unsafe lua {};"),
         Ok(_)
     );
 }
