@@ -12,7 +12,7 @@ repos:
       - id: nocommit
         name: Check for `nocommit` instances
         description: Check if any committed files contain the string `nocommit`
-        entry: sh -c "! git grep --quiet --ignore-case nocommit -- :/src"
+        entry: sh -c "! git grep --ignore-case nocommit -- :/src"
         language: system
         pass_filenames: false
       - id: cargo-test
@@ -20,10 +20,12 @@ repos:
         description: Run cargo test on the committed code
         entry: cargo test
         language: system
+        types_or: [rust, toml]
         pass_filenames: false
       - id: cargo-doc
         name: cargo doc
         description: Ensure that documentation builds correctly
         entry: env RUSTDOCFLAGS="-D warnings" cargo doc
         language: system
+        types_or: [rust, toml]
         pass_filenames: false
