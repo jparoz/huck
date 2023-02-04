@@ -238,13 +238,20 @@ impl From<ast::Expr<Name>> for Expression {
     fn from(ast_expr: ast::Expr<Name>) -> Self {
         match ast_expr {
             ast::Expr::Term(term) => match term {
-                ast::Term::Numeral(_) => todo!(),
-                ast::Term::String(_) => todo!(),
-                ast::Term::List(_) => todo!(),
-                ast::Term::Name(_) => todo!(),
-                ast::Term::Parens(_) => todo!(),
-                ast::Term::Tuple(_) => todo!(),
-                ast::Term::Unit => todo!(),
+                ast::Term::Numeral(numeral) => Expression::Literal(Literal::Numeral(numeral)),
+                ast::Term::String(s) => Expression::Literal(Literal::String(s)),
+                ast::Term::Unit => Expression::Literal(Literal::Unit),
+
+                ast::Term::Name(name) => Expression::Reference(name),
+
+                ast::Term::List(es) => {
+                    Expression::List(es.into_iter().map(Expression::from).collect())
+                }
+                ast::Term::Tuple(es) => {
+                    Expression::Tuple(es.into_iter().map(Expression::from).collect())
+                }
+
+                ast::Term::Parens(e) => Expression::from(*e),
             },
 
             ast::Expr::App { func, argument } => Expression::App(

@@ -8,7 +8,7 @@ use crate::name::UnresolvedName;
 use crate::parse::{self, parse};
 use crate::precedence::ApplyPrecedence;
 use crate::typecheck::typecheck;
-use crate::{codegen, resolve};
+use crate::{codegen, ir, resolve};
 
 /// Does every step necessary to take the added modules to compiled state.
 /// Takes a `Vec` of (filepath stem, source code)
@@ -74,6 +74,14 @@ pub fn compile(input: Vec<(String, &'static str)>) -> Result<Vec<(String, String
 
     // Typecheck
     let typechecked_modules = typecheck(resolved_modules)?;
+
+    // Convert from ast to ir
+    let mut ir_modules: BTreeMap<ModulePath, ir::Module> = BTreeMap::new();
+    for (module_path, module) in typechecked_modules.iter() {
+        ir_modules.insert(*module_path, ir::Module::from(module.clone()));
+    }
+    // @Todo: do something more than just logging it
+    crate::log::debug!("Converted AST to IR: {ir_modules:?}");
 
     // Generate code
     let mut generated = Vec::new();
