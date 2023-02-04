@@ -350,7 +350,7 @@ impl<'a> ModuleResolver<'a> {
         // we're good to go with the rest of the module.
         log::trace!(
             log::RESOLVE,
-            "Finished building now resolving the rest of the module."
+            "Finished building scope, now resolving the rest of the module."
         );
 
         // Resolve definitions
