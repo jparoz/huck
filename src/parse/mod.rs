@@ -90,16 +90,29 @@ impl Module<UnresolvedName, ()> {
                     }
                 }
 
+                // @DRY @Cleanup: with/without type
                 Statement::AssignmentWithoutType(assign) => {
-                    module
-                        .definitions
-                        .entry(*assign.0.name())
-                        .or_default()
+                    // Get the existing definition (if any).
+                    let defn = module.definitions.entry(*assign.0.name()).or_default();
+
+                    // Check that each assignment has the same number of arguments.
+                    let num_args = assign.0.arg_count();
+                    if defn
                         .assignments
-                        .push(assign);
+                        .get(0)
+                        .map(|assign| assign.0.arg_count() != num_args)
+                        .unwrap_or(false)
+                    {
+                        return Err(Error::IncorrectArgumentCount(*assign.0.name()));
+                    }
+
+                    // Add the new assignment.
+                    defn.assignments.push(assign);
                 }
 
+                // @DRY @Cleanup: with/without type
                 Statement::AssignmentWithType(ts, assign) => {
+                    // Get the existing definition (if any).
                     let defn = module.definitions.entry(*assign.0.name()).or_default();
 
                     // If there was already an explicit for this name, that's an error.
@@ -111,6 +124,18 @@ impl Module<UnresolvedName, ()> {
                         ));
                     }
 
+                    // Check that each assignment has the same number of arguments.
+                    let num_args = assign.0.arg_count();
+                    if defn
+                        .assignments
+                        .get(0)
+                        .map(|assign| assign.0.arg_count() != num_args)
+                        .unwrap_or(false)
+                    {
+                        return Err(Error::IncorrectArgumentCount(*assign.0.name()));
+                    }
+
+                    // Add the new assignment.
                     defn.assignments.push(assign);
                 }
 

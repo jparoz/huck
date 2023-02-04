@@ -422,12 +422,9 @@ impl<'a> CodeGenerator<'a> {
             .iter()
             .map(|(lhs, expr)| {
                 let args = lhs.args();
-                if arg_count != args.len() {
-                    return Err(CodegenError::IncorrectArgumentCount(format!(
-                        "{}",
-                        lhs.name()
-                    )));
-                }
+
+                // This is caught as a parse error.
+                assert_eq!(arg_count, args.len());
 
                 let mut conds = Vec::new();
                 let mut binds = Vec::new();

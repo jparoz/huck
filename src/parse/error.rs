@@ -33,4 +33,7 @@ pub enum Error {
     // @Errors: this should print the thing which caused a Definition to be made
     #[error("No assignment defining the name `{0}`")]
     MissingAssignment(UnresolvedName),
+
+    #[error("Incorrect number of function arguments in definition of `{0}`")]
+    IncorrectArgumentCount(UnresolvedName),
 }
