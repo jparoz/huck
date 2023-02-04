@@ -8,7 +8,6 @@ use crate::log;
 use crate::name::ModulePath;
 use crate::name::{ResolvedName, Source};
 use crate::types::Type;
-use crate::utils::unwrap_match;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
@@ -268,9 +267,19 @@ impl<'a> CodeGenerator<'a> {
 
             ast::Expr::Case { expr, arms } => self.case(expr, arms),
 
-            ast::Expr::Lambda { lhs, rhs } => {
-                assert!(lhs.arg_count() > 0);
-                self.curried_function(&vec![(lhs.clone(), *rhs.clone())]) // @Fixme: don't clone?
+            ast::Expr::Lambda { args, rhs } => {
+                assert!(!args.is_empty());
+                // @XXX @Fixme @IR:
+                // This is totally a punt, and unused, and dodgy;
+                // it will be fixed when we generate code from IR.
+                let lhs = ast::Lhs::Func {
+                    name: ResolvedName {
+                        source: Source::Builtin,
+                        ident: "<lambda>",
+                    },
+                    args: args.clone(),
+                };
+                self.curried_function(&vec![(lhs, *rhs.clone())]) // @Fixme: don't clone?
             }
 
             ast::Expr::Lua(lua) | ast::Expr::UnsafeLua(lua) => Ok(format!("({})", lua)),
@@ -865,10 +874,7 @@ impl ast::Expr<ResolvedName> {
                 }
             }
 
-            Expr::Lambda { lhs, rhs } => {
-                assert!(matches!(lhs, Lhs::Lambda { .. }));
-                let args = unwrap_match!(lhs, Lhs::Lambda { args } => args);
-
+            Expr::Lambda { args, rhs } => {
                 let mut sub_deps = BTreeSet::new();
 
                 rhs.dependencies(&mut sub_deps);

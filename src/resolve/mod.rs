@@ -615,10 +615,10 @@ impl<'a> ModuleResolver<'a> {
             }
 
             ast::Expr::Lambda {
-                lhs: unres_lhs,
+                args: unres_args,
                 rhs: unres_rhs,
             } => {
-                let (bindings, lhs) = self.resolve_lhs(unres_lhs)?;
+                let (bindings, args) = self.resolve_args(unres_args)?;
                 for b in bindings.iter() {
                     self.bind(*b);
                 }
@@ -626,7 +626,7 @@ impl<'a> ModuleResolver<'a> {
                 for b in bindings {
                     self.unbind(b);
                 }
-                Ok(ast::Expr::Lambda { lhs, rhs })
+                Ok(ast::Expr::Lambda { args, rhs })
             }
 
             ast::Expr::Lua(s) => Ok(ast::Expr::Lua(s)),
@@ -640,10 +640,7 @@ impl<'a> ModuleResolver<'a> {
         &mut self,
         unres_lhs: ast::Lhs<UnresolvedName>,
     ) -> Result<(Vec<Binding>, ast::Lhs<ResolvedName>), Error> {
-        // These are the variables bound in this LHS.
-        let mut bindings = BTreeMap::new();
-
-        let res_lhs = match unres_lhs {
+        match unres_lhs {
             ast::Lhs::Func {
                 name: unres_name,
                 args: unres_args,
@@ -654,21 +651,8 @@ impl<'a> ModuleResolver<'a> {
                 // Possible this should be an error earlier, but not sure.
 
                 let name = self.resolve_name(unres_name)?;
-
-                let mut args = Vec::new();
-                for unres_pat in unres_args {
-                    let (pat_bindings, res_pat) = self.resolve_pattern(unres_pat)?;
-                    for bound @ Binding(_bound_source, bound_ident) in pat_bindings {
-                        if let Some(Binding(_source, existing_name)) =
-                            bindings.insert(bound_ident, bound)
-                        {
-                            return Err(Error::DuplicateBinding(existing_name, name));
-                        }
-                    }
-                    args.push(res_pat);
-                }
-
-                ast::Lhs::Func { name, args }
+                let (bindings, args) = self.resolve_args(unres_args)?;
+                Ok((bindings, ast::Lhs::Func { name, args }))
             }
 
             ast::Lhs::Binop {
@@ -676,6 +660,9 @@ impl<'a> ModuleResolver<'a> {
                 op: unres_op,
                 b: unres_b,
             } => {
+                // These are the variables bound in this LHS.
+                let mut bindings = BTreeMap::new();
+
                 let op = self.resolve_name(unres_op)?;
 
                 let (a_bindings, a) = self.resolve_pattern(unres_a)?;
@@ -696,29 +683,35 @@ impl<'a> ModuleResolver<'a> {
                     }
                 }
 
-                ast::Lhs::Binop { a, op, b }
+                Ok((
+                    bindings.into_values().collect(),
+                    ast::Lhs::Binop { a, op, b },
+                ))
             }
+        }
+    }
 
-            ast::Lhs::Lambda { args: unres_args } => {
-                let mut args = Vec::new();
+    /// Returns a `Vec` of bound variables which have been added to the scope,
+    /// as well as the resolved `Vec<Pattern>`.
+    fn resolve_args(
+        &mut self,
+        unres_args: Vec<ast::Pattern<UnresolvedName>>,
+    ) -> Result<(Vec<Binding>, Vec<ast::Pattern<ResolvedName>>), Error> {
+        let mut bindings = BTreeMap::new();
 
-                for unres_pat in unres_args {
-                    let (pat_bindings, res_pat) = self.resolve_pattern(unres_pat)?;
-                    for bound @ Binding(_bound_source, bound_ident) in pat_bindings {
-                        if let Some(Binding(_source, existing_name)) =
-                            bindings.insert(bound_ident, bound)
-                        {
-                            return Err(Error::DuplicateBindingLambda(existing_name));
-                        }
-                    }
-                    args.push(res_pat);
+        let mut args = Vec::new();
+
+        for unres_pat in unres_args {
+            let (pat_bindings, res_pat) = self.resolve_pattern(unres_pat)?;
+            for bound @ Binding(_bound_source, bound_ident) in pat_bindings {
+                if let Some(Binding(_source, existing_name)) = bindings.insert(bound_ident, bound) {
+                    return Err(Error::DuplicateBindingLambda(existing_name));
                 }
-
-                ast::Lhs::Lambda { args }
             }
-        };
+            args.push(res_pat);
+        }
 
-        Ok((bindings.into_values().collect(), res_lhs))
+        Ok((bindings.into_values().collect(), args))
     }
 
     /// Returns a `Vec` of bound variables which have been added to the scope,

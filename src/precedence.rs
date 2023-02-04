@@ -63,7 +63,7 @@ impl ApplyPrecedence for ast::Assignment<ResolvedName> {
 impl ApplyPrecedence for ast::Lhs<ResolvedName> {
     fn apply(&mut self, precs: &BTreeMap<ResolvedName, Precedence>) {
         match self {
-            ast::Lhs::Func { args, .. } | ast::Lhs::Lambda { args } => {
+            ast::Lhs::Func { args, .. } => {
                 for arg in args {
                     arg.apply(precs);
                 }
@@ -220,9 +220,9 @@ impl ApplyPrecedence for ast::Expr<ResolvedName> {
                 }
             }
 
-            ast::Expr::Lambda { lhs, rhs } => {
-                for mut pat in lhs.args() {
-                    pat.apply(precs);
+            ast::Expr::Lambda { args, rhs } => {
+                for arg in args {
+                    arg.apply(precs);
                 }
                 rhs.apply(precs);
             }

@@ -98,9 +98,6 @@ pub enum Lhs<Name> {
         op: Name,
         b: Pattern<Name>,
     },
-    Lambda {
-        args: Vec<Pattern<Name>>,
-    },
 }
 
 impl<Name> Lhs<Name> {
@@ -108,9 +105,6 @@ impl<Name> Lhs<Name> {
         match self {
             Lhs::Func { name, .. } => name,
             Lhs::Binop { op, .. } => op,
-            Lhs::Lambda { .. } => {
-                unimplemented!();
-            }
         }
     }
 }
@@ -118,14 +112,14 @@ impl<Name> Lhs<Name> {
 impl<Name: Copy> Lhs<Name> {
     pub fn arg_count(&self) -> usize {
         match self {
-            Lhs::Func { args, .. } | Lhs::Lambda { args } => args.len(),
+            Lhs::Func { args, .. } => args.len(),
             Lhs::Binop { .. } => 2,
         }
     }
 
     pub fn args(&self) -> Vec<Pattern<Name>> {
         match self {
-            Lhs::Func { args, .. } | Lhs::Lambda { args } => args.clone(),
+            Lhs::Func { args, .. } => args.clone(),
             Lhs::Binop { a, b, .. } => vec![a.clone(), b.clone()],
         }
     }
@@ -143,12 +137,6 @@ impl<Name: Display> Display for Lhs<Name> {
             }
             Lhs::Binop { a, op, b } => {
                 write!(f, "{} {} {}", a, op, b)
-            }
-            Lhs::Lambda { args } => {
-                for arg in args.iter() {
-                    write!(f, " {}", arg)?;
-                }
-                Ok(())
             }
         }
     }
@@ -268,7 +256,7 @@ pub enum Expr<Name> {
         arms: Vec<(Pattern<Name>, Expr<Name>)>,
     },
     Lambda {
-        lhs: Lhs<Name>,
+        args: Vec<Pattern<Name>>,
         rhs: Box<Expr<Name>>,
     },
     // @CheckMe: test this
@@ -321,9 +309,9 @@ impl<Name: Display + Copy> Display for Expr<Name> {
                 write!(f, "}}")
             }
 
-            Lambda { lhs, rhs } => {
+            Lambda { args, rhs } => {
                 write!(f, "\\")?;
-                for pat in lhs.args() {
+                for pat in args {
                     write!(f, "{} ", pat)?;
                 }
                 write!(f, "-> {}", rhs)

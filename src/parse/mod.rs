@@ -523,7 +523,7 @@ fn lambda(input: &'static str) -> IResult<&'static str, Expr<UnresolvedName>> {
     map(
         nom_tuple((reserved_op("\\"), many1(pattern), reserved_op("->"), expr)),
         |(_, args, _, rhs)| Expr::Lambda {
-            lhs: Lhs::Lambda { args },
+            args,
             rhs: Box::new(rhs),
         },
     )(input)

@@ -402,7 +402,7 @@ impl Typechecker {
         let (lhs, expr) = assign;
 
         match lhs {
-            ast::Lhs::Func { args, .. } | ast::Lhs::Lambda { args } => {
+            ast::Lhs::Func { args, .. } => {
                 args.iter()
                     .rev()
                     .fold(self.generate_expr(expr), |acc, arg| {
@@ -544,8 +544,7 @@ impl Typechecker {
                 self.equate_all(arm_types)
             }
 
-            ast::Expr::Lambda { lhs, rhs } => {
-                let args = lhs.args();
+            ast::Expr::Lambda { args, rhs } => {
                 let typevars: Vec<TypeVar<ResolvedName>> =
                     args.iter().map(|_| self.fresh_var()).collect();
                 let types: Vec<Type> = typevars.iter().map(|v| Type::Var(v.clone())).collect();
