@@ -6,16 +6,19 @@
 
 use std::collections::BTreeMap;
 
-use crate::name::ResolvedName as Name;
-use crate::types::TypeScheme;
+use crate::name::{ModulePath, ResolvedName as Name};
+use crate::types::{Type, TypeScheme, TypeVarSet};
 
-// We can reuse [`Numeral`].
+/// We can reuse [`Numeral`] from the `ast` module.
 pub use crate::ast::Numeral;
 
 /// Represents all the code in a single Huck module.
 #[derive(Debug)]
 pub struct Module {
-    definitions: BTreeMap<Name, Definition>,
+    pub path: ModulePath,
+    pub definitions: BTreeMap<Name, Definition>,
+    pub type_definitions: BTreeMap<Name, TypeDefinition>,
+    pub exports: Vec<(&'static str, Expression)>,
 }
 
 /// Represents the complete definition of a single Huck function.
@@ -105,4 +108,20 @@ pub enum Pattern {
 
     /// Destructuring (unary or otherwise).
     Destructure(Name, Vec<Pattern>),
+}
+
+/// Represents the definition of a new type, and all its constructors.
+#[derive(Debug)]
+pub struct TypeDefinition {
+    /// The name of the newly-defined type.
+    pub name: Name,
+
+    /// The set of type variables bound by the new type.
+    pub vars: TypeVarSet<Name>,
+
+    /// The newly-defined type.
+    pub typ: Type,
+
+    /// Each of the constructors for this type.
+    pub constructors: BTreeMap<Name, Type>,
 }
