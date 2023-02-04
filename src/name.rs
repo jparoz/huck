@@ -52,6 +52,13 @@ pub struct ResolvedName {
 }
 
 impl ResolvedName {
+    pub fn builtin(ident: &'static str) -> Self {
+        ResolvedName {
+            source: Source::Builtin,
+            ident,
+        }
+    }
+
     pub fn is_local(&self) -> bool {
         matches!(self.source, Source::Local(..))
     }
