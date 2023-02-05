@@ -351,12 +351,22 @@ impl From<ast::Expr<Name>> for Expression {
     }
 }
 
-/// This turns an [`ast::Assignment`] into an [`ir::Expression`](Expression) (lambda expression)
+/// This turns an [`ast::Assignment`] into an [`ir::Expression`](Expression),
+/// either a lambda expression (if there are one or more arguments),
+/// or whatever the assignment's RHS is (if there are no arguments).
 impl From<ast::Assignment<Name>> for Expression {
     fn from((lhs, rhs): ast::Assignment<Name>) -> Self {
-        let args = lhs.into();
-        let expr = Box::new(rhs.into());
-        Expression::Lambda { args, expr }
+        let args: Vec<Pattern> = lhs.into();
+        let expr: Expression = rhs.into();
+
+        if args.is_empty() {
+            expr
+        } else {
+            Expression::Lambda {
+                args,
+                expr: Box::new(expr),
+            }
+        }
     }
 }
 
