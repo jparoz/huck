@@ -1,25 +1,26 @@
-use crate::name::{ModulePath, ResolvedName, Source, UnresolvedName};
+use crate::name::{Ident, ModulePath, ResolvedName, Source};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    // @Cleanup: duplicate of NonexistentName or something?
     #[error("Identifier not in scope (module {0}): {1}")]
-    NotInScope(ModulePath, UnresolvedName),
+    NotInScope(ModulePath, Ident),
 
     #[error("Module `{0}` doesn't exist")]
     NonexistentModule(ModulePath),
 
     #[error("Variable `{0}` doesn't exist in module `{1}`")]
-    NonexistentValueName(&'static str, Source),
+    NonexistentValueName(Ident, Source),
 
     #[error("Type `{0}` doesn't exist in module `{1}`")]
-    NonexistentTypeName(&'static str, Source),
+    NonexistentTypeName(Ident, Source),
 
     #[error("Identifier `{0}` doesn't exist in module `{1}`")]
-    NonexistentName(&'static str, Source),
+    NonexistentName(Ident, Source),
 
     #[error("Identifier `{0}` is bound twice in the same pattern in `{1}`")]
-    DuplicateBinding(UnresolvedName, ResolvedName),
+    DuplicateBinding(Ident, ResolvedName),
 
     #[error("Identifier `{0}` is bound twice in the same pattern in a lambda expression")]
-    DuplicateBindingLambda(UnresolvedName),
+    DuplicateBindingLambda(Ident),
 }

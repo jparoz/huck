@@ -1,4 +1,7 @@
-use std::fmt::{self, Display};
+use std::{
+    fmt::{self, Display},
+    sync::atomic::{self, AtomicUsize},
+};
 
 use crate::ast;
 
@@ -12,19 +15,22 @@ impl Display for ModulePath {
     }
 }
 
+/// An `Ident` is the unqualified part of a name.
+pub type Ident = &'static str;
+
 /// An `UnresolvedName` is a Huck identifier
 /// which may or may not exist,
 /// and which may or may not shadow other identifiers with the same name.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
 pub enum UnresolvedName {
-    Unqualified(&'static str),
-    Qualified(ModulePath, &'static str),
+    Unqualified(Ident),
+    Qualified(ModulePath, Ident),
 }
 
 impl UnresolvedName {
     /// If it's an `Unqualified` name, returns the inner `&'static str`.
     /// If it's a `Qualified` name, returns only the `ident` part (not the path!)
-    pub fn ident(&self) -> &'static str {
+    pub fn ident(&self) -> Ident {
         match self {
             UnresolvedName::Qualified(_, s) | UnresolvedName::Unqualified(s) => s,
         }
@@ -48,11 +54,37 @@ impl Display for UnresolvedName {
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct ResolvedName {
     pub source: Source,
-    pub ident: &'static str,
+    pub ident: Ident,
 }
 
 impl ResolvedName {
-    pub fn builtin(ident: &'static str) -> Self {
+    pub fn local(ident: Ident) -> Self {
+        static UNIQUE_COUNTER: AtomicUsize = AtomicUsize::new(0);
+        let id = UNIQUE_COUNTER.fetch_add(1, atomic::Ordering::Relaxed);
+        ResolvedName {
+            source: Source::Local(id),
+            ident,
+        }
+    }
+
+    pub fn module(path: ModulePath, ident: Ident) -> Self {
+        ResolvedName {
+            source: Source::Module(path),
+            ident,
+        }
+    }
+
+    pub fn foreign(require: &'static str, foreign_name: ast::ForeignName, ident: Ident) -> Self {
+        ResolvedName {
+            source: Source::Foreign {
+                require,
+                foreign_name,
+            },
+            ident,
+        }
+    }
+
+    pub fn builtin(ident: Ident) -> Self {
         ResolvedName {
             source: Source::Builtin,
             ident,
@@ -61,6 +93,10 @@ impl ResolvedName {
 
     pub fn is_local(&self) -> bool {
         matches!(self.source, Source::Local(..))
+    }
+
+    pub fn is_builtin(&self) -> bool {
+        matches!(self.source, Source::Builtin)
     }
 }
 

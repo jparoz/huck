@@ -77,6 +77,16 @@ macro_rules! assert_matches {
 #[allow(unused_imports)]
 pub(crate) use assert_matches;
 
+/// Formats a string, then leaks the result.
+#[allow(unused_macros)]
+macro_rules! leak {
+    ($fmt:literal, $($args:tt)+) => {
+        Box::leak(format!($fmt, $($args)+).into_boxed_str())
+    }
+}
+#[allow(unused_imports)]
+pub(crate) use leak;
+
 #[cfg(test)]
 mod test {
     use super::*;

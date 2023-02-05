@@ -1,5 +1,6 @@
 use crate::name::ResolvedName;
 
+// @Errors: All these errors should ideally be caught before IR and codegen stages
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Write error: {0}")]
@@ -13,4 +14,8 @@ pub enum Error {
     // @Errors: get the name of the duplicated definition
     #[error("Duplicate definitions found! Values: `{0:?}`")]
     DuplicateUnconditional(Vec<crate::ast::Expr<ResolvedName>>),
+
+    // @Errors: source code location
+    #[error("Duplicate unconditional branches found in a case expression! Values: `{0:?}`")]
+    NewDuplicateUnconditional(Vec<crate::ir::Expression>),
 }

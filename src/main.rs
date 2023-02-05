@@ -5,6 +5,7 @@ mod error;
 mod ir;
 mod log;
 mod name;
+mod new_codegen;
 mod parse;
 mod precedence;
 mod resolve;
