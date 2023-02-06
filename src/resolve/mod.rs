@@ -743,7 +743,7 @@ impl<'a> ModuleResolver<'a> {
             ast::Pattern::Bind(name) => {
                 let binding = ResolvedName::local(name.ident());
                 bindings.push(binding);
-                ast::Pattern::Bind(binding.into())
+                ast::Pattern::Bind(binding)
             }
 
             ast::Pattern::List(pats) => {
