@@ -84,7 +84,7 @@ pub fn compile(input: Vec<(String, &'static str)>) -> Result<Vec<(String, String
     // Generate code
     let mut generated = Vec::new();
     for (module_path, module) in ir_modules {
-        let lua = codegen::generate(&module, &module_stems)?;
+        let lua = codegen::generate(module, &module_stems)?;
         generated.push((module_stems[&module_path].clone(), lua));
     }
     Ok(generated)
