@@ -15,10 +15,6 @@ pub use error::Error;
 #[cfg(test)]
 mod test;
 
-// @Todo @Cleanup: This shouldn't be necessary really,
-// we can generate more sensible names for things while still avoiding name clashes
-const PREFIX: &str = "_HUCK";
-
 /// Generates Lua for the given Huck module.
 /// `requires` is a mapping from a module's `ModulePath`
 /// to the segment of a filepath to be given to Lua's `require` function to load that module.
@@ -88,7 +84,7 @@ impl<'a> CodeGenerator<'a> {
     fn generate(mut self) -> Result<String> {
         let mut lua = String::new();
 
-        writeln!(lua, "local {} = {{}}", PREFIX)?;
+        writeln!(lua, "local {} = {{}}", lua_module_path(self.module.path))?;
 
         // First, generate code for all the type definitions (i.e. for their constructors).
         // This can be done first
@@ -192,13 +188,18 @@ impl<'a> CodeGenerator<'a> {
         let mut lua = String::new();
 
         // Write the definition to the `lua` string.
-        write!(lua, r#"{}["{}"] = "#, PREFIX, name.ident)?;
+        write!(
+            lua,
+            r#"{}["{}"] = "#,
+            lua_module_path(self.module.path),
+            name.ident
+        )?;
         writeln!(lua, "{}", self.expression(defn.rhs)?)?;
         writeln!(
             self.return_entries,
             r#"["{name}"] = {prefix}["{name}"],"#,
             name = name.ident,
-            prefix = PREFIX,
+            prefix = lua_module_path(self.module.path),
         )?;
 
         // Mark this definition as generated.
@@ -287,7 +288,13 @@ impl<'a> CodeGenerator<'a> {
 
         // Store the value of expr in a local,
         // which is accessed within the conditions and bindings.
-        writeln!(lua, "local {}_{} = {}", PREFIX, id, self.expression(expr)?)?;
+        writeln!(
+            lua,
+            "local {}_{} = {}",
+            lua_module_path(self.module.path),
+            id,
+            self.expression(expr)?
+        )?;
 
         // Before returning the expression,
         // we split the branches based on whether or not they have any conditions.
@@ -295,7 +302,10 @@ impl<'a> CodeGenerator<'a> {
         let branches = arms
             .into_iter()
             .map(|(pat, expr)| {
-                let (conds, binds) = pattern_match(pat, &format!("{}_{}", PREFIX, id))?;
+                let (conds, binds) = pattern_match(
+                    pat,
+                    &format!("{}_{}", lua_module_path(self.module.path), id),
+                )?;
                 Ok((conds, binds, expr))
             })
             .collect::<Result<Vec<_>>>()?;
@@ -395,7 +405,12 @@ impl<'a> CodeGenerator<'a> {
                 let id = self.unique();
                 ids.push(id);
 
-                writeln!(lua, "function({}_{})", PREFIX, id)?;
+                writeln!(
+                    lua,
+                    "function({}_{})",
+                    lua_module_path(self.module.path),
+                    id
+                )?;
 
                 if iter.peek().is_some() {
                     write!(lua, "return ")?;
@@ -406,7 +421,10 @@ impl<'a> CodeGenerator<'a> {
         // Match the patterns
         let (mut conds, mut binds) = (Vec::new(), Vec::new());
         for (i, pat) in args.into_iter().enumerate() {
-            let (cs, bs) = pattern_match(pat, &format!("{}_{}", PREFIX, ids[i]))?;
+            let (cs, bs) = pattern_match(
+                pat,
+                &format!("{}_{}", lua_module_path(self.module.path), ids[i]),
+            )?;
             conds.extend(cs);
             binds.extend(bs);
         }
@@ -456,13 +474,18 @@ impl<'a> CodeGenerator<'a> {
 
         // Write each constructor to the `lua` string.
         for (name, constr_typ) in type_defn.constructors.into_iter() {
-            write!(lua, r#"{}["{}"] = "#, PREFIX, name)?;
+            write!(
+                lua,
+                r#"{}["{}"] = "#,
+                lua_module_path(self.module.path),
+                name
+            )?;
             writeln!(lua, "{}", self.constructor(name, constr_typ)?)?;
             writeln!(
                 self.return_entries,
                 r#"["{name}"] = {prefix}["{name}"],"#,
                 name = name,
-                prefix = PREFIX,
+                prefix = lua_module_path(self.module.path),
             )?;
 
             // Mark this constructor as generated.
@@ -485,7 +508,12 @@ impl<'a> CodeGenerator<'a> {
             let id = self.unique();
             ids.push(id);
 
-            writeln!(lua, "function({}_{})", PREFIX, id)?;
+            writeln!(
+                lua,
+                "function({}_{})",
+                lua_module_path(self.module.path),
+                id
+            )?;
             write!(lua, "return ")?;
 
             constr_type = *b;
@@ -495,7 +523,7 @@ impl<'a> CodeGenerator<'a> {
 
         let tupled_args = ids
             .iter()
-            .map(|id| format!("{}_{}", PREFIX, id))
+            .map(|id| format!("{}_{}", lua_module_path(self.module.path), id))
             .collect::<Vec<_>>()
             .join(", ");
 
@@ -517,8 +545,12 @@ impl<'a> CodeGenerator<'a> {
         match name.source {
             Source::Module(path) if path == self.module.path => {
                 // It's a top-level definition from this module,
-                // so we should emit e.g. _HUCK["var"]
-                Ok(format!(r#"{}["{}"]"#, PREFIX, name.ident))
+                // so we should emit e.g. _Module_Name["var"]
+                Ok(format!(
+                    r#"{}["{}"]"#,
+                    lua_module_path(self.module.path),
+                    name.ident
+                ))
             }
 
             Source::Module(path) => {
@@ -568,7 +600,7 @@ impl<'a> CodeGenerator<'a> {
 /// which are `Vec`s of Lua segments used to implement the pattern match.
 fn pattern_match(pat: ir::Pattern, lua_arg_name: &str) -> Result<(Vec<String>, Vec<String>)> {
     // This function takes a Lua argument name,
-    // e.g. _HUCK_0, _HUCK_12[3], _HUCK_3[13][334] or whatever.
+    // e.g. _Module_0, _Module_12[3], _Module_3[13][334] or whatever.
     // This is to allow nested pattern matches.
 
     let mut conditions = Vec::new();
@@ -681,6 +713,18 @@ fn lua_local(ident: Ident) -> String {
     }
 
     output
+}
+
+/// Returns a Lua-safe version of a Huck module path.
+/// Used when creating and referencing the Lua table of functions from the module.
+fn lua_module_path(path: ModulePath) -> String {
+    // Replace dots with underscores
+    let mut s = path.0.replace('.', "_");
+
+    // Prefix with an underscore
+    s.insert(0, '_');
+
+    s
 }
 
 impl ir::Definition {

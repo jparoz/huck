@@ -30,13 +30,13 @@ pub fn transpile(huck: &'static str) -> Result<String, HuckError> {
 macro_rules! wrap {
     ($name:literal, $expr:literal) => {
         concat!(
-            "local _HUCK = {}\n_HUCK[\"",
+            "local _Test = {}\n_Test[\"",
             $name,
             "\"] = ",
             $expr,
             "\nreturn {[\"",
             $name,
-            "\"] = _HUCK[\"",
+            "\"] = _Test[\"",
             $name,
             "\"]}",
         )
@@ -58,10 +58,10 @@ fn function_const() {
         normalize(wrap!(
             "const",
             r#"
-                function(_HUCK_0)
-                    return function(_HUCK_1)
-                        local a = _HUCK_0
-                        local b = _HUCK_1
+                function(_Test_0)
+                    return function(_Test_1)
+                        local a = _Test_0
+                        local b = _Test_1
                         return a
                     end
                 end
@@ -78,8 +78,8 @@ fn function_id() {
         normalize(wrap!(
             "id",
             r#"
-                function(_HUCK_0)
-                    local a = _HUCK_0
+                function(_Test_0)
+                    local a = _Test_0
                     return a
                 end
             "#
@@ -95,12 +95,12 @@ fn function_not() {
         normalize(wrap!(
             "not",
             r#"
-                function(_HUCK_0)
-                    local val0 = _HUCK_0
+                function(_Test_0)
+                    local val0 = _Test_0
                     return (function()
-                        local _HUCK_1 = {val0}
-                        if (#_HUCK_1 == 1) and (_HUCK_1[1] == true) then return false end
-                        if (#_HUCK_1 == 1) and (_HUCK_1[1] == false) then return true end
+                        local _Test_1 = {val0}
+                        if (#_Test_1 == 1) and (_Test_1[1] == true) then return false end
+                        if (#_Test_1 == 1) and (_Test_1[1] == false) then return true end
                         error("Unmatched pattern")
                     end)()
                 end
@@ -117,16 +117,16 @@ fn function_and() {
         normalize(wrap!(
             "&&",
             r#"
-                function(_HUCK_0)
-                    return function(_HUCK_1)
-                        local val0 = _HUCK_0
-                        local val1 = _HUCK_1
+                function(_Test_0)
+                    return function(_Test_1)
+                        local val0 = _Test_0
+                        local val1 = _Test_1
                         return (function()
-                            local _HUCK_2 = {val0, val1}
-                            if (#_HUCK_2 == 2) and (_HUCK_2[1] == true) and (_HUCK_2[2] == true) then
+                            local _Test_2 = {val0, val1}
+                            if (#_Test_2 == 2) and (_Test_2[1] == true) and (_Test_2[2] == true) then
                                 return true
                             end
-                            if (#_HUCK_2 == 2) then return false end
+                            if (#_Test_2 == 2) then return false end
                             error("Unmatched pattern")
                         end)()
                     end
