@@ -419,8 +419,8 @@ impl<'a> ModuleResolver<'a> {
         self.type_scope.bind(b)
     }
 
-    /// Removes the `Binding` on top of the type scope stack,
-    /// and asserts that it's equal to the given `Binding`.
+    /// Removes the `ResolvedName` on top of the type scope stack,
+    /// and asserts that it's equal to the given `ResolvedName`.
     fn unbind_type(&mut self, b @ ResolvedName { source, ident }: ResolvedName) {
         log::trace!(
             log::RESOLVE,
@@ -1010,8 +1010,8 @@ impl Scope {
         self.idents.entry(ident).or_default().push(source);
     }
 
-    /// Removes the `Binding` on top of the scope stack,
-    /// and asserts that it's equal to the given `Binding`.
+    /// Removes the `ResolvedName` on top of the scope stack,
+    /// and asserts that it's equal to the given `ResolvedName`.
     fn unbind(&mut self, ResolvedName { source, ident }: ResolvedName) {
         let popped_source = self.idents.get_mut(&ident).and_then(|idents| idents.pop());
         assert_eq!(

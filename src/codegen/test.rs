@@ -96,13 +96,13 @@ fn function_not() {
             "not",
             r#"
                 function(_HUCK_0)
-                    if (_HUCK_0 == true) then
-                        return false
-                    end
-                    if (_HUCK_0 == false) then
-                        return true
-                    end
-                    error("Unmatched pattern in function `Test.not`")
+                    local val0 = _HUCK_0
+                    return (function()
+                        local _HUCK_1 = {val0}
+                        if (#_HUCK_1 == 1) and (_HUCK_1[1] == true) then return false end
+                        if (#_HUCK_1 == 1) and (_HUCK_1[1] == false) then return true end
+                        error("Unmatched pattern")
+                    end)()
                 end
             "#
         ))
@@ -119,11 +119,16 @@ fn function_and() {
             r#"
                 function(_HUCK_0)
                     return function(_HUCK_1)
-                        if (_HUCK_0 == true) and
-                            (_HUCK_1 == true) then
+                        local val0 = _HUCK_0
+                        local val1 = _HUCK_1
+                        return (function()
+                            local _HUCK_2 = {val0, val1}
+                            if (#_HUCK_2 == 2) and (_HUCK_2[1] == true) and (_HUCK_2[2] == true) then
                                 return true
                             end
-                            return false
+                            if (#_HUCK_2 == 2) then return false end
+                            error("Unmatched pattern")
+                        end)()
                     end
                 end
             "#

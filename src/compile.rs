@@ -80,23 +80,12 @@ pub fn compile(input: Vec<(String, &'static str)>) -> Result<Vec<(String, String
     for (module_path, module) in typechecked_modules.iter() {
         ir_modules.insert(*module_path, ir::Module::from(module.clone()));
     }
-    // @Todo: do something more than just logging it
-    crate::log::debug!("Converted AST to IR: {ir_modules:?}");
-
-    // // @XXX: generate code from IR using new_codegen (and then throw it away)
-    // let mut new_generated = Vec::new();
-    // for (module_path, module) in ir_modules {
-    //     let lua = new_codegen::generate(&module, &module_stems)?;
-    //     new_generated.push((module_stems[&module_path].clone(), lua));
-    // }
-    // crate::log::debug!("Generated from IR: {new_generated:?}");
 
     // Generate code
     let mut generated = Vec::new();
-    for (module_path, module) in typechecked_modules.iter() {
-        let lua = codegen::generate(module, &module_stems)?;
-        generated.push((module_stems[module_path].clone(), lua));
+    for (module_path, module) in ir_modules {
+        let lua = new_codegen::generate(&module, &module_stems)?;
+        generated.push((module_stems[&module_path].clone(), lua));
     }
-
     Ok(generated)
 }

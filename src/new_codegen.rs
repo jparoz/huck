@@ -369,7 +369,7 @@ impl<'a> CodeGenerator<'a> {
         // @Warn: emit a compile time warning as well
         // @Exhaustiveness: do some exhaustiveness checking before emitting these warnings/errors
         if !has_unconditional_branch {
-            writeln!(lua, r#"error("Unmatched pattern in case expression")"#)?;
+            writeln!(lua, r#"error("Unmatched pattern")"#)?;
         }
 
         // End the scope (by calling the anonymous function)

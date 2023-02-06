@@ -17,8 +17,16 @@ fn short() {
 r#"local _HUCK = {}
 _HUCK["&&"] = function(_HUCK_0)
     return function(_HUCK_1)
-        if (_HUCK_0 == true) and (_HUCK_1 == true) then return true end
-        return false
+        local val0 = _HUCK_0
+        local val1 = _HUCK_1
+        return (function()
+            local _HUCK_2 = {val0, val1}
+            if (#_HUCK_2 == 2) and (_HUCK_2[1] == true) and (_HUCK_2[2] == true) then
+                return true
+            end
+            if (#_HUCK_2 == 2) then return false end
+            error("Unmatched pattern")
+        end)()
     end
 end
 return {["&&"] = _HUCK["&&"]}
