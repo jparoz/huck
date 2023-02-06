@@ -180,10 +180,35 @@ impl Module<UnresolvedName, ()> {
             }
         }
 
-        // Check that each Definition has at least one assignment
+        // Do some checks on the Definitions
         for (name, defn) in module.definitions.iter() {
+            // Check that this Definition has at least one assignment
             if defn.assignments.is_empty() {
                 return Err(Error::MissingAssignment(*name));
+            }
+
+            // Check that this Definition only has up to one unconditional branch
+            if defn.assignments.len() > 1 {
+                // Because we're in here, we have more than one branch.
+                // Now we have to ensure that only one of them is unconditional.
+
+                // If it defines a value (i.e. doesn't take arguments)
+                if defn.assignments[0].0.arg_count() == 0 {
+                    // This is bad, because a non-function can't have multiple values.
+                    return Err(Error::MultipleUnconditionals(*name));
+                }
+
+                let mut found_unconditional = false;
+                for (lhs, _) in defn.assignments.iter() {
+                    if lhs.is_unconditional() {
+                        // If we already found an unconditional, that's bad.
+                        if found_unconditional {
+                            return Err(Error::MultipleUnconditionals(*name));
+                        }
+
+                        found_unconditional = true;
+                    }
+                }
             }
         }
 

@@ -10,8 +10,4 @@ pub enum Error {
     // @Fixme: currently the Vec contains extra names (see its generation site), hence "within".
     #[error("Cyclic dependency detected within the following definitions: {0:?}")]
     CyclicDependency(Vec<ResolvedName>),
-
-    // @Errors: source code location
-    #[error("Duplicate unconditional branches found in a case expression! Values: `{0:?}`")]
-    DuplicateUnconditional(Vec<crate::ir::Expression>),
 }

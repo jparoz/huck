@@ -34,6 +34,11 @@ pub enum Error {
     #[error("No assignment defining the name `{0}`")]
     MissingAssignment(UnresolvedName),
 
+    // @Errors: this should print the assignment with the wrong number of args
     #[error("Incorrect number of function arguments in definition of `{0}`")]
     IncorrectArgumentCount(UnresolvedName),
+
+    // @Errors: this should print the locations of the multiple unconditionals
+    #[error("Multiple unconditional branches found in definition of `{0}`")]
+    MultipleUnconditionals(UnresolvedName),
 }

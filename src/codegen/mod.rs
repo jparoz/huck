@@ -281,6 +281,10 @@ impl<'a> CodeGenerator<'a> {
     ) -> Result<String> {
         let mut lua = String::new();
 
+        // @Errors: do this in a different way
+        // Store a string describing the expression, to use in error messages.
+        let expr_s = format!("{expr:?}");
+
         let id = self.unique();
 
         // Start a new scope.
@@ -341,33 +345,13 @@ impl<'a> CodeGenerator<'a> {
             writeln!(lua, "end")?;
         }
 
-        // Check if there are multiple unconditional branches.
-        //
-        // @Cleanup @Errors @Exhaustiveness:
-        // When we do exhaustiveness checking,
-        // this error should be caught in that process;
-        // then this can be changed to `assert_eq!(unconditional.len(), 1);`.
-        if unconditional.len() > 1 {
-            // This can't be generated,
-            // because either:
-            //     - It's a value,
-            //       and so can't have two values;
-            //     - It's a function,
-            //       and so can't have two return statements in the same block.
-            log::error!(
-                log::CODEGEN,
-                "Multiple unconditional branches in a case expression!"
-            );
-            // @Errors: Would be better to have the name than all the RHSs
-            return Err(Error::DuplicateUnconditional(
-                unconditional.into_iter().map(|(_, _, expr)| expr).collect(),
-            ));
-        }
+        // Assert that there aren't multiple unconditional branches.
+        assert!(unconditional.len() <= 1);
 
         let has_unconditional_branch = !unconditional.is_empty();
 
         // conds.is_empty()
-        for (_conds, binds, expr) in unconditional {
+        if let Some((_conds, binds, expr)) = unconditional.into_iter().next() {
             // First bind the bindings
             for b in binds {
                 lua.write_str(&b)?;
@@ -376,13 +360,19 @@ impl<'a> CodeGenerator<'a> {
             write!(lua, "return ")?;
 
             writeln!(lua, "{}", self.expression(expr)?)?;
-        }
-
-        // Emit a runtime error in case no pattern matches
-        // @Warn: emit a compile time warning as well
-        // @Exhaustiveness: do some exhaustiveness checking before emitting these warnings/errors
-        if !has_unconditional_branch {
-            writeln!(lua, r#"error("Unmatched pattern")"#)?;
+        } else {
+            // Emit a runtime error in case no pattern matches
+            // @Exhaustiveness: do some exhaustiveness checking before emitting these warnings/errors
+            // @Errors: these should have better information about the source of the case expression
+            // @Errors: shouldn't use Debug
+            log::warn!(
+                log::CODEGEN,
+                "Warning: possible partial definition when matching expression `{expr_s}`, \
+                 try adding an unconditional pattern match"
+            );
+            if !has_unconditional_branch {
+                writeln!(lua, r#"error("Unmatched pattern")"#)?;
+            }
         }
 
         // End the scope (by calling the anonymous function)

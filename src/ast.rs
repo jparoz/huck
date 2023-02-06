@@ -107,6 +107,14 @@ impl<Name> Lhs<Name> {
             Lhs::Binop { op, .. } => op,
         }
     }
+
+    /// Returns whether or not this `Lhs` binds unconditionally.
+    pub fn is_unconditional(&self) -> bool {
+        match self {
+            Lhs::Func { args, .. } => args.iter().all(Pattern::is_unconditional),
+            Lhs::Binop { a, b, .. } => a.is_unconditional() && b.is_unconditional(),
+        }
+    }
 }
 
 impl<Name: Copy> Lhs<Name> {
@@ -161,6 +169,22 @@ pub enum Pattern<Name> {
         constructor: Name,
         args: Vec<Pattern<Name>>,
     },
+}
+
+impl<Name> Pattern<Name> {
+    // Returns whether or not this pattern binds unconditionally.
+    pub fn is_unconditional(&self) -> bool {
+        match self {
+            Pattern::Bind(_) | Pattern::Underscore | Pattern::Unit => true,
+            Pattern::List(_)
+            | Pattern::Tuple(_)
+            | Pattern::Numeral(_)
+            | Pattern::String(_)
+            | Pattern::Binop { .. }
+            | Pattern::UnaryConstructor(_)
+            | Pattern::Destructure { .. } => false,
+        }
+    }
 }
 
 impl<Name: Copy> Pattern<Name> {
