@@ -186,6 +186,10 @@ impl From<ast::Definition<Name, Type>> for Definition {
         // This is caught as a parse error.
         assert!(!definition.assignments.is_empty());
 
+        // Assert that either it's a function (i.e. takes arguments),
+        // or there's only one assignment (because a non-function can't have multiple values)
+        assert!(definition.assignments[0].0.arg_count() > 0 || definition.assignments.len() == 1);
+
         Definition::from((*definition.assignments[0].0.name(), definition.assignments))
     }
 }

@@ -8,7 +8,7 @@ use crate::name::UnresolvedName;
 use crate::parse::{self, parse};
 use crate::precedence::ApplyPrecedence;
 use crate::typecheck::typecheck;
-use crate::{codegen, ir, new_codegen, resolve};
+use crate::{codegen, ir, resolve};
 
 /// Does every step necessary to take the added modules to compiled state.
 /// Takes a `Vec` of (filepath stem, source code)
@@ -84,7 +84,7 @@ pub fn compile(input: Vec<(String, &'static str)>) -> Result<Vec<(String, String
     // Generate code
     let mut generated = Vec::new();
     for (module_path, module) in ir_modules {
-        let lua = new_codegen::generate(&module, &module_stems)?;
+        let lua = codegen::generate(&module, &module_stems)?;
         generated.push((module_stems[&module_path].clone(), lua));
     }
     Ok(generated)

@@ -1,9 +1,4 @@
-mod error;
-
-#[cfg(test)]
-mod test;
-
-use crate::ast::{self, Module};
+use crate::ir::{self, Module};
 use crate::log;
 use crate::name::ModulePath;
 use crate::name::{ResolvedName, Source};
@@ -13,18 +8,20 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 use std::time::Instant;
 
+mod error;
 pub use error::Error;
-use error::Error as CodegenError;
 
+#[cfg(test)]
+mod test;
+
+// @Todo @Cleanup: This shouldn't be necessary really,
+// we can generate more sensible names for things while still avoiding name clashes
 const PREFIX: &str = "_HUCK";
 
 /// Generates Lua for the given Huck module.
 /// `requires` is a mapping from a module's `ModulePath`
 /// to the segment of a filepath to be given to Lua's `require` function to load that module.
-pub fn generate(
-    module: &Module<ResolvedName, Type>,
-    requires: &BTreeMap<ModulePath, String>,
-) -> Result<String> {
+pub fn generate(module: &ir::Module, requires: &BTreeMap<ModulePath, String>) -> Result<String> {
     let start_time = Instant::now();
 
     log::trace!(log::CODEGEN, "Generating code for module {}", module.path);
@@ -48,7 +45,7 @@ pub fn generate(
     Ok(generated)
 }
 
-type Result<T> = std::result::Result<T, CodegenError>;
+type Result<T> = std::result::Result<T, Error>;
 
 /// Generates Lua code, and maintains all necessary state to do so.
 /// Methods on this struct should generally correspond to Lua constructs,
@@ -61,7 +58,10 @@ struct CodeGenerator<'a> {
     // This is the set of definitions which have already been generated.
     generated: BTreeSet<ResolvedName>,
 
-    module: &'a Module<ResolvedName, Type>,
+    /// This is the module being generated.
+    module: &'a ir::Module,
+
+    /// This is a map from a module's path to its Lua require string.
     requires: &'a BTreeMap<ModulePath, String>,
 
     /// Used for generating unique variable IDs.
@@ -69,10 +69,7 @@ struct CodeGenerator<'a> {
 }
 
 impl<'a> CodeGenerator<'a> {
-    fn new(
-        module: &'a Module<ResolvedName, Type>,
-        requires: &'a BTreeMap<ModulePath, String>,
-    ) -> Self {
+    fn new(module: &'a Module, requires: &'a BTreeMap<ModulePath, String>) -> Self {
         CodeGenerator {
             module,
             requires,
@@ -82,7 +79,7 @@ impl<'a> CodeGenerator<'a> {
         }
     }
 
-    /// Generate Lua code for the Module<ResolvedName, Type> used in CodeGenerator::new.
+    /// Generate Lua code for the Module used in CodeGenerator::new.
     /// This will generate a Lua chunk which returns a table
     /// containing the definitions given in the Huck module.
     fn generate(mut self) -> Result<String> {
@@ -119,17 +116,15 @@ impl<'a> CodeGenerator<'a> {
             let mut generated_anything = false;
 
             for (name, mut defn) in current_pass.drain(..) {
-                // @Errors: this should throw an error saying that
-                // there was a type annotation without a corresponding definition.
-                assert!(!defn.assignments.is_empty());
-
                 // @Lazy @Laziness: lazy values can be generated in any order
 
-                // If the definition has any arguments, then it will become a Lua function;
+                // If the definition is a lambda,
+                // then it will become a Lua function;
                 // this means we can generate it in any order.
-                // Note that if it has missing dependencies, it will error at runtime;
-                // so we should have already caught this in a compile error.
-                let has_any_args = defn.assignments[0].0.arg_count() > 0;
+                // Note that if it has missing dependencies,
+                // it will error at runtime;
+                // so we need to catch this in a compile error.
+                let has_any_args = matches!(defn.rhs, ir::Expression::Lambda { .. });
 
                 // If the definition has no un-generated dependencies from this module,
                 // then we're ready generate it.
@@ -163,7 +158,7 @@ impl<'a> CodeGenerator<'a> {
                     "Error, didn't generate anything in one pass. Next in queue: {:?}",
                     next_pass
                 );
-                return Err(CodegenError::CyclicDependency(
+                return Err(Error::CyclicDependency(
                     next_pass
                         .iter()
                         // @Fixme @Errors: filter out entries which depend on the cycle,
@@ -179,8 +174,8 @@ impl<'a> CodeGenerator<'a> {
         }
 
         // Write out foreign exports
-        for (lua_lhs, expr) in self.module.foreign_exports.iter() {
-            writeln!(lua, "{} = {}", lua_lhs, self.expr(expr)?)?;
+        for (lua_lhs, expr) in self.module.exports.iter() {
+            writeln!(lua, "{} = {}", lua_lhs, self.expression(expr)?)?;
         }
 
         // Write out the return statement
@@ -189,17 +184,13 @@ impl<'a> CodeGenerator<'a> {
         Ok(lua)
     }
 
-    /// Generates a Lua expression representing a Huck definition.
-    fn definition<Ty>(
-        &mut self,
-        name: &ResolvedName,
-        defn: &ast::Definition<ResolvedName, Ty>,
-    ) -> Result<String> {
+    /// Generates a Lua expression representing a top-level Huck definition.
+    fn definition(&mut self, name: &ResolvedName, defn: &ir::Definition) -> Result<String> {
         let mut lua = String::new();
 
         // Write the definition to the `lua` string.
         write!(lua, r#"{}["{}"] = "#, PREFIX, name.ident)?;
-        writeln!(lua, "{}", self.curried_function(&defn.assignments)?)?;
+        writeln!(lua, "{}", self.expression(&defn.rhs)?)?;
         writeln!(
             self.return_entries,
             r#"["{name}"] = {prefix}["{name}"],"#,
@@ -213,23 +204,37 @@ impl<'a> CodeGenerator<'a> {
         Ok(lua)
     }
 
-    fn expr(&mut self, expr: &ast::Expr<ResolvedName>) -> Result<String> {
+    fn expression(&mut self, expr: &ir::Expression) -> Result<String> {
         match expr {
-            ast::Expr::Term(term) => self.term(term),
-            ast::Expr::App { func, argument } => {
-                Ok(format!("({})({})", self.expr(func)?, self.expr(argument)?))
-            }
-            ast::Expr::Binop { operator, lhs, rhs } => Ok(format!(
-                "{}({})({})",
-                self.reference(operator)?,
-                self.expr(lhs)?,
-                self.expr(rhs)?
+            ir::Expression::Reference(name) => self.reference(name),
+
+            ir::Expression::Literal(lit) => Ok(format!("{}", lit)),
+            // @Note: this is where the semantics for Huck Lists are decided.
+            // The below simply converts them as Lua lists;
+            // possibly one day we should instead convert them to Lua iterators.
+            ir::Expression::List(v) => Ok(format!(
+                "{{{}}}",
+                v.iter()
+                    .map(|e| self.expression(e))
+                    .collect::<Result<Vec<_>>>()?
+                    .join(", ")
             )),
 
-            ast::Expr::Let {
-                definitions,
-                in_expr,
-            } => {
+            ir::Expression::Tuple(v) => Ok(format!(
+                "{{{}}}",
+                v.iter()
+                    .map(|e| self.expression(e))
+                    .collect::<Result<Vec<_>>>()?
+                    .join(", ")
+            )),
+
+            ir::Expression::App(func, argument) => Ok(format!(
+                "({})({})",
+                self.expression(func)?,
+                self.expression(argument)?
+            )),
+
+            ir::Expression::Let { definitions, expr } => {
                 let mut lua = String::new();
 
                 // Open a new scope (i.e. an immediately-called function so that return works)
@@ -240,13 +245,13 @@ impl<'a> CodeGenerator<'a> {
                     writeln!(
                         lua,
                         "local {} = {}",
-                        definition[0].0.name(),
-                        self.curried_function(definition)?
+                        definition.name,
+                        self.expression(&definition.rhs)?
                     )?;
                 }
 
                 // Generate the in_expr
-                writeln!(lua, "return {}", self.expr(in_expr)?)?;
+                writeln!(lua, "return {}", self.expression(expr)?)?;
 
                 // End and call the function
                 writeln!(lua, "end)()")?;
@@ -254,186 +259,41 @@ impl<'a> CodeGenerator<'a> {
                 Ok(lua)
             }
 
-            ast::Expr::If {
-                cond,
-                then_expr,
-                else_expr,
-            } => Ok(format!(
-                "(({}) and ({}) or ({}))",
-                self.expr(cond)?,
-                self.expr(then_expr)?,
-                self.expr(else_expr)?,
-            )),
+            ir::Expression::Case { expr, arms } => self.case(expr, arms),
 
-            ast::Expr::Case { expr, arms } => self.case(expr, arms),
-
-            ast::Expr::Lambda { args, rhs } => {
+            ir::Expression::Lambda { args, expr } => {
                 assert!(!args.is_empty());
-                // @XXX @Fixme @IR:
-                // This is totally a punt, and unused, and dodgy;
-                // it will be fixed when we generate code from IR.
-                let lhs = ast::Lhs::Func {
-                    name: ResolvedName {
-                        source: Source::Builtin,
-                        ident: "<lambda>",
-                    },
-                    args: args.clone(),
-                };
-                self.curried_function(&vec![(lhs, *rhs.clone())]) // @Fixme: don't clone?
+                self.curried_function(args.clone(), *expr.clone()) // @Fixme: don't clone?
             }
 
-            ast::Expr::Lua(lua) | ast::Expr::UnsafeLua(lua) => Ok(format!("({})", lua)),
-        }
-    }
-
-    fn term(&mut self, term: &ast::Term<ResolvedName>) -> Result<String> {
-        match term {
-            ast::Term::Numeral(num) => match num {
-                ast::Numeral::Int(s) | ast::Numeral::Float(s) => Ok(s.to_string()),
-            },
-
-            // @Note: includes the quotes
-            ast::Term::String(s) => Ok(s.to_string()),
-
-            ast::Term::Unit => Ok("nil".to_string()),
-
-            // @Note: this is where the semantics for Huck Lists are decided.
-            // The below simply converts them as Lua lists;
-            // possibly one day we should instead convert them to Lua iterators.
-            ast::Term::List(v) => Ok(format!(
-                "{{{}}}",
-                v.iter()
-                    .map(|e| self.expr(e))
-                    .collect::<Result<Vec<_>>>()?
-                    .join(", ")
-            )),
-
-            ast::Term::Tuple(v) => Ok(format!(
-                "{{{}}}",
-                v.iter()
-                    .map(|e| self.expr(e))
-                    .collect::<Result<Vec<_>>>()?
-                    .join(", ")
-            )),
-
-            ast::Term::Name(name) => self.reference(name),
-
-            ast::Term::Parens(expr) => Ok(format!("({})", self.expr(expr)?)),
+            ir::Expression::Lua(lua) => Ok(format!("({})", lua)),
         }
     }
 
     fn case(
         &mut self,
-        expr: &ast::Expr<ResolvedName>,
-        arms: &Vec<(ast::Pattern<ResolvedName>, ast::Expr<ResolvedName>)>,
+        expr: &ir::Expression,
+        arms: &Vec<(ir::Pattern, ir::Expression)>,
     ) -> Result<String> {
         let mut lua = String::new();
-
-        let mut has_unconditional_branch = false;
 
         let id = self.unique();
 
         // Start a new scope.
         writeln!(lua, "(function()")?;
 
-        // Store the value of expr in a local.
-        let expr_s = self.expr(expr)?;
+        // Store the value of expr in a local,
+        // which is accessed within the conditions and bindings.
+        let expr_s = self.expression(expr)?;
         writeln!(lua, "local {}_{} = {}", PREFIX, id, expr_s)?;
 
-        for (pat, expr) in arms {
-            let (conditions, bindings) = pattern_match(pat, &format!("{}_{}", PREFIX, id))?;
-
-            if conditions.is_empty() {
-                has_unconditional_branch = true;
-
-                // First bind the bindings
-                for b in bindings {
-                    lua.write_str(&b)?;
-                }
-                // Then return the return value
-                writeln!(lua, "return {}", self.expr(expr)?)?;
-            } else {
-                // Check the conditions
-                lua.write_str("if ")?;
-                let condition_count = conditions.len();
-                for (i, cond) in conditions.into_iter().enumerate() {
-                    write!(lua, "({})", cond)?;
-                    if i < condition_count - 1 {
-                        lua.write_str("\nand ")?;
-                    }
-                }
-                writeln!(lua, " then")?;
-
-                // If the conditions are met, then bind the bindings
-                for b in bindings {
-                    lua.write_str(&b)?;
-                }
-
-                // Return the return value
-                writeln!(lua, "return {}", self.expr(expr)?)?;
-
-                // End the if
-                writeln!(lua, "end")?;
-            }
-        }
-
-        // Emit a runtime error in case no pattern matches
-        // @Warn: emit a compile time warning as well
-        // @Exhaustiveness: do some exhaustiveness checking before emitting these warnings/errors
-        if !has_unconditional_branch {
-            writeln!(lua, r#"error("Unmatched pattern in case expression")"#,)?;
-        }
-
-        // End the scope (by calling the anonymous function)
-        writeln!(lua, "end)()")?;
-
-        Ok(lua)
-    }
-
-    fn curried_function(
-        &mut self,
-        assignments: &Vec<(ast::Lhs<ResolvedName>, ast::Expr<ResolvedName>)>,
-    ) -> Result<String> {
-        assert!(!assignments.is_empty());
-
-        let arg_count = assignments[0].0.arg_count();
-        let mut ids = Vec::with_capacity(arg_count);
-
-        let mut lua = String::new();
-
-        // Start the functions
-        for i in 0..arg_count {
-            let id = self.unique();
-            ids.push(id);
-
-            writeln!(lua, "function({}_{})", PREFIX, ids[i])?;
-
-            if i < arg_count - 1 {
-                write!(lua, "return ")?;
-            }
-        }
-
-        // Some @DRY: CodeGenerator::case
-        //
         // Before returning the expression,
         // we split the branches based on whether or not they have any conditions.
         // This is to make sure that unconditional branch(es) go at the end.
-        let branches = assignments
+        let branches = arms
             .iter()
-            .map(|(lhs, expr)| {
-                let args = lhs.args();
-
-                // This is caught as a parse error.
-                assert_eq!(arg_count, args.len());
-
-                let mut conds = Vec::new();
-                let mut binds = Vec::new();
-                for i in 0..arg_count {
-                    let (cond, bind) = pattern_match(&args[i], &format!("{}_{}", PREFIX, ids[i]))?;
-                    conds.extend(cond);
-                    binds.extend(bind);
-                }
-
+            .map(|(pat, expr)| {
+                let (conds, binds) = pattern_match(pat, &format!("{}_{}", PREFIX, id))?;
                 Ok((conds, binds, expr))
             })
             .collect::<Result<Vec<_>>>()?;
@@ -442,17 +302,17 @@ impl<'a> CodeGenerator<'a> {
             .into_iter()
             .partition(|(conds, _binds, _expr)| conds.is_empty());
 
-        let has_unconditional_branch = !unconditional.is_empty();
-
         // !conds.is_empty()
         for (conds, binds, expr) in conditional {
             // Check the conditions
             lua.write_str("if ")?;
-            let condition_count = conds.len();
-            for (i, cond) in conds.into_iter().enumerate() {
-                write!(lua, "({})", cond)?;
-                if i < condition_count - 1 {
-                    lua.write_str("\nand ")?;
+            {
+                let mut iter = conds.into_iter().peekable();
+                while let Some(cond) = iter.next() {
+                    write!(lua, "({})", cond)?;
+                    if iter.peek().is_some() {
+                        lua.write_str("\nand ")?;
+                    }
                 }
             }
             writeln!(lua, " then")?;
@@ -463,7 +323,7 @@ impl<'a> CodeGenerator<'a> {
             }
 
             // Return the return value
-            writeln!(lua, "return {}", self.expr(expr)?)?;
+            writeln!(lua, "return {}", self.expression(expr)?)?;
 
             // End the if
             writeln!(lua, "end")?;
@@ -484,7 +344,7 @@ impl<'a> CodeGenerator<'a> {
             //       and so can't have two return statements in the same block.
             log::error!(
                 log::CODEGEN,
-                "Multiple unconditional branches in a definition!"
+                "Multiple unconditional branches in a case expression!"
             );
             // @Errors: Would be better to have the name than all the RHSs
             return Err(Error::DuplicateUnconditional(
@@ -495,33 +355,92 @@ impl<'a> CodeGenerator<'a> {
             ));
         }
 
+        let has_unconditional_branch = !unconditional.is_empty();
+
         // conds.is_empty()
         for (_conds, binds, expr) in unconditional {
-            if arg_count == 0 {
-                // If we have no Huck arguments,
-                // then we should be a Lua value, not a Lua function;
-                // so we don't return, we just are.
-            } else {
-                // First bind the bindings
-                for b in binds {
-                    lua.write_str(&b)?;
-                }
-                // Then return the return value
-                write!(lua, "return ")?;
+            // First bind the bindings
+            for b in binds {
+                lua.write_str(&b)?;
             }
+            // Then return the return value
+            write!(lua, "return ")?;
 
-            writeln!(lua, "{}", self.expr(expr)?)?;
+            writeln!(lua, "{}", self.expression(expr)?)?;
         }
 
         // Emit a runtime error in case no pattern matches
         // @Warn: emit a compile time warning as well
         // @Exhaustiveness: do some exhaustiveness checking before emitting these warnings/errors
         if !has_unconditional_branch {
-            writeln!(
-                lua,
-                r#"error("Unmatched pattern in function `{}`")"#,
-                &assignments[0].0.name()
-            )?;
+            writeln!(lua, r#"error("Unmatched pattern")"#)?;
+        }
+
+        // End the scope (by calling the anonymous function)
+        writeln!(lua, "end)()")?;
+
+        Ok(lua)
+    }
+
+    fn curried_function(&mut self, args: Vec<ir::Pattern>, expr: ir::Expression) -> Result<String> {
+        let mut lua = String::new();
+
+        let arg_count = args.len();
+
+        let mut ids = Vec::with_capacity(arg_count);
+
+        // Start the functions
+        {
+            let mut iter = (0..arg_count).peekable();
+            while iter.next().is_some() {
+                let id = self.unique();
+                ids.push(id);
+
+                writeln!(lua, "function({}_{})", PREFIX, id)?;
+
+                if iter.peek().is_some() {
+                    write!(lua, "return ")?;
+                }
+            }
+        }
+
+        // Match the patterns
+        let (mut conds, mut binds) = (Vec::new(), Vec::new());
+        for (i, pat) in args.into_iter().enumerate() {
+            let (cs, bs) = pattern_match(&pat, &format!("{}_{}", PREFIX, ids[i]))?;
+            conds.extend(cs);
+            binds.extend(bs);
+        }
+
+        if conds.is_empty() {
+            // First bind the bindings
+            for b in binds {
+                lua.write_str(&b)?;
+            }
+            // Then return the return value
+            writeln!(lua, "return {}", self.expression(&expr)?)?;
+        } else {
+            // Check the conditions
+            lua.write_str("if ")?;
+            let condition_count = conds.len();
+            for (i, cond) in conds.into_iter().enumerate() {
+                write!(lua, "({})", cond)?;
+                if i < condition_count - 1 {
+                    lua.write_str("\nand ")?;
+                }
+            }
+            writeln!(lua, " then")?;
+
+            // If the conditions are met, then bind the bindings
+            for b in binds {
+                lua.write_str(&b)?;
+            }
+
+            // Return the return value
+            writeln!(lua, "return {}", self.expression(&expr)?)?;
+
+            // End the if
+            writeln!(lua, "end")?;
         }
 
         // End the functions
@@ -533,16 +452,13 @@ impl<'a> CodeGenerator<'a> {
     }
 
     /// Generates all the type constructors found in the type definition.
-    fn type_definition(
-        &mut self,
-        type_defn: &ast::TypeDefinition<ResolvedName, Type>,
-    ) -> Result<String> {
+    fn type_definition(&mut self, type_defn: &ir::TypeDefinition) -> Result<String> {
         let mut lua = String::new();
 
         // Write each constructor to the `lua` string.
-        for (name, constr) in type_defn.constructors.iter() {
+        for (name, constr_typ) in type_defn.constructors.iter() {
             write!(lua, r#"{}["{}"] = "#, PREFIX, name)?;
-            writeln!(lua, "{}", self.constructor(name, &constr.typ)?)?;
+            writeln!(lua, "{}", self.constructor(name, constr_typ)?)?;
             writeln!(
                 self.return_entries,
                 r#"["{name}"] = {prefix}["{name}"],"#,
@@ -651,10 +567,7 @@ impl<'a> CodeGenerator<'a> {
 /// Generates code for a pattern match.
 /// Returns `conditions` and `bindings`,
 /// which are `Vec`s of Lua segments used to implement the pattern match.
-fn pattern_match(
-    pat: &ast::Pattern<ResolvedName>,
-    lua_arg_name: &str,
-) -> Result<(Vec<String>, Vec<String>)> {
+fn pattern_match(pat: &ir::Pattern, lua_arg_name: &str) -> Result<(Vec<String>, Vec<String>)> {
     // This function takes a Lua argument name,
     // e.g. _HUCK_0, _HUCK_12[3], _HUCK_3[13][334] or whatever.
     // This is to allow nested pattern matches.
@@ -663,18 +576,18 @@ fn pattern_match(
     let mut bindings = Vec::new();
 
     match pat {
-        ast::Pattern::Bind(s) => {
+        ir::Pattern::Bind(s) => {
             assert!(s.is_local());
             bindings.push(format!("local {} = {}\n", lua_local(s.ident), lua_arg_name));
         }
 
         // Because underscore is not a legal identifier,
         // we don't need to bind anything at all.
-        ast::Pattern::Underscore => (),
+        ir::Pattern::Underscore => (),
 
         // @Note: the Lua logic is identical for Huck lists and tuples.
         // This is because they have the same representation in Lua: a heterogenous list!
-        ast::Pattern::List(list) | ast::Pattern::Tuple(list) => {
+        ir::Pattern::List(list) | ir::Pattern::Tuple(list) => {
             // @Fixme @Errors: for tuples,
             // this should give a runtime error saying something like
             // "tuple of incorrect length",
@@ -692,19 +605,37 @@ fn pattern_match(
             }
         }
 
-        ast::Pattern::Numeral(lit) => {
+        // Don't need to do anything because unit is ignored
+        ir::Pattern::Literal(ir::Literal::Unit) => (),
+
+        ir::Pattern::Literal(lit) => {
             conditions.push(format!("{} == {}", lua_arg_name, lit));
         }
 
-        ast::Pattern::String(lit) => {
-            conditions.push(format!("{} == {}", lua_arg_name, lit));
+        // @Cleanup @Hardcode @Hack-ish
+        ir::Pattern::Constructor(name, args)
+            if args.is_empty()
+                && name.is_builtin()
+                && (name.ident == "True" || name.ident == "False") =>
+        {
+            let mut name_string = name.ident.to_string();
+            name_string.make_ascii_lowercase();
+            conditions.push(format!(r#"{} == {}"#, lua_arg_name, name_string));
         }
 
-        ast::Pattern::Destructure { constructor, args } => {
+        ir::Pattern::Constructor(name, args) if args.is_empty() => {
             // Check that it's the right variant
             conditions.push(format!(
                 r#"getmetatable({}).__variant == "{}""#,
-                lua_arg_name, constructor
+                lua_arg_name, name
+            ));
+        }
+
+        ir::Pattern::Constructor(name, args) => {
+            // Check that it's the right variant
+            conditions.push(format!(
+                r#"getmetatable({}).__variant == "{}""#,
+                lua_arg_name, name
             ));
 
             // Check that each pattern matches
@@ -715,41 +646,6 @@ fn pattern_match(
                 bindings.extend(sub_binds);
             }
         }
-
-        ast::Pattern::Binop { lhs, rhs, operator } => {
-            // Check that it's the right variant
-            conditions.push(format!(
-                r#"getmetatable({}).__variant == "{}""#,
-                lua_arg_name, operator
-            ));
-
-            // Check that the LHS pattern matches
-            let (sub_conds, sub_binds) = pattern_match(lhs, &format!("{}[{}]", lua_arg_name, 1))?;
-            conditions.extend(sub_conds);
-            bindings.extend(sub_binds);
-
-            // Check that the RHS pattern matches
-            let (sub_conds, sub_binds) = pattern_match(rhs, &format!("{}[{}]", lua_arg_name, 2))?;
-            conditions.extend(sub_conds);
-            bindings.extend(sub_binds);
-        }
-
-        // @Hardcode @Hack-ish @Prelude
-        ast::Pattern::UnaryConstructor(name) if name.ident == "True" || name.ident == "False" => {
-            let mut name_string = name.ident.to_string();
-            name_string.make_ascii_lowercase();
-            conditions.push(format!(r#"{} == {}"#, lua_arg_name, name_string));
-        }
-
-        ast::Pattern::UnaryConstructor(name) => {
-            // Check that it's the right variant
-            conditions.push(format!(
-                r#"getmetatable({}).__variant == "{}""#,
-                lua_arg_name, name
-            ));
-        }
-
-        ast::Pattern::Unit => (), // Don't need to do anything because unit is ignored
     };
 
     Ok((conditions, bindings))
@@ -788,49 +684,36 @@ fn lua_local(ident: &'static str) -> String {
     output
 }
 
-impl<Ty> ast::Definition<ResolvedName, Ty> {
+impl ir::Definition {
     fn dependencies(&mut self) -> BTreeSet<ResolvedName> {
         let mut deps = BTreeSet::new();
-
-        for (_lhs, expr) in self.assignments.iter() {
-            expr.dependencies(&mut deps);
-        }
-
+        self.rhs.dependencies(&mut deps);
         deps
     }
 }
 
-impl ast::Expr<ResolvedName> {
+impl ir::Expression {
     fn dependencies(&self, deps: &mut BTreeSet<ResolvedName>) {
-        use ast::*;
+        use ir::*;
         match self {
-            Expr::Term(Term::List(es)) | Expr::Term(Term::Tuple(es)) => {
-                es.iter().for_each(|e| e.dependencies(deps));
-            }
-            Expr::Term(Term::Name(name)) => {
+            Expression::Reference(name) => {
                 deps.insert(*name);
             }
-            Expr::Term(Term::Parens(e)) => e.dependencies(deps),
-            Expr::Term(_) => (),
 
-            Expr::App { func, argument } => {
+            Expression::List(es) | Expression::Tuple(es) => {
+                es.iter().for_each(|e| e.dependencies(deps));
+            }
+            Expression::Literal(_) => (),
+
+            Expression::App(func, argument) => {
                 func.dependencies(deps);
                 argument.dependencies(deps);
             }
 
-            Expr::Binop { operator, lhs, rhs } => {
-                deps.insert(*operator);
-                lhs.dependencies(deps);
-                rhs.dependencies(deps);
-            }
-
-            Expr::Let {
-                definitions,
-                in_expr,
-            } => {
+            Expression::Let { definitions, expr } => {
                 let mut sub_deps = BTreeSet::new();
 
-                in_expr.dependencies(&mut sub_deps);
+                expr.dependencies(&mut sub_deps);
 
                 // Remove variables bound in the definitions
                 for name in definitions.keys() {
@@ -844,17 +727,7 @@ impl ast::Expr<ResolvedName> {
                 deps.extend(sub_deps);
             }
 
-            Expr::If {
-                cond,
-                then_expr,
-                else_expr,
-            } => {
-                cond.dependencies(deps);
-                then_expr.dependencies(deps);
-                else_expr.dependencies(deps);
-            }
-
-            Expr::Case { expr, arms } => {
+            Expression::Case { expr, arms } => {
                 // Always include the dependencies of the scrutinised expression.
                 expr.dependencies(deps);
 
@@ -871,10 +744,10 @@ impl ast::Expr<ResolvedName> {
                 }
             }
 
-            Expr::Lambda { args, rhs } => {
+            Expression::Lambda { args, expr } => {
                 let mut sub_deps = BTreeSet::new();
 
-                rhs.dependencies(&mut sub_deps);
+                expr.dependencies(&mut sub_deps);
 
                 // Remove variables bound in the lambda LHS
                 for pat in args.iter() {
@@ -893,7 +766,7 @@ impl ast::Expr<ResolvedName> {
             // Lua inline expressions can't depend on Huck values,
             // or at least we can't (i.e. won't) check inside Lua for dependencies;
             // so we do nothing.
-            Expr::Lua(_) | Expr::UnsafeLua(_) => (),
+            Expression::Lua(_) => (),
         }
     }
 }

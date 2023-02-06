@@ -11,11 +11,7 @@ pub enum Error {
     #[error("Cyclic dependency detected within the following definitions: {0:?}")]
     CyclicDependency(Vec<ResolvedName>),
 
-    // @Errors: get the name of the duplicated definition
-    #[error("Duplicate definitions found! Values: `{0:?}`")]
-    DuplicateUnconditional(Vec<crate::ast::Expr<ResolvedName>>),
-
     // @Errors: source code location
     #[error("Duplicate unconditional branches found in a case expression! Values: `{0:?}`")]
-    NewDuplicateUnconditional(Vec<crate::ir::Expression>),
+    DuplicateUnconditional(Vec<crate::ir::Expression>),
 }
