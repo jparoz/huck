@@ -785,7 +785,7 @@ impl ir::Expression {
                 // Remove variables bound in the lambda LHS
                 for pat in args.iter() {
                     for name in pat.names_bound() {
-                        // @Note: if .remove() returns false,
+                        // @Note @Errors: if .remove() returns false,
                         // the definition isn't referenced in the in_expr;
                         // therefore it's dead code.
                         // Maybe emit a warning about this.
