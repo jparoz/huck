@@ -750,7 +750,7 @@ impl ir::Expression {
 
                 // Remove variables bound in the definitions
                 for name in definitions.keys() {
-                    // @Note: if .remove() returns false,
+                    // @Note @Errors: if .remove() returns false,
                     // the definition isn't referenced in the in_expr;
                     // therefore it's dead code.
                     // Maybe emit a warning about this.
