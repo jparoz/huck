@@ -1,9 +1,13 @@
-use std::{
-    fmt::{self, Display},
-    sync::atomic::{self, AtomicUsize},
-};
+use std::fmt::{self, Display};
+use std::sync::atomic::{self, AtomicUsize};
 
 use crate::ast;
+
+mod resolve;
+pub use resolve::Resolver;
+
+mod error;
+pub use error::Error;
 
 /// A ModulePath is a path to a Huck module, as defined within that module.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

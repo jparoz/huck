@@ -3,13 +3,11 @@ use std::fmt;
 use std::time::Instant;
 
 use crate::ast::Module;
-use crate::name::{Ident, ModulePath, ResolvedName, Source, UnresolvedName};
 use crate::types::TypeVar;
 use crate::utils::unwrap_match;
 use crate::{ast, log};
 
-mod error;
-pub use error::Error;
+use super::{Error, Ident, ModulePath, ResolvedName, Source, UnresolvedName};
 
 /// This struct manages name resolution across all modules.
 /// The following example illustrates which names are held in which `Scope`

@@ -2,13 +2,13 @@ use std::collections::BTreeMap;
 use std::iter;
 
 use crate::ast::Module;
-use crate::error::Error as HuckError;
-use crate::name::ModulePath;
-use crate::name::UnresolvedName;
+use crate::name::{self, ModulePath, UnresolvedName};
 use crate::parse::{self, parse};
 use crate::precedence::ApplyPrecedence;
 use crate::typecheck::typecheck;
-use crate::{codegen, ir, resolve};
+use crate::{codegen, ir};
+
+use crate::error::Error as HuckError;
 
 /// Does every step necessary to take the added modules to compiled state.
 /// Takes a `Vec` of (filepath stem, source code)
@@ -44,7 +44,7 @@ pub fn compile(input: Vec<(String, &'static str)>) -> Result<Vec<(String, String
         .collect::<Result<BTreeMap<ModulePath, Module<UnresolvedName, ()>>, HuckError>>()?;
 
     // Resolve names
-    let mut resolver = resolve::Resolver::new();
+    let mut resolver = name::Resolver::new();
 
     // Start with the prelude...
     let prelude_path = ModulePath("Prelude");

@@ -3,10 +3,9 @@ use test_log::test;
 use std::collections::BTreeMap;
 
 use crate::ast::Module;
-use crate::name::{ModulePath, ResolvedName, Source};
+use crate::name::{self, ModulePath, ResolvedName, Source};
 use crate::parse::parse;
 use crate::precedence::ApplyPrecedence;
-use crate::resolve::Resolver;
 use crate::typecheck::{typecheck, Error as TypeError};
 use crate::types::{Primitive, Type};
 use crate::utils::{assert_matches, unwrap_match};
@@ -43,7 +42,7 @@ fn typ_module(huck: &'static str) -> Result<Module<ResolvedName, Type>, HuckErro
     }
 
     // Resolve
-    let mut resolver = Resolver::new();
+    let mut resolver = name::Resolver::new();
 
     // Start with the prelude...
     let prelude_path = ModulePath("Prelude");
