@@ -87,6 +87,17 @@ macro_rules! leak {
 #[allow(unused_imports)]
 pub(crate) use leak;
 
+/// Replaces a BTreeMap with a new empty one,
+/// and moves the existing map into an iterator.
+#[allow(unused_macros)]
+macro_rules! drain_map {
+    ($map:expr) => {
+        std::mem::replace(&mut $map, std::collections::BTreeMap::new()).into_iter()
+    };
+}
+#[allow(unused_imports)]
+pub(crate) use drain_map;
+
 #[cfg(test)]
 mod test {
     use super::*;

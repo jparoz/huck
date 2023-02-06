@@ -1,10 +1,10 @@
 use std::collections::BTreeMap;
-use std::mem;
 
 use crate::ast::{self, Module};
 use crate::log;
 use crate::name::{ModulePath, ResolvedName, Source};
 use crate::types::Type;
+use crate::utils::drain_map;
 
 use super::Error;
 
@@ -70,11 +70,8 @@ impl ArityChecker {
         &mut self,
         modules: &BTreeMap<ModulePath, Module<ResolvedName, Type>>,
     ) -> Result<(), Error> {
-        let mut assumptions = BTreeMap::new();
-        mem::swap(&mut assumptions, &mut self.assumptions);
-
         // Check that all the assumed arities match the arity from the type definitions.
-        for (name, assumed_arities) in assumptions {
+        for (name, assumed_arities) in drain_map!(self.assumptions) {
             let actual_arity = match name.source {
                 Source::Module(path) => {
                     let module = modules.get(&path).expect("should already be resolved");
