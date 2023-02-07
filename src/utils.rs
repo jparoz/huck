@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::{io::Write, time::Instant};
 
 use crate::error::Error as HuckError;
@@ -49,6 +50,23 @@ pub fn normalize(lua: &str) -> Result<String, HuckError> {
     );
 
     Ok(res)
+}
+
+/// Takes an iterator of `Display`-able things, and prints them out comma-separated.
+pub fn display_iter<It: Display>(iter: impl Iterator<Item = It>) -> String {
+    use std::fmt::Write;
+
+    let mut s = String::new();
+
+    let mut iter = iter.peekable();
+    while let Some(it) = iter.next() {
+        let _ = write!(s, "{}", it);
+        if iter.peek().is_some() {
+            let _ = write!(s, ", ");
+        }
+    }
+
+    s
 }
 
 #[allow(unused_macros)]

@@ -6,7 +6,7 @@ use crate::name::{self, ModulePath, UnresolvedName};
 use crate::parse::{self, parse};
 use crate::precedence::ApplyPrecedence;
 use crate::typecheck::typecheck;
-use crate::{codegen, ir};
+use crate::{codegen, dependencies, ir};
 
 use crate::error::Error as HuckError;
 
@@ -72,6 +72,12 @@ pub fn compile(input: Vec<(String, &'static str)>) -> Result<Vec<(String, String
         module.apply(&precs);
     }
 
+    // Dependency resolution
+    let mut generation_orders = BTreeMap::new();
+    for (path, module) in resolved_modules.iter() {
+        generation_orders.insert(*path, dependencies::resolve(module)?);
+    }
+
     // Typecheck
     let typechecked_modules = typecheck(resolved_modules)?;
 
@@ -84,7 +90,7 @@ pub fn compile(input: Vec<(String, &'static str)>) -> Result<Vec<(String, String
     // Generate code
     let mut generated = Vec::new();
     for (module_path, module) in ir_modules {
-        let lua = codegen::generate(module, &module_stems)?;
+        let lua = codegen::generate(module, &module_stems, &generation_orders)?;
         generated.push((module_stems[&module_path].clone(), lua));
     }
     Ok(generated)

@@ -58,10 +58,13 @@ mapped' = map double myLinkedList;
 l +++ r = l <> l <> r <> r;
 
 (* We can define mutually-recursive functions: *)
+(* (Note that currently this requires an explicit type signature) *)
+isEven : Int -> Bool;
 isEven 0 = True;
 isEven 1 = False;
 isEven n = isOdd (n-1);
 
+isOdd : Int -> Bool;
 isOdd 0 = False;
 isOdd 1 = True;
 isOdd n = isEven (n-1);

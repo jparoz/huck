@@ -1,6 +1,7 @@
 mod ast;
 mod codegen;
 mod compile;
+mod dependencies;
 mod error;
 mod ir;
 mod log;

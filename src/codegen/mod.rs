@@ -9,6 +9,8 @@ use std::fmt::Write;
 use std::mem;
 use std::time::Instant;
 
+use crate::dependencies::GenerationOrder;
+
 mod error;
 pub use error::Error;
 
@@ -18,14 +20,18 @@ mod test;
 /// Generates Lua for the given Huck module.
 /// `requires` is a mapping from a module's `ModulePath`
 /// to the segment of a filepath to be given to Lua's `require` function to load that module.
-pub fn generate(module: ir::Module, requires: &BTreeMap<ModulePath, String>) -> Result<String> {
+pub fn generate(
+    module: ir::Module,
+    requires: &BTreeMap<ModulePath, String>,
+    generation_orders: &BTreeMap<ModulePath, GenerationOrder>,
+) -> Result<String> {
     let start_time = Instant::now();
 
     let module_path = module.path;
 
     log::trace!(log::CODEGEN, "Generating code for module {}", module_path);
 
-    let generated = CodeGenerator::new(module, requires).generate()?;
+    let generated = CodeGenerator::new(module, requires, generation_orders).generate()?;
 
     log::trace!(
         log::CODEGEN,
@@ -63,15 +69,25 @@ struct CodeGenerator<'a> {
     /// This is a map from a module's path to its Lua require string.
     requires: &'a BTreeMap<ModulePath, String>,
 
+    /// This is a map containing each module's definitions,
+    /// in the appropriate order to be generated so as to not cause Lua errors.
+    /// See [`dependencies::resolve`](crate::dependencies::resolve) for more information.
+    generation_orders: &'a BTreeMap<ModulePath, GenerationOrder>,
+
     /// Used for generating unique variable IDs.
     unique_counter: u64,
 }
 
 impl<'a> CodeGenerator<'a> {
-    fn new(module: Module, requires: &'a BTreeMap<ModulePath, String>) -> Self {
+    fn new(
+        module: Module,
+        requires: &'a BTreeMap<ModulePath, String>,
+        generation_orders: &'a BTreeMap<ModulePath, GenerationOrder>,
+    ) -> Self {
         CodeGenerator {
             module,
             requires,
+            generation_orders,
             generated: BTreeSet::new(),
             return_entries: String::new(),
             unique_counter: 0,

@@ -1,4 +1,4 @@
-use crate::{codegen, name, parse, typecheck};
+use crate::{codegen, dependencies, name, parse, typecheck};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -16,6 +16,9 @@ pub enum Error {
 
     #[error("Name resolution error: {0}")]
     NameResolution(#[from] name::Error),
+
+    #[error("Dependency resolution error: {0}")]
+    DependencyResolution(#[from] dependencies::Error),
 
     #[error("Type error: {0}")]
     Type(#[from] typecheck::Error),
