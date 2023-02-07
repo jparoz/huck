@@ -115,7 +115,7 @@ mod test {
             "function foo(bar)
             return baz    end",
         )
-        .expect("normalize to accept and return valid Lua");
+        .expect("normalize should accept and return valid Lua");
     }
 
     #[test]

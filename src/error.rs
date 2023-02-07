@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::{dependencies, name, parse, typecheck};
 
 #[derive(thiserror::Error, Debug)]
@@ -7,6 +9,9 @@ pub enum Error {
 
     #[error("Invalid characters in file path: `{0}`")]
     BadFilePath(String),
+
+    #[error("Attempt to compile a directory: `{0}`")]
+    InputFileWasDirectory(PathBuf),
 
     #[error("Failed when normalizing Lua output, with lua-format stderr: {0}")]
     NormalizeFailed(String),

@@ -850,7 +850,9 @@ impl Typechecker {
                                 .get(import_name)
                                 .map(|defn| defn.typ.clone())
                         })
-                        .expect("should already be resolved and typechecked");
+                        .expect(
+                            "module should have been assigned types before binding assumptions",
+                        );
 
                     // If there are any assumptions about the variable, bind them.
                     if let Some(assumed_types) = self.assumptions.remove(import_name) {

@@ -230,8 +230,9 @@ impl<'a> CodeGenerator<'a> {
     ) -> Result<String, fmt::Error> {
         let mut lua = String::new();
 
-        // @Errors: do this in a different way
         // Store a string describing the expression, to use in error messages.
+        // @Errors: do this in a different way
+        // @Errors: shouldn't use Debug
         let expr_s = format!("{expr:?}");
 
         let id = self.unique();
@@ -313,8 +314,8 @@ impl<'a> CodeGenerator<'a> {
             // Emit a runtime error in case no pattern matches
             // @Exhaustiveness: do some exhaustiveness checking before emitting these warnings/errors
             // @Errors: these should have better information about the source of the case expression
-            // @Errors: shouldn't use Debug
-            log::warn!(
+            // @Errors: shouldn't be info level
+            log::info!(
                 log::CODEGEN,
                 "Warning: possible partial definition when matching expression `{expr_s}`, \
                  try adding an unconditional pattern match"

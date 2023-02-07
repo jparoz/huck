@@ -45,7 +45,7 @@ struct Args {
     #[arg(
         long,
         value_name = "LEVEL",
-        default_value = "off",
+        default_value = "warn",
         value_parser = clap::builder::PossibleValuesParser::new(["error", "warn", "info", "debug", "trace", "off"])
                 .map(|s| log_crate::LevelFilter::from_str(&s).unwrap()),
         )]
@@ -161,14 +161,26 @@ where
 {
     let mut path_buf = path.as_ref().to_path_buf();
 
-    // Convert the path into a relative path
+    // Check that it's not a directory
+    if path_buf.is_dir() {
+        return Err(HuckError::InputFileWasDirectory(path_buf));
+    }
+
+    // Try to convert the path into a relative path
     if path_buf.is_absolute() {
         let cwd = std::env::current_dir()?;
 
-        path_buf = path_buf
-            .strip_prefix(cwd)
-            .expect("should be able to make filepaths relative")
-            .to_path_buf();
+        path_buf = if let Ok(path) = path_buf.strip_prefix(cwd) {
+            path.to_path_buf()
+        } else {
+            log::warn!(
+                log::IMPORT,
+                "File path {path} is not in the current working directory; \
+                 compiled output will be placed in the current working directory instead.",
+                path = path_buf.display()
+            );
+            path_buf.file_name().expect("can't compile '..'").into()
+        };
     }
 
     // Remove the extension

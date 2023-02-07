@@ -73,14 +73,7 @@ impl ArityChecker {
         // Check that all the assumed arities match the arity from the type definitions.
         for (name, assumed_arities) in mem::take(&mut self.assumptions) {
             let actual_arity = match name.source {
-                Source::Module(path) => {
-                    let module = modules.get(&path).expect("should already be resolved");
-                    let type_defn = module
-                        .type_definitions
-                        .get(&name)
-                        .expect("should already be resolved");
-                    type_defn.vars.len()
-                }
+                Source::Module(path) => modules[&path].type_definitions[&name].vars.len(),
 
                 Source::Local(_id) => {
                     // @Typeclasses: this code will need to change when implementing type classes

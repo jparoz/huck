@@ -94,7 +94,7 @@ pub fn compile(input: Vec<(String, &'static str)>) -> Result<Vec<(String, String
             module,
             generation_orders
                 .remove(&module_path)
-                .expect("should have found a generation order for this module"),
+                .expect("should have found a generation order during dependency resolution"),
             &module_stems,
         );
         generated.push((module_stems[&module_path].clone(), lua));
