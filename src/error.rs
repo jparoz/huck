@@ -1,4 +1,4 @@
-use crate::{codegen, dependencies, name, parse, typecheck};
+use crate::{dependencies, name, parse, typecheck};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -22,9 +22,6 @@ pub enum Error {
 
     #[error("Type error: {0}")]
     Type(#[from] typecheck::Error),
-
-    #[error("Code generation error: {0}")]
-    CodeGen(#[from] codegen::Error),
 }
 
 #[cfg(test)]

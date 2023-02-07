@@ -5,14 +5,11 @@ use crate::name::{ResolvedName, Source};
 use crate::types::Type;
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fmt::Write;
+use std::fmt::{self, Write};
 use std::mem;
 use std::time::Instant;
 
 use crate::dependencies::GenerationOrder;
-
-mod error;
-pub use error::Error;
 
 #[cfg(test)]
 mod test;
@@ -22,35 +19,29 @@ mod test;
 /// to the segment of a filepath to be given to Lua's `require` function to load that module.
 pub fn generate(
     module: ir::Module,
+    generation_order: GenerationOrder,
     requires: &BTreeMap<ModulePath, String>,
-    generation_orders: &BTreeMap<ModulePath, GenerationOrder>,
-) -> Result<String> {
+) -> String {
     let start_time = Instant::now();
 
     let module_path = module.path;
 
     log::trace!(log::CODEGEN, "Generating code for module {}", module_path);
 
-    let generated = CodeGenerator::new(module, requires, generation_orders).generate()?;
+    let generated = CodeGenerator::new(module, requires)
+        .generate(generation_order)
+        .expect("write should not fail");
 
-    log::trace!(
-        log::CODEGEN,
-        "Generated module {}:\n{}",
-        module_path,
-        generated
-    );
+    log::trace!(log::CODEGEN, "Generated module {module_path}:\n{generated}");
 
     log::info!(
         log::METRICS,
-        "Generated module {}, {:?} elapsed",
-        module_path,
-        start_time.elapsed()
+        "Generated module {module_path}, {time:?} elapsed",
+        time = start_time.elapsed()
     );
 
-    Ok(generated)
+    generated
 }
-
-type Result<T> = std::result::Result<T, Error>;
 
 /// Generates Lua code, and maintains all necessary state to do so.
 /// Methods on this struct should generally correspond to Lua constructs,
@@ -69,25 +60,15 @@ struct CodeGenerator<'a> {
     /// This is a map from a module's path to its Lua require string.
     requires: &'a BTreeMap<ModulePath, String>,
 
-    /// This is a map containing each module's definitions,
-    /// in the appropriate order to be generated so as to not cause Lua errors.
-    /// See [`dependencies::resolve`](crate::dependencies::resolve) for more information.
-    generation_orders: &'a BTreeMap<ModulePath, GenerationOrder>,
-
     /// Used for generating unique variable IDs.
     unique_counter: u64,
 }
 
 impl<'a> CodeGenerator<'a> {
-    fn new(
-        module: Module,
-        requires: &'a BTreeMap<ModulePath, String>,
-        generation_orders: &'a BTreeMap<ModulePath, GenerationOrder>,
-    ) -> Self {
+    fn new(module: Module, requires: &'a BTreeMap<ModulePath, String>) -> Self {
         CodeGenerator {
             module,
             requires,
-            generation_orders,
             generated: BTreeSet::new(),
             return_entries: String::new(),
             unique_counter: 0,
@@ -97,7 +78,7 @@ impl<'a> CodeGenerator<'a> {
     /// Generate Lua code for the Module used in CodeGenerator::new.
     /// This will generate a Lua chunk which returns a table
     /// containing the definitions given in the Huck module.
-    fn generate(mut self) -> Result<String> {
+    fn generate(mut self, generation_order: GenerationOrder) -> Result<String, fmt::Error> {
         let mut lua = String::new();
 
         writeln!(lua, "local {} = {{}}", lua_module_path(self.module.path))?;
@@ -108,99 +89,51 @@ impl<'a> CodeGenerator<'a> {
         // so they can't refer to anything else.
 
         log::trace!(log::CODEGEN, "  Generating type definitions");
-        for (_name, type_defn) in mem::take(&mut self.module.type_definitions) {
+        for (name, type_defn) in mem::take(&mut self.module.type_definitions) {
+            log::trace!(log::CODEGEN, "    Generating {name}");
             write!(lua, "{}", self.type_definition(type_defn)?)?;
         }
 
         // Next, we can generate all the definitions.
         log::trace!(log::CODEGEN, "  Generating definitions");
 
-        // Start by putting all definitions in the queue to be generated.
-        // @Fixme: this probably doesn't need to be entirely cloned
-        let mut current_pass: Vec<_> = self.module.definitions.clone().into_iter().collect();
-        let mut next_pass = Vec::new();
+        // This is the appropriate order for the definitions to be generated,
+        // so as to not cause Lua errors.
+        // See [`dependencies::resolve`](crate::dependencies::resolve) for more information.
+        for name in generation_order {
+            log::trace!(log::CODEGEN, "    Generating {name}");
 
-        loop {
-            // If the queue is empty, we're done.
-            if current_pass.is_empty() {
-                break;
-            }
+            // Safe unwrap: all the names in the order are in the module, true by construction
+            let defn = self.module.definitions.remove(&name).expect(
+                "Internal compiler error: \
+                 either tried to generate a definition twice, \
+                 or tried to generate a function that doesn't exist",
+            );
 
-            log::trace!(log::CODEGEN, "  Started a new generation pass");
-            // Keep track of whether we've generated anything in this pass.
-            let mut generated_anything = false;
-
-            for (name, mut defn) in current_pass.drain(..) {
-                // @Lazy @Laziness: lazy values can be generated in any order
-
-                // If the definition is a lambda,
-                // then it will become a Lua function;
-                // this means we can generate it in any order.
-                // Note that if it has missing dependencies,
-                // it will error at runtime;
-                // so we need to catch this in a compile error.
-                let has_any_args = matches!(defn.rhs, ir::Expression::Lambda { .. });
-
-                // If the definition has no un-generated dependencies from this module,
-                // then we're ready generate it.
-                let has_all_deps = defn
-                    .dependencies()
-                    .iter()
-                    .filter(|n| n.source == Source::Module(self.module.path))
-                    .all(|n| self.generated.contains(n));
-
-                if has_any_args || has_all_deps {
-                    // Because there are arguments, it's going to be a Lua function.
-                    // Thus, we can generate in any order.
-                    log::trace!(log::CODEGEN, "    Generating {name}");
-                    write!(lua, "{}", self.definition(name, defn)?)?;
-
-                    // Mark that we have generated something in this pass.
-                    generated_anything = true;
-                } else {
-                    // Skip it for now
-                    log::trace!(log::CODEGEN, "    Skipping {name}");
-                    next_pass.push((name, defn));
-                }
-            }
-
-            // If we didn't generate anything in this pass,
-            // it means we have a cyclic dependency.
-            // @Checkme: is this the only time this happens?
-            if !generated_anything {
-                log::error!(
-                    log::CODEGEN,
-                    "Error, didn't generate anything in one pass. Next in queue: {:?}",
-                    next_pass
-                );
-                return Err(Error::CyclicDependency(
-                    next_pass
-                        .iter()
-                        // @Fixme @Errors: filter out entries which depend on the cycle,
-                        // but are not part of the cycle themselves.
-                        .map(|t| t.0)
-                        .collect(),
-                ));
-            }
-
-            log::trace!(log::CODEGEN, "  Finished generation pass");
-
-            std::mem::swap(&mut current_pass, &mut next_pass);
+            write!(lua, "{}", self.definition(name, defn)?)?;
         }
+        // All the definitions should have been generated.
+        assert!(self.module.definitions.is_empty());
 
         // Write out foreign exports
+        log::trace!(log::CODEGEN, "  Generating foreign exports");
         for (lua_lhs, expr) in mem::take(&mut self.module.exports) {
             writeln!(lua, "{} = {}", lua_lhs, self.expression(expr)?)?;
         }
 
         // Write out the return statement
+        log::trace!(log::CODEGEN, "  Generating Lua return statement");
         writeln!(lua, "return {{\n{}}}", self.return_entries)?;
 
         Ok(lua)
     }
 
     /// Generates a Lua expression representing a top-level Huck definition.
-    fn definition(&mut self, name: ResolvedName, defn: ir::Definition) -> Result<String> {
+    fn definition(
+        &mut self,
+        name: ResolvedName,
+        defn: ir::Definition,
+    ) -> Result<String, fmt::Error> {
         let mut lua = String::new();
 
         // Write the definition to the `lua` string.
@@ -224,7 +157,7 @@ impl<'a> CodeGenerator<'a> {
         Ok(lua)
     }
 
-    fn expression(&mut self, expr: ir::Expression) -> Result<String> {
+    fn expression(&mut self, expr: ir::Expression) -> Result<String, fmt::Error> {
         match expr {
             ir::Expression::Reference(name) => self.reference(name),
 
@@ -236,7 +169,7 @@ impl<'a> CodeGenerator<'a> {
                 "{{{}}}",
                 v.into_iter()
                     .map(|e| self.expression(e))
-                    .collect::<Result<Vec<_>>>()?
+                    .collect::<Result<Vec<_>, _>>()?
                     .join(", ")
             )),
 
@@ -244,7 +177,7 @@ impl<'a> CodeGenerator<'a> {
                 "{{{}}}",
                 v.into_iter()
                     .map(|e| self.expression(e))
-                    .collect::<Result<Vec<_>>>()?
+                    .collect::<Result<Vec<_>, _>>()?
                     .join(", ")
             )),
 
@@ -294,7 +227,7 @@ impl<'a> CodeGenerator<'a> {
         &mut self,
         expr: ir::Expression,
         arms: Vec<(ir::Pattern, ir::Expression)>,
-    ) -> Result<String> {
+    ) -> Result<String, fmt::Error> {
         let mut lua = String::new();
 
         // @Errors: do this in a different way
@@ -328,7 +261,7 @@ impl<'a> CodeGenerator<'a> {
                 )?;
                 Ok((conds, binds, expr))
             })
-            .collect::<Result<Vec<_>>>()?;
+            .collect::<Result<Vec<_>, _>>()?;
 
         let (unconditional, conditional): (Vec<_>, Vec<_>) = branches
             .into_iter()
@@ -397,7 +330,11 @@ impl<'a> CodeGenerator<'a> {
         Ok(lua)
     }
 
-    fn curried_function(&mut self, args: Vec<ir::Pattern>, expr: ir::Expression) -> Result<String> {
+    fn curried_function(
+        &mut self,
+        args: Vec<ir::Pattern>,
+        expr: ir::Expression,
+    ) -> Result<String, fmt::Error> {
         let mut lua = String::new();
 
         let arg_count = args.len();
@@ -475,22 +412,22 @@ impl<'a> CodeGenerator<'a> {
     }
 
     /// Generates all the type constructors found in the type definition.
-    fn type_definition(&mut self, type_defn: ir::TypeDefinition) -> Result<String> {
+    fn type_definition(&mut self, type_defn: ir::TypeDefinition) -> Result<String, fmt::Error> {
         let mut lua = String::new();
 
         // Write each constructor to the `lua` string.
         for (name, constr_typ) in type_defn.constructors.into_iter() {
             write!(
                 lua,
-                r#"{}["{}"] = "#,
-                lua_module_path(self.module.path),
-                name
+                r#"{prefix}["{ident}"] = "#,
+                prefix = lua_module_path(self.module.path),
+                ident = name.ident
             )?;
             writeln!(lua, "{}", self.constructor(name, constr_typ)?)?;
             writeln!(
                 self.return_entries,
-                r#"["{name}"] = {prefix}["{name}"],"#,
-                name = name,
+                r#"["{ident}"] = {prefix}["{ident}"],"#,
+                ident = name.ident,
                 prefix = lua_module_path(self.module.path),
             )?;
 
@@ -502,7 +439,11 @@ impl<'a> CodeGenerator<'a> {
     }
 
     /// Generates code for a constructor.
-    fn constructor(&mut self, name: ResolvedName, mut constr_type: Type) -> Result<String> {
+    fn constructor(
+        &mut self,
+        name: ResolvedName,
+        mut constr_type: Type,
+    ) -> Result<String, fmt::Error> {
         // @Errors: maybe we should do some runtime type checking in Lua?
 
         let mut ids = Vec::new();
@@ -547,7 +488,7 @@ impl<'a> CodeGenerator<'a> {
         Ok(lua)
     }
 
-    fn reference(&mut self, name: ResolvedName) -> Result<String> {
+    fn reference(&mut self, name: ResolvedName) -> Result<String, fmt::Error> {
         match name.source {
             Source::Module(path) if path == self.module.path => {
                 // It's a top-level definition from this module,
@@ -604,7 +545,10 @@ impl<'a> CodeGenerator<'a> {
 /// Generates code for a pattern match.
 /// Returns `conditions` and `bindings`,
 /// which are `Vec`s of Lua segments used to implement the pattern match.
-fn pattern_match(pat: ir::Pattern, lua_arg_name: &str) -> Result<(Vec<String>, Vec<String>)> {
+fn pattern_match(
+    pat: ir::Pattern,
+    lua_arg_name: &str,
+) -> Result<(Vec<String>, Vec<String>), fmt::Error> {
     // This function takes a Lua argument name,
     // e.g. _Module_0, _Module_12[3], _Module_3[13][334] or whatever.
     // This is to allow nested pattern matches.
@@ -731,91 +675,4 @@ fn lua_module_path(path: ModulePath) -> String {
     s.insert(0, '_');
 
     s
-}
-
-impl ir::Definition {
-    fn dependencies(&mut self) -> BTreeSet<ResolvedName> {
-        let mut deps = BTreeSet::new();
-        self.rhs.dependencies(&mut deps);
-        deps
-    }
-}
-
-impl ir::Expression {
-    fn dependencies(&self, deps: &mut BTreeSet<ResolvedName>) {
-        use ir::*;
-        match self {
-            Expression::Reference(name) => {
-                deps.insert(*name);
-            }
-
-            Expression::List(es) | Expression::Tuple(es) => {
-                es.iter().for_each(|e| e.dependencies(deps));
-            }
-            Expression::Literal(_) => (),
-
-            Expression::App(func, argument) => {
-                func.dependencies(deps);
-                argument.dependencies(deps);
-            }
-
-            Expression::Let { definitions, expr } => {
-                let mut sub_deps = BTreeSet::new();
-
-                expr.dependencies(&mut sub_deps);
-
-                // Remove variables bound in the definitions
-                for name in definitions.keys() {
-                    // @Note @Errors: if .remove() returns false,
-                    // the definition isn't referenced in the in_expr;
-                    // therefore it's dead code.
-                    // Maybe emit a warning about this.
-                    sub_deps.remove(name);
-                }
-
-                deps.extend(sub_deps);
-            }
-
-            Expression::Case { expr, arms } => {
-                // Always include the dependencies of the scrutinised expression.
-                expr.dependencies(deps);
-
-                for (arm_pat, arm_expr) in arms {
-                    let mut sub_deps = BTreeSet::new();
-                    arm_expr.dependencies(&mut sub_deps);
-
-                    // Remove variables bound in the arm pattern
-                    for name in arm_pat.names_bound() {
-                        sub_deps.remove(&name);
-                    }
-
-                    deps.extend(sub_deps);
-                }
-            }
-
-            Expression::Lambda { args, expr } => {
-                let mut sub_deps = BTreeSet::new();
-
-                expr.dependencies(&mut sub_deps);
-
-                // Remove variables bound in the lambda LHS
-                for pat in args.iter() {
-                    for name in pat.names_bound() {
-                        // @Note @Errors: if .remove() returns false,
-                        // the definition isn't referenced in the in_expr;
-                        // therefore it's dead code.
-                        // Maybe emit a warning about this.
-                        sub_deps.remove(&name);
-                    }
-                }
-
-                deps.extend(sub_deps);
-            }
-
-            // Lua inline expressions can't depend on Huck values,
-            // or at least we can't (i.e. won't) check inside Lua for dependencies;
-            // so we do nothing.
-            Expression::Lua(_) => (),
-        }
-    }
 }

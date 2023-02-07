@@ -19,6 +19,11 @@ pub use error::Error;
 /// [this wikipedia article](https://en.wikipedia.org/wiki/Topological_sorting#Depth-first_search)
 /// for more details.
 pub fn resolve<Ty>(module: &ast::Module<ResolvedName, Ty>) -> Result<GenerationOrder, Error> {
+    log::trace!(
+        log::RESOLVE,
+        "Starting dependency resolution for module {path}",
+        path = module.path
+    );
     let mut visitor = Visitor {
         module,
         finished: BTreeSet::new(),
@@ -32,9 +37,9 @@ pub fn resolve<Ty>(module: &ast::Module<ResolvedName, Ty>) -> Result<GenerationO
 
     log::trace!(
         log::RESOLVE,
-        "Resolved dependencies for module {path}: {order:?}",
+        "Resolved dependencies for module {path}: {order}",
         path = module.path,
-        order = visitor.ordered
+        order = display_iter(visitor.ordered.iter())
     );
 
     Ok(GenerationOrder(visitor.ordered))
@@ -78,8 +83,14 @@ struct Visitor<'m, Ty> {
 
 impl<'m, Ty> Visitor<'m, Ty> {
     fn visit(&mut self, name: ResolvedName) -> Result<(), Error> {
+        log::trace!(log::RESOLVE, "  Visiting `{name}`");
+
         // If we've searched this branch already, we're done.
         if self.finished.contains(&name) {
+            log::trace!(
+                log::RESOLVE,
+                "    Already resolved dependencies for `{name}`"
+            );
             return Ok(());
         }
 
@@ -90,76 +101,89 @@ impl<'m, Ty> Visitor<'m, Ty> {
         if self.visited.contains(&name) {
             log::trace!(
                 log::RESOLVE,
-                "Found a dependency cycle: {}",
+                "    Found a dependency cycle: {}",
                 display_iter(self.visited.iter())
             );
-            // Find the smallest cycle by walking the cycle starting from this name.
-            let mut minimal_cycle = BTreeSet::new();
-            self.walk_cycle(&mut minimal_cycle, name);
-            log::trace!(
-                log::RESOLVE,
-                "Found minimal dependency cycle: {}",
-                display_iter(minimal_cycle.iter())
-            );
+            return self.resolve_cycle(name);
+        }
 
-            // Check if all the names define Lua functions.
-            // @Lazy @Laziness: lazy values are okay too
+        // If we're here, we need to keep searching.
+        self.visited.insert(name);
 
-            // Keep track of whether one of the names in the cycle has an explicit type.
-            let mut any_explicit_type = false;
-
-            for name in minimal_cycle.iter() {
-                if let Some(defn) = self.module.definitions.get(name) {
-                    // If the name has no arguments...
-                    if defn.assignments[0].0.arg_count() == 0 {
-                        // then it's an error.
-                        return Err(Error::CyclicDependency(minimal_cycle));
-                    }
-
-                    any_explicit_type = defn.explicit_type.is_some() || any_explicit_type;
-                }
-            }
-
-            // At least one of the functions has to have an explicit type,
-            // otherwise we'll diverge in typechecking.
-            //
-            // @Note @Fixme: This is actually too restrictive.
-            // It disallows functions like:
-            //      foo 1 = True;
-            //      foo x = bar (x-1);
-            //
-            //      bar 1 = False;
-            //      bar x = foo (x-1);
-            // It's clear that the type of both `foo` and `bar` is `Int -> Bool`;
-            // yet this check rejects the mutual recursion.
-            //
-            // To allow the above definitions,
-            // we might have to do some extra check during typechecking,
-            // so that an unconditionally-recursive function
-            // is given type `Void` or something similar.
-            // This will actually make this case not an error at all.
-            if !any_explicit_type {
-                return Err(Error::CyclicDependencyWithoutExplicitType(minimal_cycle));
-            }
-
-            // If we're down here,
-            // all the names are functions,
-            // and so are okay to be generated in any order.
-        } else {
-            // If we're in here, we need to keep searching.
-            self.visited.insert(name);
-
-            // If the name is defined as a definition in this module...
-            if let Some(defn) = self.module.definitions.get(&name) {
-                // then recurse onto its dependencies.
-                for dep in defn.dependencies() {
+        // If the name is defined as a definition in this module...
+        if let Some(defn) = self.module.definitions.get(&name) {
+            // then recurse onto its dependencies.
+            for dep in defn.dependencies() {
+                // Only if the dependency is within this module.
+                if self.module.definitions.contains_key(&dep) {
                     self.visit(dep)?;
                 }
             }
         }
 
         self.visited.remove(&name);
+        log::trace!(log::RESOLVE, "    Finished visiting `{name}`");
+        self.finished.insert(name);
         self.ordered.push(name);
+
+        Ok(())
+    }
+
+    fn resolve_cycle(&self, name: ResolvedName) -> Result<(), Error> {
+        // Find the smallest cycle by walking the cycle starting from this name.
+        let mut minimal_cycle = BTreeSet::new();
+        self.walk_cycle(&mut minimal_cycle, name);
+        log::trace!(
+            log::RESOLVE,
+            "      Found minimal dependency cycle: {}",
+            display_iter(minimal_cycle.iter())
+        );
+
+        // Check if all the names define Lua functions.
+        // @Lazy @Laziness: lazy values are okay too
+
+        // Keep track of whether one of the names in the cycle has an explicit type.
+        let mut any_explicit_type = false;
+
+        for name in minimal_cycle.iter() {
+            if let Some(defn) = self.module.definitions.get(name) {
+                // If the name has no arguments...
+                if defn.assignments[0].0.arg_count() == 0 {
+                    // then it's an error.
+                    return Err(Error::CyclicDependency(minimal_cycle));
+                }
+
+                any_explicit_type = defn.explicit_type.is_some() || any_explicit_type;
+            }
+        }
+
+        // At least one of the functions has to have an explicit type,
+        // otherwise we'll diverge in typechecking.
+        //
+        // @Note @Fixme: This is actually too restrictive.
+        // It disallows functions like:
+        //      foo 1 = True;
+        //      foo x = bar (x-1);
+        //
+        //      bar 1 = False;
+        //      bar x = foo (x-1);
+        // It's clear that the type of both `foo` and `bar` is `Int -> Bool`;
+        // yet this check rejects the mutual recursion.
+        //
+        // To allow the above definitions,
+        // we might have to do some extra check during typechecking,
+        // so that an unconditionally-recursive function
+        // is given type `Void` or something similar.
+        // This will actually make this case not an error at all.
+        if !any_explicit_type {
+            return Err(Error::CyclicDependencyWithoutExplicitType(minimal_cycle));
+        }
+
+        // If we're down here,
+        // all the names are functions,
+        // and so are okay to be generated in any order.
+        log::trace!(log::RESOLVE, "      Dependency cycle is okay to generate.");
+
         Ok(())
     }
 
@@ -171,7 +195,9 @@ impl<'m, Ty> Visitor<'m, Ty> {
         if let Some(defn) = self.module.definitions.get(&name) {
             cycle.insert(name);
             for dep in defn.dependencies() {
-                self.walk_cycle(cycle, dep);
+                if self.module.definitions.contains_key(&dep) {
+                    self.walk_cycle(cycle, dep);
+                }
             }
         }
     }

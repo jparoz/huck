@@ -90,7 +90,13 @@ pub fn compile(input: Vec<(String, &'static str)>) -> Result<Vec<(String, String
     // Generate code
     let mut generated = Vec::new();
     for (module_path, module) in ir_modules {
-        let lua = codegen::generate(module, &module_stems, &generation_orders)?;
+        let lua = codegen::generate(
+            module,
+            generation_orders
+                .remove(&module_path)
+                .expect("should have found a generation order for this module"),
+            &module_stems,
+        );
         generated.push((module_stems[&module_path].clone(), lua));
     }
     Ok(generated)
