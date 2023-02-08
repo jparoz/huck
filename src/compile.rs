@@ -120,7 +120,7 @@ pub fn compile(
                 .expect("should have found a generation order during dependency resolution"),
             &infos,
         );
-        generated.insert(module_path, (infos.remove(&module_path).unwrap(), lua));
+        generated.insert(module_path, (infos[&module_path].clone(), lua));
     }
     Ok(generated)
 }
