@@ -56,7 +56,7 @@ fn typ_module(huck: &'static str) -> Result<Module<ResolvedName, Type>, HuckErro
     }
 
     // Check that any qualified names used actually exist.
-    let mut resolved_modules = resolver.check_assumptions()?;
+    let mut resolved_modules = resolver.finish()?;
 
     // Apply operator precedences
     let mut precs = BTreeMap::new();

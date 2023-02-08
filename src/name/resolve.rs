@@ -98,9 +98,7 @@ impl Resolver {
 
     /// Checks that any assumptions made in the resolved modules,
     /// and return the resolved modules.
-    pub fn check_assumptions(
-        mut self,
-    ) -> Result<BTreeMap<ModulePath, Module<ResolvedName, ()>>, Error> {
+    pub fn finish(mut self) -> Result<BTreeMap<ModulePath, Module<ResolvedName, ()>>, Error> {
         log::trace!(log::RESOLVE, "Checking resolution assumptions");
 
         // Assumptions about modules
