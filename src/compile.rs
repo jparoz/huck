@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::iter;
+use std::path::PathBuf;
 
 use crate::ast::Module;
 use crate::name::{self, ModulePath, UnresolvedName};
@@ -10,28 +11,50 @@ use crate::{codegen, dependencies, ir};
 
 use crate::error::Error as HuckError;
 
+/// Filesystem-related information used to compile a module from source.
+#[derive(Debug, Clone)]
+pub struct CompileInfo {
+    /// A `String` which is given to Lua's `require` function.
+    pub require: String,
+
+    /// The Huck source code to be compiled.
+    /// This must be a `&'static str`;
+    /// it is suggested that you [leak](crate::read_to_leaked) the contents of the source file.
+    pub source: &'static str,
+
+    /// Path to the input file.
+    /// A value of `None` means that there is no input file;
+    /// the code came from some other source (e.g. tests, stdin).
+    pub input: Option<PathBuf>,
+
+    /// Path to the output file.
+    /// A value of `None` means that there is no output file;
+    /// the generated Lua code should be output to stdout.
+    pub output: Option<PathBuf>,
+}
+
 /// Does every step necessary to take the added modules to compiled state.
-/// Takes a `Vec` of (filepath stem, source code)
-/// and returns a `Vec` of (filepath stem, compiled Lua code).
-/// The filepath stems are given to Lua's `require` function.
+/// Takes a `Vec` of [`CompileInfo`]s,
+/// and returns a `Vec` of ([`CompileInfo`], compiled Lua code).
 //
 // @Future: we could incrementally process modules somehow,
 // rather than just having this monolithic all-or-nothing compile step.
-pub fn compile(input: Vec<(String, &'static str)>) -> Result<Vec<(String, String)>, HuckError> {
-    // Record which module originated from which stem.
-    // This is used later in code generation.
-    let mut module_stems = BTreeMap::new();
+pub fn compile(
+    input_infos: Vec<CompileInfo>,
+) -> Result<BTreeMap<ModulePath, (CompileInfo, String)>, HuckError> {
+    // Record which module originated from which `CompileInfo`.
+    let mut infos = BTreeMap::new();
 
     // Parse all the files
     let mut parsed = Vec::new();
-    for (stem, src) in input {
-        let (module_path, statements) = parse(src)?;
+    for info in input_infos {
+        let (module_path, statements) = parse(info.source)?;
 
-        if let Some(existing_stem) = module_stems.insert(module_path, stem) {
+        if let Some(existing_info) = infos.insert(module_path, info) {
             Err(parse::Error::MultipleModules(
                 module_path,
-                module_stems[&module_path].clone(),
-                existing_stem,
+                infos.remove(&module_path).unwrap().input,
+                existing_info.input,
             ))?;
         }
         parsed.push((module_path, statements));
@@ -88,16 +111,16 @@ pub fn compile(input: Vec<(String, &'static str)>) -> Result<Vec<(String, String
     }
 
     // Generate code
-    let mut generated = Vec::new();
+    let mut generated = BTreeMap::new();
     for (module_path, module) in ir_modules {
         let lua = codegen::generate(
             module,
             generation_orders
                 .remove(&module_path)
                 .expect("should have found a generation order during dependency resolution"),
-            &module_stems,
+            &infos,
         );
-        generated.push((module_stems[&module_path].clone(), lua));
+        generated.insert(module_path, (infos.remove(&module_path).unwrap(), lua));
     }
     Ok(generated)
 }

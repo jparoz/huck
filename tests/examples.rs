@@ -6,11 +6,7 @@ use std::process::Command;
 #[test]
 fn short() {
     let mut cmd = Command::cargo_bin(env!("CARGO_PKG_NAME")).unwrap();
-    cmd.args([
-        "--write-to-stdout",
-        "examples/short.hk",
-        "examples/short.hk",
-    ]);
+    cmd.args(["--write-to-stdout", "examples/short.hk"]);
 
     #[rustfmt::skip]
     let lua =

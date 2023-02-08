@@ -21,7 +21,7 @@ use std::time::Instant;
 use clap::builder::TypedValueParser as _;
 use clap::Parser;
 
-use compile::compile;
+use compile::{compile, CompileInfo};
 
 use error::Error as HuckError;
 
@@ -89,7 +89,7 @@ fn main() {
 fn do_main() -> Result<(), HuckError> {
     let compilation_start = Instant::now();
 
-    let mut args = Args::parse();
+    let args = Args::parse();
 
     env_logger::Builder::new()
         .filter(None, args.log)
@@ -111,38 +111,32 @@ fn do_main() -> Result<(), HuckError> {
     for file in args.files.iter() {
         to_compile.push(load(file)?);
     }
-
-    // Remove the .hk extensions from the write_to_stdout paths
-    for path in args.write_to_stdout.iter_mut() {
-        path.set_extension("");
+    for file in args.write_to_stdout.iter() {
+        let mut info = load(file)?;
+        info.output = None;
+        to_compile.push(info);
     }
 
     // We're done adding modules, so now we can compile.
-    'compiled: for (stem, mut lua) in compile(to_compile)? {
+    for (info, mut lua) in compile(to_compile)?.into_values() {
         if args.normalize && !args.no_normalize {
             lua = utils::normalize(&lua)?;
         }
 
         // Check if we should write to stdout instead of a file.
-        let compiled_path = PathBuf::from(&stem);
-        for path in args.write_to_stdout.iter() {
-            if path == &compiled_path {
-                // Write the compiled Lua to stdout.
-                log::info!(log::CODEGEN, "Writing generated output to stdout");
-                print!("{}", lua);
-                continue 'compiled;
-            }
+        if let Some(file_path) = info.output {
+            // Write the compiled Lua to a .lua file.
+            log::info!(
+                log::CODEGEN,
+                "Writing generated output to {}",
+                file_path.display()
+            );
+            std::fs::write(file_path, lua)?;
+        } else {
+            // Write the compiled Lua to stdout.
+            log::info!(log::CODEGEN, "Writing generated output to stdout");
+            print!("{}", lua);
         }
-
-        // Write the compiled Lua to a .lua file.
-        let mut file_path = PathBuf::from(stem);
-        assert!(file_path.set_extension("lua"));
-        log::info!(
-            log::CODEGEN,
-            "Writing generated output to {}",
-            file_path.display()
-        );
-        std::fs::write(file_path, lua)?;
     }
 
     log::info!(
@@ -155,44 +149,64 @@ fn do_main() -> Result<(), HuckError> {
 }
 
 /// Takes a file path, and loads the file into a format ready to be compiled.
-fn load<P>(path: P) -> Result<(String, &'static str), HuckError>
+fn load<P>(path: P) -> Result<CompileInfo, HuckError>
 where
     P: AsRef<Path>,
 {
-    let mut path_buf = path.as_ref().to_path_buf();
+    let mut input = path.as_ref().to_path_buf();
 
     // Check that it's not a directory
-    if path_buf.is_dir() {
-        return Err(HuckError::InputFileWasDirectory(path_buf));
+    if input.is_dir() {
+        return Err(HuckError::InputFileWasDirectory(input));
     }
 
     // Try to convert the path into a relative path
-    if path_buf.is_absolute() {
+    if input.is_absolute() {
         let cwd = std::env::current_dir()?;
 
-        path_buf = if let Ok(path) = path_buf.strip_prefix(cwd) {
+        input = if let Ok(path) = input.strip_prefix(cwd) {
             path.to_path_buf()
         } else {
             log::warn!(
                 log::IMPORT,
                 "File path {path} is not in the current working directory; \
                  compiled output will be placed in the current working directory instead.",
-                path = path_buf.display()
+                path = input.display()
             );
-            path_buf.file_name().expect("can't compile '..'").into()
+            input.file_name().expect("can't compile '..'").into()
         };
     }
 
     // Remove the extension
-    path_buf.set_extension("");
+    let mut stem_path = input.clone();
+    stem_path.set_extension("");
 
-    let stem = path_buf
-        .into_os_string()
-        .into_string()
-        .map_err(|_| HuckError::BadFilePath(format!("{}", path.as_ref().display())))?;
-    let src = read_to_leaked(path)?;
+    // Build the Lua require string (stem) by joining the components with a dot "."
+    let mut require = String::new();
+    let mut iter = stem_path.iter().peekable();
+    while let Some(os_str) = iter.next() {
+        require.push_str(
+            &os_str
+                .to_os_string()
+                .into_string()
+                .map_err(|_| HuckError::BadFilePath(format!("{}", path.as_ref().display())))?,
+        );
+        if iter.peek().is_some() {
+            require.push('.');
+        }
+    }
 
-    Ok((stem, src))
+    let mut output = stem_path.clone();
+    output.set_extension("lua");
+
+    let source = read_to_leaked(path)?;
+
+    Ok(CompileInfo {
+        require,
+        source,
+        input: Some(input),
+        output: Some(output),
+    })
 }
 
 /// Reads a file to a `String`, then leaks it.

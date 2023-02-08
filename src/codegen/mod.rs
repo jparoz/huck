@@ -1,3 +1,4 @@
+use crate::compile::CompileInfo;
 use crate::ir::{self, Module};
 use crate::log;
 use crate::name::{Ident, ModulePath};
@@ -20,7 +21,7 @@ mod test;
 pub fn generate(
     module: ir::Module,
     generation_order: GenerationOrder,
-    requires: &BTreeMap<ModulePath, String>,
+    infos: &BTreeMap<ModulePath, CompileInfo>,
 ) -> String {
     let start_time = Instant::now();
 
@@ -28,7 +29,7 @@ pub fn generate(
 
     log::trace!(log::CODEGEN, "Generating code for module {}", module_path);
 
-    let generated = CodeGenerator::new(module, requires)
+    let generated = CodeGenerator::new(module, infos)
         .generate(generation_order)
         .expect("write should not fail");
 
@@ -57,18 +58,18 @@ struct CodeGenerator<'a> {
     /// This is the module being generated.
     module: ir::Module,
 
-    /// This is a map from a module's path to its Lua require string.
-    requires: &'a BTreeMap<ModulePath, String>,
+    /// This is a map from a module's path to its [`CompileInfo`].
+    infos: &'a BTreeMap<ModulePath, CompileInfo>,
 
     /// Used for generating unique variable IDs.
     unique_counter: u64,
 }
 
 impl<'a> CodeGenerator<'a> {
-    fn new(module: Module, requires: &'a BTreeMap<ModulePath, String>) -> Self {
+    fn new(module: Module, infos: &'a BTreeMap<ModulePath, CompileInfo>) -> Self {
         CodeGenerator {
             module,
-            requires,
+            infos,
             generated: BTreeSet::new(),
             return_entries: String::new(),
             unique_counter: 0,
@@ -506,7 +507,7 @@ impl<'a> CodeGenerator<'a> {
                 // so we should emit e.g. require("Bar")["var"]
                 Ok(format!(
                     r#"require("{}")["{}"]"#,
-                    self.requires[&path], name.ident
+                    self.infos[&path].require, name.ident
                 ))
             }
 

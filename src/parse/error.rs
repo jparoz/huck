@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::name::{ModulePath, UnresolvedName};
 use crate::precedence::Precedence;
 
@@ -10,9 +12,12 @@ pub enum Error {
     #[error("Leftover input: {0}")]
     Leftover(String),
 
-    // @XXX @Fixme @Errors: we don't know for sure that the file is stem.hk
-    #[error("Multiple modules defined with the same name: `{0}` (files '{1}.hk' and '{2}.hk')")]
-    MultipleModules(ModulePath, String, String),
+    #[error(
+        "Multiple modules defined with the same name: `{0}` (files {} and {})",
+        .1.as_ref().map(|p| format!("{}", p.display())).unwrap_or_else(|| "<stdin>".to_string()),
+        .2.as_ref().map(|p| format!("{}", p.display())).unwrap_or_else(|| "<stdin>".to_string()),
+    )]
+    MultipleModules(ModulePath, Option<PathBuf>, Option<PathBuf>),
 
     // @Cleanup @Errors: this shouldn't use Debug printing, but should print the source.
     #[error("Multiple precedence declarations found for `{0}`:\n    {1:?}\n    {2:?}")]

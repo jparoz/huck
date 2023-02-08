@@ -31,6 +31,8 @@ pub enum Error {
 
 #[cfg(test)]
 mod test {
+    use crate::utils::assert_matches;
+
     use super::Error;
 
     #[test]
@@ -48,9 +50,6 @@ mod test {
 
         // \xC3\x28 is invalid UTF-8
         let path = OsString::from_vec(Vec::from(&b"\xC3\x28.hk"[..]));
-        assert!(matches!(
-            dbg!(crate::load(&path)),
-            Err(Error::BadFilePath(_))
-        ))
+        assert_matches!(crate::load(path), Err(Error::BadFilePath(_)));
     }
 }
