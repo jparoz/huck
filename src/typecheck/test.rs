@@ -3,6 +3,7 @@ use test_log::test;
 use std::collections::BTreeMap;
 
 use crate::ast::Module;
+use crate::dependencies::{self, Error as DependencyError};
 use crate::name::{self, ModulePath, ResolvedName, Source};
 use crate::parse::parse;
 use crate::precedence::ApplyPrecedence;
@@ -69,6 +70,9 @@ fn typ_module(huck: &'static str) -> Result<Module<ResolvedName, Type>, HuckErro
     for module in resolved_modules.values_mut() {
         module.apply(&precs);
     }
+
+    // Dependency resolution (not strictly needed for typechecking, but catches errors)
+    let _generation_orders = dependencies::resolve(&resolved_modules)?;
 
     // Typecheck
     let mut gen_mods = typecheck(resolved_modules)?;
@@ -373,6 +377,59 @@ fn function_apply_to_variable_indirect() {
     let val = module.definitions.get(&name!("val")).unwrap();
 
     assert_eq!(val.typ, Type::Primitive(Primitive::Int))
+}
+
+#[test]
+fn function_self_recursive() {
+    let mut module = typ_module(
+        r#"
+            foo x = foo x;
+        "#,
+    )
+    .unwrap();
+
+    let typ = module.definitions.remove(&name!("foo")).unwrap().typ;
+
+    assert_matches!(typ, Type::Arrow(_, _));
+    let (l, r) = unwrap_match!(typ, Type::Arrow(l, r) => (l, r));
+    assert_matches!(*l, Type::Var(_));
+    assert_matches!(*r, Type::Var(_));
+}
+
+#[test]
+fn function_mutually_recursive() {
+    let mut module = typ_module(
+        r#"
+            foo x = bar x;
+            bar x = baz x;
+            baz x = foo x;
+        "#,
+    )
+    .unwrap();
+
+    let typ = module.definitions.remove(&name!("foo")).unwrap().typ;
+
+    assert_matches!(typ, Type::Arrow(_, _));
+    let (l, r) = unwrap_match!(typ, Type::Arrow(l, r) => (l, r));
+    assert_matches!(*l, Type::Var(_));
+    assert_matches!(*r, Type::Var(_));
+}
+
+#[test]
+fn value_mutually_recursive() {
+    let module = typ_module(
+        r#"
+            foo = bar;
+            bar = foo;
+        "#,
+    );
+
+    assert_matches!(
+        module,
+        Err(HuckError::DependencyResolution(
+            DependencyError::CyclicDependency(_)
+        ))
+    )
 }
 
 #[test]

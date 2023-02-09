@@ -154,9 +154,6 @@ impl<'m, Ty> Resolver<'m, Ty> {
         // Check if all the names define Lua functions.
         // @Lazy @Laziness: lazy values are okay too
 
-        // Keep track of whether one of the names in the cycle has an explicit type.
-        let mut any_explicit_type = false;
-
         for name in cycle.iter() {
             if let Source::Module(path) = name.source {
                 if let Some(defn) = self
@@ -169,32 +166,8 @@ impl<'m, Ty> Resolver<'m, Ty> {
                         // then it's an error.
                         return Err(Error::CyclicDependency(cycle));
                     }
-
-                    any_explicit_type = defn.explicit_type.is_some() || any_explicit_type;
                 }
             }
-        }
-
-        // At least one of the functions has to have an explicit type,
-        // otherwise we'll diverge in typechecking.
-        //
-        // @Note @Fixme: This is actually too restrictive.
-        // It disallows functions like:
-        //      foo 1 = True;
-        //      foo x = bar (x-1);
-        //
-        //      bar 1 = False;
-        //      bar x = foo (x-1);
-        // It's clear that the type of both `foo` and `bar` is `Int -> Bool`;
-        // yet this check rejects the mutual recursion.
-        //
-        // To allow the above definitions,
-        // we might have to do some extra check during typechecking,
-        // so that an unconditionally-recursive function
-        // is given type `Void` or something similar.
-        // This will actually make this case not an error at all.
-        if !any_explicit_type {
-            return Err(Error::CyclicDependencyWithoutExplicitType(cycle));
         }
 
         // If we're down here,

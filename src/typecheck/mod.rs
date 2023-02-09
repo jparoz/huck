@@ -6,6 +6,7 @@ use crate::ast::{self, Module};
 use crate::log;
 use crate::name::{ModulePath, ResolvedName, Source};
 use crate::types::{Primitive, Type, TypeScheme, TypeVar, TypeVarSet};
+use crate::utils::unwrap_match;
 
 mod arity;
 mod substitution;
@@ -306,7 +307,8 @@ impl Typechecker {
         let mut solution = Substitution::empty();
 
         // The constraints being processed in the current pass.
-        let mut constraints = self.constraints;
+        // @Note: have to use mem::take so we can later on use self.fresh()
+        let mut constraints = mem::take(&mut self.constraints);
 
         // The constraints to be processed in the next pass.
         let mut next_constraints = Vec::new();
@@ -385,7 +387,67 @@ impl Typechecker {
             // and then leave some sort of hint for the type system.
             // For now though, that's too clever.
             if !processed_any_constraint {
-                return Err(Error::CouldNotSolveTypeConstraints(next_constraints));
+                // Here we try to detect cyclic type dependencies.
+                // If the remaining constraints form a closed loop,
+                // the type may be assigned arbitrarily.
+                log::trace!(
+                    log::TYPECHECK,
+                    "Completed a pass of all constraints without processing any"
+                );
+                log::trace!(
+                    log::TYPECHECK,
+                    "  Checking if the remaining constraints form a closed loop:"
+                );
+
+                let mut cons = next_constraints.clone();
+                // Safe unwrap: we checked that !is_empty() above
+                let start = cons.pop().unwrap();
+                let (mut t1, start_t2, mut m) =
+                    unwrap_match!(start, Constraint::ImplicitInstance(t1, t2, m) => (t1, t2, m));
+
+                while !cons.is_empty() {
+                    // @Checkme: is this always true? bit of a punt
+                    assert!(m.is_empty());
+
+                    if let Some(pos) = cons.iter().position(|c| {
+                        let c_t2 =
+                            unwrap_match!(c, Constraint::ImplicitInstance(_t1, t2, _m) => t2);
+                        &t1 == c_t2
+                    }) {
+                        let removed = cons.remove(pos);
+                        (t1, m) = unwrap_match!(
+                            removed,
+                            Constraint::ImplicitInstance(t1, _t2, m) => (t1, m)
+                        );
+                    } else {
+                        log::trace!(log::TYPECHECK, "  They did not form a loop.");
+                        return Err(Error::CouldNotSolveTypeConstraints(next_constraints));
+                    }
+                }
+
+                // Since we made it out of the loop,
+                // the constraints Vec is empty.
+                debug_assert!(cons.is_empty());
+
+                // Check if the loop is closed.
+                if t1 == start_t2 {
+                    // The loop is closed,
+                    // so add constraints binding all the types to a new variable.
+                    log::trace!(log::TYPECHECK, "  The constraints did form a closed loop.");
+                    log::trace!(
+                        log::TYPECHECK,
+                        "  Binding all involved types to the same new type variable."
+                    );
+
+                    let new_type = self.fresh();
+                    for c in next_constraints.iter_mut() {
+                        let t1 = unwrap_match!(c, Constraint::ImplicitInstance(t1, _t2, _m) => t1);
+                        *c = Constraint::Equality(new_type.clone(), t1.clone())
+                    }
+                } else {
+                    log::trace!(log::TYPECHECK, "  They did not form a loop.");
+                    return Err(Error::CouldNotSolveTypeConstraints(next_constraints));
+                }
             }
 
             // Swap the just-processed constraints with the next-to-be-processed constraints,

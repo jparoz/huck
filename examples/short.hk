@@ -1,8 +1,8 @@
 module Short;
 
-mutualA : forall a. a -> a;
-mutualB : forall b. b -> b;
-mutualC : forall c. c -> c;
+(* mutualA : forall a. a -> a; *)
+(* mutualB : forall b. b -> b; *)
+(* mutualC : forall c. c -> c; *)
 
 (* mutualA : Int -> Int; *)
 (* mutualB : Int -> Int; *)
@@ -11,3 +11,6 @@ mutualC : forall c. c -> c;
 mutualA x = mutualB x;
 mutualB x = mutualC x;
 mutualC x = mutualA x;
+
+(* foo : forall a b. a -> b; *)
+foo x = foo x;
