@@ -1,5 +1,3 @@
-use std::collections::BTreeSet;
-
 use crate::name::ResolvedName;
 use crate::utils::display_iter;
 
@@ -9,7 +7,7 @@ pub enum Error {
         "Cyclic dependency detected in the following definitions: {}",
         display_iter(.0.iter())
     )]
-    CyclicDependency(BTreeSet<ResolvedName>),
+    CyclicDependency(Vec<ResolvedName>),
 
     #[error(
         "Cyclic dependency detected in the following definitions: {}\n\
@@ -17,5 +15,5 @@ pub enum Error {
          but needs an explicit type somewhere in the cycle.",
         display_iter(.0.iter())
     )]
-    CyclicDependencyWithoutExplicitType(BTreeSet<ResolvedName>),
+    CyclicDependencyWithoutExplicitType(Vec<ResolvedName>),
 }

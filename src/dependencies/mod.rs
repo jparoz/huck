@@ -25,7 +25,7 @@ pub fn resolve<Ty>(
     let mut resolver = Resolver {
         modules,
         finished: BTreeSet::new(),
-        visited: BTreeSet::new(),
+        visited: Vec::new(),
         ordered: BTreeMap::new(),
     };
 
@@ -70,7 +70,7 @@ struct Resolver<'m, Ty> {
 
     /// Names which have been visited on this iteration of the main search loop.
     /// If a name is visited twice, that indicates a cycle.
-    visited: BTreeSet<ResolvedName>,
+    visited: Vec<ResolvedName>,
 
     /// The order which is returned from [`resolve`],
     /// built up during the search.
@@ -107,14 +107,14 @@ impl<'m, Ty> Resolver<'m, Ty> {
         if self.visited.contains(&name) {
             log::trace!(
                 log::RESOLVE,
-                "    Found a dependency cycle: {}",
+                "    Found a dependency cycle within these names: {}",
                 display_iter(self.visited.iter())
             );
             return self.resolve_cycle(name);
         }
 
         // If we're here, we need to keep searching.
-        self.visited.insert(name);
+        self.visited.push(name);
 
         // Recurse onto the definition's dependencies.
         if let Some(defn) = self.get_definition(&name) {
@@ -123,7 +123,8 @@ impl<'m, Ty> Resolver<'m, Ty> {
             }
         }
 
-        self.visited.remove(&name);
+        assert_eq!(self.visited.pop(), Some(name));
+
         log::trace!(log::RESOLVE, "    Finished visiting `{name}`");
         self.finished.insert(name);
         if let Source::Module(path) = name.source {
@@ -136,11 +137,19 @@ impl<'m, Ty> Resolver<'m, Ty> {
     fn resolve_cycle(&self, name: ResolvedName) -> Result<(), Error> {
         // self.visited contains a cycle,
         // and possibly some extra names which depend on the cycle.
-        // @Todo: remove the names which depend on the cycle,
-        // by changing self.visited into a Vec (to track insertion order),
-        // and removing elements before `name`.
 
-        let cycle = self.visited.clone();
+        // Remove the names which depend on the cycle,
+        // but are not part of the cycle.
+        // @Note: safe unwrap: Before calling resolve_cycle,
+        //        we detected that this name was in self.visited.
+        let index = self.visited.iter().position(|n| n == &name).unwrap();
+        let cycle = self.visited.split_at(index).1.to_vec();
+
+        log::trace!(
+            log::RESOLVE,
+            "    Found minimal dependency cycle: {}",
+            display_iter(cycle.iter())
+        );
 
         // Check if all the names define Lua functions.
         // @Lazy @Laziness: lazy values are okay too
