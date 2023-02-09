@@ -1003,7 +1003,7 @@ impl Typechecker {
         }
 
         // We should have removed all assumptions by now.
-        assert!(self.assumptions.is_empty());
+        assert_eq!(self.assumptions, BTreeMap::new());
 
         // Checks all the arity assumptions are true within the given modules.
         self.arity_checker.finish(&self.modules)?;

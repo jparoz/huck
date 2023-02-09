@@ -10,9 +10,10 @@ mod parse;
 mod precedence;
 mod typecheck;
 mod types;
-
-#[allow(dead_code)]
 mod utils;
+
+#[cfg(test)]
+mod test_common;
 
 use std::path::{Path, PathBuf};
 use std::str::FromStr;

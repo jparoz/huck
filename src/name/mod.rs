@@ -9,6 +9,9 @@ pub use resolve::Resolver;
 mod error;
 pub use error::Error;
 
+#[cfg(test)]
+mod test;
+
 /// A ModulePath is a path to a Huck module, as defined within that module.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ModulePath(pub &'static str);

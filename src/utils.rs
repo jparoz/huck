@@ -4,19 +4,6 @@ use std::{io::Write, time::Instant};
 use crate::error::Error as HuckError;
 use crate::log;
 
-/// Takes Lua code as input, executes it using a Lua interpreter found in PATH,
-/// and returns the contents of stdout in a String.
-pub fn execute_lua(lua: &str) -> String {
-    let output = std::process::Command::new("lua")
-        .args([
-            "-e",
-            &format!("print(require('inspect')((function() {} end)()))", lua),
-        ])
-        .output()
-        .unwrap();
-    String::from_utf8(output.stdout).unwrap()
-}
-
 /// Takes some Lua and normalizes it into a consistent format.
 pub fn normalize(lua: &str) -> Result<String, HuckError> {
     // Time how long it takes to normalize the Lua

@@ -1,37 +1,7 @@
 use test_log::test;
 
-use crate::compile::{compile, CompileInfo};
-use crate::error::Error as HuckError;
-use crate::utils::{leak, normalize};
-
-const PRELUDE_SRC: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/huck/Prelude.hk"));
-
-/// Takes some Huck and turns it into Lua, doing every step in between.
-pub fn transpile(huck: &'static str) -> Result<String, HuckError> {
-    // Include the prelude
-    let prelude_info = CompileInfo {
-        require: "huck.Prelude".to_string(),
-        source: PRELUDE_SRC,
-        input: None,
-        output: None,
-    };
-
-    // Include our module
-    let module_info = CompileInfo {
-        require: "Test".to_string(),
-        source: leak!("module Test; {}", huck),
-        input: None,
-        output: None,
-    };
-
-    // Compile
-    for (info, lua) in compile(vec![prelude_info, module_info.clone()])?.into_values() {
-        if info.require == module_info.require {
-            return normalize(&lua);
-        }
-    }
-    unreachable!()
-}
+use crate::test_common::transpile;
+use crate::utils::normalize;
 
 macro_rules! wrap {
     ($name:literal, $expr:literal) => {
