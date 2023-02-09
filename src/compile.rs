@@ -96,10 +96,7 @@ pub fn compile(
     }
 
     // Dependency resolution
-    let mut generation_orders = BTreeMap::new();
-    for (path, module) in resolved_modules.iter() {
-        generation_orders.insert(*path, dependencies::resolve(module)?);
-    }
+    let mut generation_orders = dependencies::resolve(&resolved_modules)?;
 
     // Typecheck
     let typechecked_modules = typecheck(resolved_modules)?;

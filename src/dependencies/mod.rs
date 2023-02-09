@@ -1,6 +1,6 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
-use crate::name::ResolvedName;
+use crate::name::{ModulePath, ResolvedName, Source};
 use crate::utils::display_iter;
 use crate::{ast, log};
 
@@ -18,31 +18,30 @@ pub use error::Error;
 /// See
 /// [this wikipedia article](https://en.wikipedia.org/wiki/Topological_sorting#Depth-first_search)
 /// for more details.
-pub fn resolve<Ty>(module: &ast::Module<ResolvedName, Ty>) -> Result<GenerationOrder, Error> {
-    log::trace!(
-        log::RESOLVE,
-        "Starting dependency resolution for module {path}",
-        path = module.path
-    );
-    let mut visitor = Visitor {
-        module,
+pub fn resolve<Ty>(
+    modules: &BTreeMap<ModulePath, ast::Module<ResolvedName, Ty>>,
+) -> Result<BTreeMap<ModulePath, GenerationOrder>, Error> {
+    log::trace!(log::RESOLVE, "Starting dependency resolution",);
+    let mut resolver = Resolver {
+        modules,
         finished: BTreeSet::new(),
         visited: BTreeSet::new(),
-        ordered: Vec::new(),
+        ordered: BTreeMap::new(),
     };
 
-    for name in module.definitions.keys() {
-        visitor.visit(*name)?;
+    for module in modules.values() {
+        for name in module.definitions.keys() {
+            resolver.visit(*name)?;
+        }
     }
 
     log::trace!(
         log::RESOLVE,
-        "Resolved dependencies for module {path}: {order}",
-        path = module.path,
-        order = display_iter(visitor.ordered.iter())
+        "Resolved all dependencies: {}",
+        display_iter(resolver.ordered.values().flat_map(|x| x.0.iter()))
     );
 
-    Ok(GenerationOrder(visitor.ordered))
+    Ok(resolver.ordered)
 }
 
 /// `GenerationOrder` represents an ordering of definitions in a module,
@@ -50,7 +49,7 @@ pub fn resolve<Ty>(module: &ast::Module<ResolvedName, Ty>) -> Result<GenerationO
 ///   - if generated in the order given,
 ///     definitions in the module will not cause any Lua errors;
 ///   - the `GenerationOrder` contains the [`ResolvedName`]s of all definitions in the module.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct GenerationOrder(Vec<ResolvedName>);
 
 impl IntoIterator for GenerationOrder {
@@ -65,7 +64,7 @@ impl IntoIterator for GenerationOrder {
 
 /// Used to keep track of which names have been visited during the depth-first-search.
 #[derive(Debug)]
-struct Visitor<'m, Ty> {
+struct Resolver<'m, Ty> {
     /// Names which have been searched completely.
     finished: BTreeSet<ResolvedName>,
 
@@ -75,15 +74,22 @@ struct Visitor<'m, Ty> {
 
     /// The order which is returned from [`resolve`],
     /// built up during the search.
-    ordered: Vec<ResolvedName>,
+    ordered: BTreeMap<ModulePath, GenerationOrder>,
 
-    /// The module being resolved.
-    module: &'m ast::Module<ResolvedName, Ty>,
+    /// The map of modules being resolved.
+    modules: &'m BTreeMap<ModulePath, ast::Module<ResolvedName, Ty>>,
 }
 
-impl<'m, Ty> Visitor<'m, Ty> {
+impl<'m, Ty> Resolver<'m, Ty> {
     fn visit(&mut self, name: ResolvedName) -> Result<(), Error> {
         log::trace!(log::RESOLVE, "  Visiting `{name}`");
+
+        // We only want to visit definitions,
+        // not type constructors and suchlike.
+        if self.get_definition(&name).is_none() {
+            log::trace!(log::RESOLVE, "    Dependency is not a definition: `{name}`");
+            return Ok(());
+        };
 
         // If we've searched this branch already, we're done.
         if self.finished.contains(&name) {
@@ -110,34 +116,31 @@ impl<'m, Ty> Visitor<'m, Ty> {
         // If we're here, we need to keep searching.
         self.visited.insert(name);
 
-        // If the name is defined as a definition in this module...
-        if let Some(defn) = self.module.definitions.get(&name) {
-            // then recurse onto its dependencies.
+        // Recurse onto the definition's dependencies.
+        if let Some(defn) = self.get_definition(&name) {
             for dep in defn.dependencies() {
-                // Only if the dependency is within this module.
-                if self.module.definitions.contains_key(&dep) {
-                    self.visit(dep)?;
-                }
+                self.visit(dep)?;
             }
         }
 
         self.visited.remove(&name);
         log::trace!(log::RESOLVE, "    Finished visiting `{name}`");
         self.finished.insert(name);
-        self.ordered.push(name);
+        if let Source::Module(path) = name.source {
+            self.ordered.entry(path).or_default().0.push(name);
+        }
 
         Ok(())
     }
 
     fn resolve_cycle(&self, name: ResolvedName) -> Result<(), Error> {
-        // Find the smallest cycle by walking the cycle starting from this name.
-        let mut minimal_cycle = BTreeSet::new();
-        self.walk_cycle(&mut minimal_cycle, name);
-        log::trace!(
-            log::RESOLVE,
-            "      Found minimal dependency cycle: {}",
-            display_iter(minimal_cycle.iter())
-        );
+        // self.visited contains a cycle,
+        // and possibly some extra names which depend on the cycle.
+        // @Todo: remove the names which depend on the cycle,
+        // by changing self.visited into a Vec (to track insertion order),
+        // and removing elements before `name`.
+
+        let cycle = self.visited.clone();
 
         // Check if all the names define Lua functions.
         // @Lazy @Laziness: lazy values are okay too
@@ -145,15 +148,21 @@ impl<'m, Ty> Visitor<'m, Ty> {
         // Keep track of whether one of the names in the cycle has an explicit type.
         let mut any_explicit_type = false;
 
-        for name in minimal_cycle.iter() {
-            if let Some(defn) = self.module.definitions.get(name) {
-                // If the name has no arguments...
-                if defn.assignments[0].0.arg_count() == 0 {
-                    // then it's an error.
-                    return Err(Error::CyclicDependency(minimal_cycle));
-                }
+        for name in cycle.iter() {
+            if let Source::Module(path) = name.source {
+                if let Some(defn) = self
+                    .modules
+                    .get(&path)
+                    .and_then(|module| module.definitions.get(name))
+                {
+                    // If the name has no arguments...
+                    if defn.assignments[0].0.arg_count() == 0 {
+                        // then it's an error.
+                        return Err(Error::CyclicDependency(cycle));
+                    }
 
-                any_explicit_type = defn.explicit_type.is_some() || any_explicit_type;
+                    any_explicit_type = defn.explicit_type.is_some() || any_explicit_type;
+                }
             }
         }
 
@@ -176,7 +185,7 @@ impl<'m, Ty> Visitor<'m, Ty> {
         // is given type `Void` or something similar.
         // This will actually make this case not an error at all.
         if !any_explicit_type {
-            return Err(Error::CyclicDependencyWithoutExplicitType(minimal_cycle));
+            return Err(Error::CyclicDependencyWithoutExplicitType(cycle));
         }
 
         // If we're down here,
@@ -187,18 +196,15 @@ impl<'m, Ty> Visitor<'m, Ty> {
         Ok(())
     }
 
-    fn walk_cycle(&self, cycle: &mut BTreeSet<ResolvedName>, name: ResolvedName) {
-        if cycle.contains(&name) {
-            return;
-        }
-
-        if let Some(defn) = self.module.definitions.get(&name) {
-            cycle.insert(name);
-            for dep in defn.dependencies() {
-                if self.module.definitions.contains_key(&dep) {
-                    self.walk_cycle(cycle, dep);
-                }
-            }
+    fn get_definition(&self, name: &ResolvedName) -> Option<&ast::Definition<ResolvedName, Ty>> {
+        // If the name is defined as a definition in some module,
+        if let Source::Module(path) = name.source {
+            // Get the definition from the module.
+            self.modules
+                .get(&path)
+                .and_then(|module| module.definitions.get(name))
+        } else {
+            None
         }
     }
 }

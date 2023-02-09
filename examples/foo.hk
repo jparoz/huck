@@ -2,28 +2,11 @@ module Foo;
 
 import Bar (bar, baz);
 
-(* import Quux (quux); *)
-(* myQuux = quux; *)
-
-(* import Quux; *)
-(* myQuux = Quux.quux; *)
-
 foo = bar baz;
 
 foo_quux = Bar.bar Bar.quux;
 
-add a b = a + b;
-usesAdd = 12 `add` 34;
-
-foreign import "inspect" (inspect : forall a. a -> String);
-resultOfInspect = inspect foo;
-
-luaCallMethodDelete : forall a. a -> IO ();
-luaCallMethodDelete obj = lua { obj:delete() };
-
-banana : Int;
-banana = 123 + 2 * 456;
-
-myTrue = True;
-
-foreign export main = \() -> lua { print("hello!") };
+isEven : Int -> Bool;
+isEven 0 = True;
+isEven 1 = False;
+isEven n = Bar.isOdd (n-1);

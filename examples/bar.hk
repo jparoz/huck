@@ -1,7 +1,14 @@
 module Bar;
 
+import Foo;
+
 bar x = x + 3;
 
 baz = 123;
 
 quux = 456;
+
+isOdd : Int -> Bool;
+isOdd 0 = False;
+isOdd 1 = True;
+isOdd n = Foo.isEven (n-1);
