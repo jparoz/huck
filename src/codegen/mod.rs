@@ -479,7 +479,7 @@ impl<'a> CodeGenerator<'a> {
         writeln!(
             lua,
             r#"setmetatable({{{}}}, {{__variant = "{}"}})"#,
-            tupled_args, name
+            tupled_args, name.ident
         )?;
 
         // End the functions
@@ -606,19 +606,11 @@ fn pattern_match(
             conditions.push(format!(r#"{} == {}"#, lua_arg_name, name_string));
         }
 
-        ir::Pattern::Constructor(name, args) if args.is_empty() => {
-            // Check that it's the right variant
-            conditions.push(format!(
-                r#"getmetatable({}).__variant == "{}""#,
-                lua_arg_name, name
-            ));
-        }
-
         ir::Pattern::Constructor(name, args) => {
             // Check that it's the right variant
             conditions.push(format!(
                 r#"getmetatable({}).__variant == "{}""#,
-                lua_arg_name, name
+                lua_arg_name, name.ident
             ));
 
             // Check that each pattern matches
