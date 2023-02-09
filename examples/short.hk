@@ -1,6 +1,13 @@
 module Short;
 
-True && True = True;
-_ && _ = False;
+mutualA : forall a. a -> a;
+mutualB : forall b. b -> b;
+mutualC : forall c. c -> c;
 
-(* asbd kjfdsl ; *)
+(* mutualA : Int -> Int; *)
+(* mutualB : Int -> Int; *)
+(* mutualC : Int -> Int; *)
+
+mutualA x = mutualB x;
+mutualB x = mutualC x;
+mutualC x = mutualA x;

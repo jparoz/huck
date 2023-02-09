@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 use std::fmt::{self, Debug, Write};
-use std::iter;
 use std::{collections::BTreeMap, time::Instant};
+use std::{iter, mem};
 
 use crate::ast::{self, Module};
 use crate::log;
@@ -55,7 +55,7 @@ pub fn typecheck(
 }
 
 #[derive(PartialEq, Eq, Clone)]
-enum Constraint {
+pub enum Constraint {
     Equality(Type, Type),
     ImplicitInstance(Type, Type, TypeVarSet<ResolvedName>),
     ExplicitInstance(Type, TypeScheme),
@@ -304,50 +304,83 @@ impl Typechecker {
         let mut solution = Substitution::empty();
 
         let mut constraints = VecDeque::from(self.constraints);
+        let mut next_constraints = VecDeque::new();
 
-        while let Some(constraint) = constraints.pop_front() {
-            let constraint_str = format!("{constraint:?}");
-            let mut new_str = String::new();
+        loop {
+            let mut processed_any_constraint = false;
+            while let Some(constraint) = constraints.pop_front() {
+                let constraint_str = format!("{constraint:?}");
+                let mut new_str = String::new();
 
-            match constraint {
-                Constraint::Equality(t1, t2) => {
-                    let new_sub = t1.unify(t2)?;
+                match constraint {
+                    Constraint::Equality(t1, t2) => {
+                        let new_sub = t1.unify(t2)?;
 
-                    for c in constraints.iter_mut() {
-                        c.apply(&new_sub);
+                        for c in constraints.iter_mut().chain(next_constraints.iter_mut()) {
+                            c.apply(&new_sub);
+                        }
+
+                        write!(new_str, "{new_sub:?}").unwrap();
+                        solution = new_sub.then(solution);
+
+                        processed_any_constraint = true;
                     }
 
-                    write!(new_str, "{new_sub:?}").unwrap();
-                    solution = new_sub.then(solution);
+                    Constraint::ExplicitInstance(t, ts) => {
+                        let new_constraint = Constraint::Equality(t, ts.instantiate());
+                        write!(new_str, "{new_constraint:?}").unwrap();
+                        next_constraints.push_back(new_constraint);
+
+                        processed_any_constraint = true;
+                    }
+
+                    Constraint::ImplicitInstance(t1, t2, m)
+                        if t2
+                            .free_vars()
+                            .difference(&m)
+                            .intersection(
+                                &constraints
+                                    .active_vars()
+                                    .union(&next_constraints.active_vars()),
+                            )
+                            .is_empty() =>
+                    {
+                        let new_constraint = Constraint::ExplicitInstance(t1, t2.generalize(&m));
+                        write!(new_str, "{new_constraint:?}").unwrap();
+                        next_constraints.push_back(new_constraint);
+
+                        processed_any_constraint = true;
+                    }
+
+                    constraint @ Constraint::ImplicitInstance(..) => {
+                        write!(new_str, "[Skipping for now]").unwrap();
+                        next_constraints.push_back(constraint);
+                    }
                 }
 
-                Constraint::ExplicitInstance(t, ts) => {
-                    let new_constraint = Constraint::Equality(t, ts.instantiate());
-                    write!(new_str, "{new_constraint:?}").unwrap();
-                    constraints.push_back(new_constraint)
-                }
-
-                Constraint::ImplicitInstance(t1, t2, m)
-                    if t2
-                        .free_vars()
-                        .difference(&m)
-                        .intersection(&constraints.active_vars())
-                        .is_empty() =>
-                {
-                    let new_constraint = Constraint::ExplicitInstance(t1, t2.generalize(&m));
-                    write!(new_str, "{new_constraint:?}").unwrap();
-                    constraints.push_back(new_constraint)
-                }
-
-                constraint @ Constraint::ImplicitInstance(..) => {
-                    // @Note: This should never diverge, i.e. there should always be at least one
-                    // constraint in the set that meets the criteria to be solvable. See HHS02.
-                    write!(new_str, "[Skipping for now]").unwrap();
-                    constraints.push_back(constraint);
-                }
+                log::trace!(log::TYPECHECK, "{constraint_str:>60} ==> {new_str}");
             }
 
-            log::trace!(log::TYPECHECK, "{constraint_str:>60} ==> {new_str}");
+            // If we didn't push any constraints into the queue, we're done.
+            if next_constraints.is_empty() {
+                break;
+            }
+
+            // If we pushed constraints but didn't process any of them
+            // (i.e. if we skipped all the constraints),
+            // then we can't proceed any further.
+            // This situation might arise when typing a recursive function
+            // (mutually or otherwise).
+            //
+            // @Note:
+            // It's possible that we could pick this up during dependency resolution,
+            // and then leave some sort of hint for the type system.
+            // For now though, that's too clever.
+            if !processed_any_constraint {
+                return Err(Error::CouldNotSolveTypeConstraints(next_constraints.into()));
+            }
+
+            mem::swap(&mut constraints, &mut next_constraints);
         }
 
         log::trace!(log::TYPECHECK, "{:-^100}", " FINISH SOLVING ");
