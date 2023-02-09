@@ -69,8 +69,6 @@ impl Resolver {
     pub fn resolve_prelude(&mut self, module: Module<UnresolvedName, ()>) -> Result<(), Error> {
         let module_resolver = ModuleResolver::new(self, module.path);
 
-        // Keep the Prelude module's scopes,
-        // because they'll be used in resolving other modules.
         let (resolved, scope, type_scope) = module_resolver.resolve(module)?;
         self.modules.insert(resolved.path, resolved);
 
@@ -78,6 +76,10 @@ impl Resolver {
         // so that it will be implicitly imported into other modules.
         self.scope.idents.extend(scope.idents);
         self.type_scope.idents.extend(type_scope.idents);
+
+        // Pass on any assumptions
+        self.scope.assumptions.extend(scope.assumptions);
+        self.type_scope.assumptions.extend(type_scope.assumptions);
 
         log::trace!(log::RESOLVE, "{self:?}");
 
@@ -88,9 +90,12 @@ impl Resolver {
     pub fn resolve_module(&mut self, module: Module<UnresolvedName, ()>) -> Result<(), Error> {
         let module_resolver = ModuleResolver::new(self, module.path);
 
-        // Throw away the module's scopes,
-        // because they're not used in resolving other modules.
-        let (resolved, _scope, _type_scope) = module_resolver.resolve(module)?;
+        let (resolved, scope, type_scope) = module_resolver.resolve(module)?;
+
+        // Pass on any assumptions
+        self.scope.assumptions.extend(scope.assumptions);
+        self.type_scope.assumptions.extend(type_scope.assumptions);
+
         self.modules.insert(resolved.path, resolved);
 
         Ok(())
