@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 use std::fmt::{self, Debug, Write};
 use std::{collections::BTreeMap, time::Instant};
 use std::{iter, mem};
@@ -300,15 +299,24 @@ impl Typechecker {
             log::trace!(log::TYPECHECK, "  {:?}", constraint);
         }
 
+        // Solve the type constraints by iterating over them in passes.
         log::trace!(log::TYPECHECK, "{:-^100}", " START SOLVING ");
+
+        // The solution substitution, built up as we go.
         let mut solution = Substitution::empty();
 
-        let mut constraints = VecDeque::from(self.constraints);
-        let mut next_constraints = VecDeque::new();
+        // The constraints being processed in the current pass.
+        let mut constraints = self.constraints;
+
+        // The constraints to be processed in the next pass.
+        let mut next_constraints = Vec::new();
 
         loop {
+            // Keep track of whether we've processed any constraints in this pass.
             let mut processed_any_constraint = false;
-            while let Some(constraint) = constraints.pop_front() {
+
+            while let Some(constraint) = constraints.pop() {
+                // Keep track of the processing action, for logging
                 let constraint_str = format!("{constraint:?}");
                 let mut new_str = String::new();
 
@@ -329,7 +337,7 @@ impl Typechecker {
                     Constraint::ExplicitInstance(t, ts) => {
                         let new_constraint = Constraint::Equality(t, ts.instantiate());
                         write!(new_str, "{new_constraint:?}").unwrap();
-                        next_constraints.push_back(new_constraint);
+                        next_constraints.push(new_constraint);
 
                         processed_any_constraint = true;
                     }
@@ -347,14 +355,14 @@ impl Typechecker {
                     {
                         let new_constraint = Constraint::ExplicitInstance(t1, t2.generalize(&m));
                         write!(new_str, "{new_constraint:?}").unwrap();
-                        next_constraints.push_back(new_constraint);
+                        next_constraints.push(new_constraint);
 
                         processed_any_constraint = true;
                     }
 
                     constraint @ Constraint::ImplicitInstance(..) => {
                         write!(new_str, "[Skipping for now]").unwrap();
-                        next_constraints.push_back(constraint);
+                        next_constraints.push(constraint);
                     }
                 }
 
@@ -377,9 +385,11 @@ impl Typechecker {
             // and then leave some sort of hint for the type system.
             // For now though, that's too clever.
             if !processed_any_constraint {
-                return Err(Error::CouldNotSolveTypeConstraints(next_constraints.into()));
+                return Err(Error::CouldNotSolveTypeConstraints(next_constraints));
             }
 
+            // Swap the just-processed constraints with the next-to-be-processed constraints,
+            // in time for the next pass.
             mem::swap(&mut constraints, &mut next_constraints);
         }
 
@@ -965,10 +975,9 @@ impl ActiveVars for &[Constraint] {
     }
 }
 
-impl ActiveVars for VecDeque<Constraint> {
+impl ActiveVars for Vec<Constraint> {
     fn active_vars(&self) -> TypeVarSet<ResolvedName> {
-        let (a, b) = self.as_slices();
-        a.active_vars().union(&b.active_vars())
+        self.as_slice().active_vars()
     }
 }
 
