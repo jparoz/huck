@@ -34,8 +34,10 @@ fn function_const() {
         normalize(wrap!(
             "const",
             r#"
-                function(_Test_0)
-                    return function(_Test_1)
+                function(...)
+                    local _Test_0 = select(1, ...)
+                    return function(...)
+                        local _Test_1 = select(1, ...)
                         local a = _Test_0
                         local b = _Test_1
                         return a
@@ -54,7 +56,8 @@ fn function_id() {
         normalize(wrap!(
             "id",
             r#"
-                function(_Test_0)
+                function(...)
+                    local _Test_0 = select(1, ...)
                     local a = _Test_0
                     return a
                 end
@@ -71,7 +74,8 @@ fn function_not() {
         normalize(wrap!(
             "not",
             r#"
-                function(_Test_0)
+                function(...)
+                    local _Test_0 = select(1, ...)
                     local arg0 = _Test_0
                     return (function()
                         local case = {arg0}
@@ -93,8 +97,10 @@ fn function_and() {
         normalize(wrap!(
             "&&",
             r#"
-                function(_Test_0)
-                    return function(_Test_1)
+                function(...)
+                    local _Test_0 = select(1, ...)
+                    return function(...)
+                        local _Test_1 = select(1, ...)
                         local arg0 = _Test_0
                         local arg1 = _Test_1
                         return (function()

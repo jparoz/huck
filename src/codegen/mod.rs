@@ -337,17 +337,31 @@ impl<'a> CodeGenerator<'a> {
 
         // Start the functions
         {
-            let mut iter = (0..arg_count).peekable();
-            while iter.next().is_some() {
+            let mut iter = args.iter().peekable();
+            while let Some(arg) = iter.next() {
                 let id = self.unique();
                 ids.push(id);
+                let path = lua_module_path(self.module.path);
 
-                writeln!(
-                    lua,
-                    "function({}_{})",
-                    lua_module_path(self.module.path),
-                    id
-                )?;
+                writeln!(lua, "function(...)")?;
+                match arg {
+                    ir::Pattern::Tuple(_) => {
+                        writeln!(lua, "local {path}_{id}")?;
+                        writeln!(
+                            lua,
+                            r##"if select("#", ...) == 1 and type(select(1, ...)) == "table" then"##,
+                        )?;
+                        writeln!(lua, "{path}_{id} = select(1, ...)",)?;
+                        writeln!(lua, "else")?;
+                        writeln!(lua, "{path}_{id} = {{...}}",)?;
+                        writeln!(lua, "end")?;
+                    }
+                    _ => writeln!(
+                        lua,
+                        "local {path}_{id} = select(1, ...)",
+                        path = lua_module_path(self.module.path)
+                    )?,
+                }
 
                 if iter.peek().is_some() {
                     write!(lua, "return ")?;
