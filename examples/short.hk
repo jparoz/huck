@@ -14,3 +14,11 @@ mutualC x = mutualA x;
 
 (* foo : forall a b. a -> b; *)
 foo x = foo x;
+
+bar = let id x = x in id foo;
+
+exampleCase scrut = case scrut of {
+    1 -> "foo";
+    2 -> "bar";
+    _ -> "baz";
+};

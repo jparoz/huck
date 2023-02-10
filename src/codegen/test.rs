@@ -74,9 +74,9 @@ fn function_not() {
                 function(_Test_0)
                     local val0 = _Test_0
                     return (function()
-                        local _Test_1 = {val0}
-                        if (#_Test_1 == 1) and (_Test_1[1] == true) then return false end
-                        if (#_Test_1 == 1) and (_Test_1[1] == false) then return true end
+                        local case = {val0}
+                        if (#case == 1) and (case[1] == true) then return false end
+                        if (#case == 1) and (case[1] == false) then return true end
                         error("Unmatched pattern")
                     end)()
                 end
@@ -98,11 +98,11 @@ fn function_and() {
                         local val0 = _Test_0
                         local val1 = _Test_1
                         return (function()
-                            local _Test_2 = {val0, val1}
-                            if (#_Test_2 == 2) and (_Test_2[1] == true) and (_Test_2[2] == true) then
+                            local case = {val0, val1}
+                            if (#case == 2) and (case[1] == true) and (case[2] == true) then
                                 return true
                             end
-                            if (#_Test_2 == 2) then return false end
+                            if (#case == 2) then return false end
                             error("Unmatched pattern")
                         end)()
                     end

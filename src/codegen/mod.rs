@@ -236,20 +236,15 @@ impl<'a> CodeGenerator<'a> {
         // @Errors: shouldn't use Debug
         let expr_s = format!("{expr:?}");
 
-        let id = self.unique();
-
         // Start a new scope.
         writeln!(lua, "(function()")?;
 
         // Store the value of expr in a local,
         // which is accessed within the conditions and bindings.
-        writeln!(
-            lua,
-            "local {}_{} = {}",
-            lua_module_path(self.module.path),
-            id,
-            self.expression(expr)?
-        )?;
+        //
+        // @Note: We can safely use the Lua variable name `case` without clashing,
+        // because it's a reserved word in Huck.
+        writeln!(lua, "local case = {}", self.expression(expr)?)?;
 
         // Before returning the expression,
         // we split the branches based on whether or not they have any conditions.
@@ -257,10 +252,7 @@ impl<'a> CodeGenerator<'a> {
         let branches = arms
             .into_iter()
             .map(|(pat, expr)| {
-                let (conds, binds) = pattern_match(
-                    pat,
-                    &format!("{}_{}", lua_module_path(self.module.path), id),
-                )?;
+                let (conds, binds) = pattern_match(pat, "case")?;
                 Ok((conds, binds, expr))
             })
             .collect::<Result<Vec<_>, _>>()?;
