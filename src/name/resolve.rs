@@ -811,7 +811,7 @@ impl<'a> ModuleResolver<'a> {
             ast::Pattern::Numeral(s) => ast::Pattern::Numeral(s),
             ast::Pattern::String(s) => ast::Pattern::String(s),
             ast::Pattern::Unit => ast::Pattern::Unit,
-            ast::Pattern::Underscore => ast::Pattern::Underscore,
+            ast::Pattern::Underscore(s) => ast::Pattern::Underscore(s),
         };
 
         Ok((bindings, res_pat))

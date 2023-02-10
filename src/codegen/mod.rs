@@ -572,7 +572,7 @@ fn pattern_match(
 
         // Because underscore is not a legal identifier,
         // we don't need to bind anything at all.
-        ir::Pattern::Underscore => (),
+        ir::Pattern::Underscore(_) => (),
 
         ir::Pattern::List(list) => {
             // Check that the list is the correct length

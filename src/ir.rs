@@ -112,7 +112,7 @@ pub enum Pattern {
     Bind(Name),
 
     /// Don't bind anything.
-    Underscore,
+    Underscore(&'static str),
 
     /// Destructuring (unary or otherwise).
     Constructor(Name, Vec<Pattern>),
@@ -128,7 +128,7 @@ impl Pattern {
                 pats.iter().flat_map(|pat| pat.names_bound()).collect()
             }
 
-            Pattern::Literal(_) | Pattern::Underscore => Vec::new(),
+            Pattern::Literal(_) | Pattern::Underscore(_) => Vec::new(),
         }
     }
 }
@@ -378,7 +378,7 @@ impl From<ast::Pattern<Name>> for Pattern {
     fn from(ast_pat: ast::Pattern<Name>) -> Self {
         match ast_pat {
             ast::Pattern::Bind(name) => Pattern::Bind(name),
-            ast::Pattern::Underscore => Pattern::Underscore,
+            ast::Pattern::Underscore(s) => Pattern::Underscore(s),
 
             ast::Pattern::List(pats) => {
                 Pattern::List(pats.into_iter().map(Pattern::from).collect())

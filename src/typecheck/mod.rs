@@ -841,7 +841,7 @@ impl Typechecker {
 
             // Don't need to bind anything for underscores,
             // because they're not legal identifiers and can't be used again.
-            ast::Pattern::Underscore => self.fresh(),
+            ast::Pattern::Underscore(_) => self.fresh(),
 
             ast::Pattern::List(pats) => {
                 let beta = self.fresh();

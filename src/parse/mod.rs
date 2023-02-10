@@ -422,9 +422,12 @@ fn pattern_binop(input: &'static str) -> IResult<&'static str, Pattern<Unresolve
 }
 
 fn pattern_underscore(input: &'static str) -> IResult<&'static str, Pattern<UnresolvedName>> {
-    value(
+    map(
+        ws(recognize(nom_tuple((
+            char('_'),
+            many0(satisfy(is_name_char)),
+        )))),
         Pattern::Underscore,
-        ws(terminated(tag("_"), peek(not(satisfy(is_name_char))))),
     )(input)
 }
 
@@ -623,10 +626,10 @@ fn term(input: &'static str) -> IResult<&'static str, Term<UnresolvedName>> {
 fn lower_ident(input: &'static str) -> IResult<&'static str, &'static str> {
     verify(
         recognize(nom_tuple((
-            satisfy(is_var_start_char),
+            satisfy(char::is_lowercase),
             many0(satisfy(is_name_char)),
         ))),
-        |s| !(is_reserved(s) || s == "_"),
+        |s| !(is_reserved(s)),
     )(input)
 }
 
@@ -857,10 +860,6 @@ where
 
 fn is_name_char(c: char) -> bool {
     c.is_alphanumeric() || c == '_' || c == '\''
-}
-
-fn is_var_start_char(c: char) -> bool {
-    c.is_lowercase() || c == '_'
 }
 
 // @Note: In the definition of upper_ident, we assume there are no reserved words beginning with

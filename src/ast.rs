@@ -153,7 +153,7 @@ impl<Name: Display> Display for Lhs<Name> {
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub enum Pattern<Name> {
     Bind(Name),
-    Underscore,
+    Underscore(&'static str),
     List(Vec<Pattern<Name>>),
     Tuple(Vec<Pattern<Name>>),
     Numeral(Numeral),
@@ -175,7 +175,7 @@ impl<Name> Pattern<Name> {
     // Returns whether or not this pattern binds unconditionally.
     pub fn is_unconditional(&self) -> bool {
         match self {
-            Pattern::Bind(_) | Pattern::Underscore | Pattern::Unit => true,
+            Pattern::Bind(_) | Pattern::Underscore(_) | Pattern::Unit => true,
             Pattern::List(_)
             | Pattern::Tuple(_)
             | Pattern::Numeral(_)
@@ -207,7 +207,7 @@ impl<Name: Copy> Pattern<Name> {
             | Pattern::String(_)
             | Pattern::UnaryConstructor(_)
             | Pattern::Unit
-            | Pattern::Underscore => Vec::new(),
+            | Pattern::Underscore(_) => Vec::new(),
         }
     }
 }
@@ -217,7 +217,7 @@ impl<Name: Display> Display for Pattern<Name> {
         use Pattern::*;
         match self {
             Bind(n) => write!(f, "{n}"),
-            Underscore => write!(f, "_"),
+            Underscore(_) => write!(f, "_"),
             List(v) => write!(
                 f,
                 "[{}]",
