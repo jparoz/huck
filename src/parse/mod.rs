@@ -475,10 +475,8 @@ fn type_app(input: &'static str) -> IResult<&'static str, TypeExpr<UnresolvedNam
 
 fn type_term(input: &'static str) -> IResult<&'static str, TypeTerm<UnresolvedName>> {
     alt((
-        map(ws(upper_ident), |s| {
-            TypeTerm::Concrete(UnresolvedName::Unqualified(s))
-        }),
-        map(ws(lower_name), TypeTerm::Var),
+        map(upper_name, TypeTerm::Concrete),
+        map(unqualified(lower_ident), TypeTerm::Var),
         map(delimited(ws(tag("[")), type_expr, ws(tag("]"))), |t| {
             TypeTerm::List(Box::new(t))
         }),
@@ -644,10 +642,13 @@ fn ident(input: &'static str) -> IResult<&'static str, &'static str> {
 }
 
 fn name(input: &'static str) -> IResult<&'static str, UnresolvedName> {
-    alt((qualified_name, unqualified_name, parens(operator)))(input)
+    alt((qualified(ident), unqualified(ident), parens(operator)))(input)
 }
 
-fn qualified_name(input: &'static str) -> IResult<&'static str, UnresolvedName> {
+fn qualified<F>(inner: F) -> impl FnMut(&'static str) -> IResult<&'static str, UnresolvedName>
+where
+    F: FnMut(&'static str) -> IResult<&'static str, &'static str>,
+{
     ws(map(
         separated_pair(
             recognize(separated_list1(
@@ -658,10 +659,17 @@ fn qualified_name(input: &'static str) -> IResult<&'static str, UnresolvedName> 
                 ),
             )),
             tag("."),
-            ident,
+            inner,
         ),
         |(path, ident)| UnresolvedName::Qualified(ModulePath(path), ident),
-    ))(input)
+    ))
+}
+
+fn unqualified<F>(inner: F) -> impl FnMut(&'static str) -> IResult<&'static str, UnresolvedName>
+where
+    F: FnMut(&'static str) -> IResult<&'static str, &'static str>,
+{
+    ws(map(inner, UnresolvedName::Unqualified))
 }
 
 fn module_path_segment(input: &'static str) -> IResult<&'static str, &'static str> {
@@ -671,16 +679,12 @@ fn module_path_segment(input: &'static str) -> IResult<&'static str, &'static st
     )))(input)
 }
 
-fn unqualified_name(input: &'static str) -> IResult<&'static str, UnresolvedName> {
-    ws(map(ident, UnresolvedName::Unqualified))(input)
-}
-
 fn lower_name(input: &'static str) -> IResult<&'static str, UnresolvedName> {
-    ws(map(lower_ident, UnresolvedName::Unqualified))(input)
+    alt((qualified(lower_ident), unqualified(lower_ident)))(input)
 }
 
 fn upper_name(input: &'static str) -> IResult<&'static str, UnresolvedName> {
-    ws(map(upper_ident, UnresolvedName::Unqualified))(input)
+    alt((qualified(upper_ident), unqualified(upper_ident)))(input)
 }
 
 fn lua_name(input: &'static str) -> IResult<&'static str, ForeignName> {
