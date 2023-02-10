@@ -270,6 +270,28 @@ fn case() {
 }
 
 #[test]
+fn let_in() {
+    assert_eq!(parse::expr(r#"let n = 123 in n;"#).unwrap().1, {
+        let n = UnresolvedName::Unqualified("n");
+        ast::Expr::Let {
+            definitions: BTreeMap::from([(
+                n,
+                vec![(
+                    ast::Lhs::Func {
+                        name: n,
+                        args: vec![],
+                    },
+                    ast::Expr::Term(ast::Term::Numeral(ast::Numeral::Int("123"))),
+                )],
+            )]),
+            in_expr: Box::new(ast::Expr::Term(ast::Term::Name(
+                UnresolvedName::Unqualified("n"),
+            ))),
+        }
+    })
+}
+
+#[test]
 fn empty_definition() {
     let (path, stats) = parse::parse("module Test; foo : Int;").unwrap();
     let module = ast::Module::from_statements(path, stats);

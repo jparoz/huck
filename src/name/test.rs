@@ -1,3 +1,5 @@
+use test_log::test;
+
 use crate::error::Error as HuckError;
 use crate::test_common::transpile;
 use crate::utils::assert_matches;
@@ -7,6 +9,11 @@ use super::Error as NameError;
 #[test]
 fn name_in_scope() {
     assert_matches!(transpile("foo = 123; bar = foo;"), Ok(_));
+}
+
+#[test]
+fn let_binding_in_scope() {
+    assert_matches!(transpile("foo = let bar = 123 in bar;"), Ok(_));
 }
 
 #[test]

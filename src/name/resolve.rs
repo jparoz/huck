@@ -554,12 +554,11 @@ impl<'a> ModuleResolver<'a> {
                 in_expr: unres_in,
             } => {
                 let mut definitions = BTreeMap::new();
+                let mut to_unbind = Vec::new();
                 for (unres_name, unres_assigns) in unres_defns {
-                    // @Checkme: is this binding stuff right?
-                    let binding = ResolvedName::local(unres_name.ident());
-                    self.bind(binding);
-
-                    let res_name = self.resolve_name(unres_name)?;
+                    let res_name = ResolvedName::local(unres_name.ident());
+                    self.bind(res_name);
+                    to_unbind.push(res_name);
 
                     let mut res_assigns = Vec::new();
                     for unres_assign in unres_assigns {
@@ -567,11 +566,14 @@ impl<'a> ModuleResolver<'a> {
                         res_assigns.push(res_assign);
                     }
                     definitions.insert(res_name, res_assigns);
-
-                    self.unbind(binding);
                 }
 
+                // Resolve the expression while the variables are in scope.
                 let in_expr = Box::new(self.resolve_expr(*unres_in)?);
+
+                for binding in to_unbind {
+                    self.unbind(binding);
+                }
 
                 Ok(ast::Expr::Let {
                     definitions,

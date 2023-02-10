@@ -199,7 +199,7 @@ impl<'a> CodeGenerator<'a> {
                     writeln!(
                         lua,
                         "local {} = {}",
-                        definition.name,
+                        definition.name.ident,
                         self.expression(definition.rhs)?
                     )?;
                 }
