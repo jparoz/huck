@@ -76,9 +76,9 @@ fn function_not() {
             r#"
                 function(...)
                     local _Test_0 = select(1, ...)
-                    local arg0 = _Test_0
+                    local _arg_0 = _Test_0
                     return (function()
-                        local case = {arg0}
+                        local case = {_arg_0}
                         if (case[1] == true) then return false end
                         if (case[1] == false) then return true end
                         error("Unmatched pattern")
@@ -101,10 +101,10 @@ fn function_and() {
                     local _Test_0 = select(1, ...)
                     return function(...)
                         local _Test_1 = select(1, ...)
-                        local arg0 = _Test_0
-                        local arg1 = _Test_1
+                        local _arg_0 = _Test_0
+                        local _arg_1 = _Test_1
                         return (function()
-                            local case = {arg0, arg1}
+                            local case = {_arg_0, _arg_1}
                             if (case[1] == true) and (case[2] == true) then
                                 return true
                             end

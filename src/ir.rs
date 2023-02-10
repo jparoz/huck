@@ -229,7 +229,7 @@ impl From<(Name, Vec<ast::Assignment<Name>>)> for Definition {
             // make a new lambda argument
             // which will immediately be scrutinised by the case expression.
             let names: Vec<Name> = (0..num_args)
-                .map(|n| Name::local(leak!("arg{}", n)))
+                .map(|n| Name::local(leak!("_arg_{}", n)))
                 .collect();
             let args = names.iter().cloned().map(Pattern::Bind).collect();
             let case_expr = Box::new(Expression::Tuple(
