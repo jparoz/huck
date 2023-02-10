@@ -75,8 +75,8 @@ fn function_not() {
                     local arg0 = _Test_0
                     return (function()
                         local case = {arg0}
-                        if (#case == 1) and (case[1] == true) then return false end
-                        if (#case == 1) and (case[1] == false) then return true end
+                        if (case[1] == true) then return false end
+                        if (case[1] == false) then return true end
                         error("Unmatched pattern")
                     end)()
                 end
@@ -99,11 +99,10 @@ fn function_and() {
                         local arg1 = _Test_1
                         return (function()
                             local case = {arg0, arg1}
-                            if (#case == 2) and (case[1] == true) and (case[2] == true) then
+                            if (case[1] == true) and (case[2] == true) then
                                 return true
                             end
-                            if (#case == 2) then return false end
-                            error("Unmatched pattern")
+                            return false
                         end)()
                     end
                 end

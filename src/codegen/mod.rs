@@ -560,16 +560,26 @@ fn pattern_match(
         // we don't need to bind anything at all.
         ir::Pattern::Underscore => (),
 
-        // @Note: the Lua logic is identical for Huck lists and tuples.
-        // This is because they have the same representation in Lua: a heterogenous list!
-        ir::Pattern::List(list) | ir::Pattern::Tuple(list) => {
-            // @Fixme @Errors: for tuples,
-            // this should give a runtime error saying something like
-            // "tuple of incorrect length",
-            // instead of just failing to pattern match.
-            //
+        ir::Pattern::List(list) => {
             // Check that the list is the correct length
             conditions.push(format!("#{} == {}", lua_arg_name, list.len()));
+
+            // Check that each pattern matches
+            for (i, pat) in list.into_iter().enumerate() {
+                let new_lua_arg_name = format!("{}[{}]", lua_arg_name, i + 1);
+                let (sub_conds, sub_binds) = pattern_match(pat, &new_lua_arg_name)?;
+                conditions.extend(sub_conds);
+                bindings.extend(sub_binds);
+            }
+        }
+
+        ir::Pattern::Tuple(list) => {
+            // @Todo @Errors: should this give a runtime error saying something like
+            // "tuple of incorrect length"
+            // when given the wrong number of arguments??
+
+            // @Note: we don't need to check that the tuple is the right length,
+            // because it's statically checked by the type system.
 
             // Check that each pattern matches
             for (i, pat) in list.into_iter().enumerate() {
