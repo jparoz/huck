@@ -184,6 +184,53 @@ fn function_add() {
 }
 
 #[test]
+fn function_binop_backticks() {
+    let module = typ_module(r#"foo x y = 123; bar = 4 `foo` 5;"#).unwrap();
+
+    // assert_eq!(
+    //     module.definitions[&name!("foo")].typ,
+    //     Type::Arrow(
+    //         Box::new(Type::Primitive(Primitive::Int)),
+    //         Box::new(Type::Arrow(
+    //             Box::new(Type::Primitive(Primitive::Int)),
+    //             Box::new(Type::Primitive(Primitive::Int))
+    //         ))
+    //     )
+    // );
+
+    let foo = &module.definitions[&name!("foo")].typ;
+    assert_matches!(foo, Type::Arrow(_, _));
+    let (l, r) = unwrap_match!(foo, Type::Arrow(l, r) => (l, r));
+    assert_matches!(**l, Type::Var(_));
+    let (r_l, r_r) = unwrap_match!(&**r, Type::Arrow(l, r) => (l, r));
+    assert_matches!(**r_l, Type::Var(_));
+    assert_matches!(**r_r, Type::Primitive(Primitive::Int));
+
+    assert_eq!(
+        module.definitions[&name!("bar")].typ,
+        Type::Primitive(Primitive::Int)
+    );
+}
+
+#[test]
+fn function_define_binop_backticks() {
+    let module = typ_module(r#"x `foo` y = 123; bar = 4 `foo` 5;"#).unwrap();
+
+    let foo = &module.definitions[&name!("foo")].typ;
+    assert_matches!(foo, Type::Arrow(_, _));
+    let (l, r) = unwrap_match!(foo, Type::Arrow(l, r) => (l, r));
+    assert_matches!(**l, Type::Var(_));
+    let (r_l, r_r) = unwrap_match!(&**r, Type::Arrow(l, r) => (l, r));
+    assert_matches!(**r_l, Type::Var(_));
+    assert_matches!(**r_r, Type::Primitive(Primitive::Int));
+
+    assert_eq!(
+        module.definitions[&name!("bar")].typ,
+        Type::Primitive(Primitive::Int)
+    );
+}
+
+#[test]
 fn constructor_unary() {
     let module = typ_module(
         r#"

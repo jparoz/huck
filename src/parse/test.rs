@@ -181,6 +181,23 @@ fn binop_plus() {
 }
 
 #[test]
+fn binop_backticks() {
+    assert_eq!(parse::statement(r#"bar = 4 `foo` 5;"#).unwrap().1, {
+        ast::Statement::AssignmentWithoutType((
+            ast::Lhs::Func {
+                name: UnresolvedName::Unqualified("bar"),
+                args: vec![],
+            },
+            ast::Expr::Binop {
+                operator: UnresolvedName::Unqualified("foo"),
+                lhs: Box::new(ast::Expr::Term(ast::Term::Numeral(ast::Numeral::Int("4")))),
+                rhs: Box::new(ast::Expr::Term(ast::Term::Numeral(ast::Numeral::Int("5")))),
+            },
+        ))
+    })
+}
+
+#[test]
 fn name_qualified_lower() {
     assert_eq!(
         parse::name(r#"Foo.bar"#).unwrap(),
