@@ -119,6 +119,22 @@ fn function_and() {
 }
 
 #[test]
+fn function_backticks_defined() {
+    assert_eq!(
+        transpile(r#"foo x y = 1 + x + 2 + y;"#).unwrap(),
+        transpile(r#"x `foo` y = 1 + x + 2 + y;"#).unwrap(),
+    )
+}
+
+#[test]
+fn function_backticks_used() {
+    assert_eq!(
+        transpile(r#"foo x y = 1 + x + 2 + y; bar = foo 3 4;"#).unwrap(),
+        transpile(r#"foo x y = 1 + x + 2 + y; bar = 3 `foo` 4;"#).unwrap(),
+    )
+}
+
+#[test]
 fn literal_list() {
     assert_eq!(
         transpile(r#"list = [1, 2, 3];"#).unwrap(),
