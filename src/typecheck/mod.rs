@@ -145,6 +145,18 @@ impl Typechecker {
         beta
     }
 
+    /// Takes a TypeScheme and replaces all quantified variables with fresh variables;
+    /// then returns the resulting Type.
+    fn instantiate(&mut self, ts: TypeScheme) -> Type {
+        let TypeScheme { vars, mut typ } = ts;
+        let sub = vars
+            .into_iter()
+            .zip(iter::repeat_with(|| self.fresh()))
+            .collect();
+        typ.apply(&sub);
+        typ
+    }
+
     fn typecheck_module(&mut self, module: Module<ResolvedName, ()>) -> Result<(), Error> {
         log::trace!(log::TYPECHECK, "Typechecking: module {};", module.path);
         // Set the new `Module`'s path.
@@ -235,6 +247,10 @@ impl Typechecker {
                          foreign import {require_string} ({foreign_name} as {name})",
                     module_path = module.path
                 );
+
+                let ts = self.generate_type_scheme(&type_scheme);
+                let typ = self.instantiate(ts);
+
                 // @Errors: check for name clashes
                 typechecked_module
                     .foreign_imports
@@ -243,7 +259,7 @@ impl Typechecker {
                     .push(ast::ForeignImportItem {
                         foreign_name,
                         name,
-                        typ: self.generate_type_scheme(&type_scheme).instantiate(),
+                        typ,
                         type_scheme,
                     });
             }
@@ -337,7 +353,7 @@ impl Typechecker {
                     }
 
                     Constraint::ExplicitInstance(t, ts) => {
-                        let new_constraint = Constraint::Equality(t, ts.instantiate());
+                        let new_constraint = Constraint::Equality(t, self.instantiate(ts));
                         write!(new_str, "{new_constraint:?}").unwrap();
                         next_constraints.push(new_constraint);
 
@@ -494,7 +510,7 @@ impl Typechecker {
                 "Including explicit type scheme: {explicit_type_scheme:?}",
             );
             let ts = self.generate_type_scheme(explicit_type_scheme);
-            typs.push(ts.instantiate());
+            typs.push(self.instantiate(ts));
         }
 
         // Constrain that each inferred assignment,
@@ -1109,14 +1125,5 @@ impl Type {
 impl TypeScheme {
     fn free_vars(&self) -> TypeVarSet<ResolvedName> {
         self.typ.free_vars().difference(&self.vars)
-    }
-
-    /// Takes a `TypeScheme` and throws away the quantifier.
-    /// This is equivalent to replacing the quantified variables
-    /// with new free variables,
-    /// but it better preserves variable names.
-    #[inline]
-    fn instantiate(self) -> Type {
-        self.typ
     }
 }

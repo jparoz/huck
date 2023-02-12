@@ -1,24 +1,3 @@
 module Short;
 
-(* mutualA : forall a. a -> a; *)
-(* mutualB : forall b. b -> b; *)
-(* mutualC : forall c. c -> c; *)
-
-(* mutualA : Int -> Int; *)
-(* mutualB : Int -> Int; *)
-(* mutualC : Int -> Int; *)
-
-mutualA x = mutualB x;
-mutualB x = mutualC x;
-mutualC x = mutualA x;
-
-(* foo : forall a b. a -> b; *)
-foo x = foo x;
-
-bar = let id x = x in id foo;
-
-exampleCase scrut = case scrut of {
-    1 -> "foo";
-    2 -> "bar";
-    _ -> "baz";
-};
+bar = let id x = x in (id 5, id "hi");
