@@ -56,6 +56,7 @@ mapped' = map double myLinkedList;
 (* We can define custom binary operators: *)
 (+++) : String -> String -> String;
 l +++ r = l <> l <> r <> r;
+infixr 4 +++;
 
 (* We can define mutually-recursive functions: *)
 (* (Note that currently this requires an explicit type signature) *)
