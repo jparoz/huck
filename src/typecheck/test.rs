@@ -181,6 +181,20 @@ fn function_id_used() {
 }
 
 #[test]
+fn function_id_let() {
+    let module = typ_module(r#"foo = let id a = a in (id 5, id "hi");"#).unwrap();
+
+    let foo = &module.definitions[&name!("foo")].typ;
+    assert_eq!(
+        *foo,
+        Type::Tuple(vec![
+            Type::Primitive(Primitive::Int),
+            Type::Primitive(Primitive::String)
+        ])
+    );
+}
+
+#[test]
 fn function_const() {
     let typ = typ(r#"const a b = a;"#).unwrap();
 
