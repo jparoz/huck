@@ -1,5 +1,6 @@
 module Short;
 
-foo = (5 : forall a. a);
-
-bar : forall a. a = 5;
+foo = (5 : Int);
+bar : Int = 5;
+baz : Int = unsafe lua {nil};
+quux : forall a. a = unsafe lua {nil};

@@ -13,6 +13,9 @@ pub enum Error {
     #[error("Could not unify type '{0}' with type '{1}' (recursive type)")]
     CouldNotUnifyRecursive(Type, Type),
 
+    #[error("Inferred type '{0}' could not be unified with explicit type '{1}'")]
+    CouldNotUnifyExplicit(Type, Type),
+
     // @Errors: this advice isn't super helpful
     #[error(
         "Could not solve the following type constraints: {}\n\

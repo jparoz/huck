@@ -76,6 +76,14 @@ impl ApplySub for Constraint {
                 t1.apply(sub);
                 t2.apply(sub);
             }
+            Constraint::ExplicitType(inferred, explicit) => {
+                inferred.apply(sub);
+
+                let pre_sub_explicit = explicit.clone();
+                explicit.apply(sub);
+                // @Checkme: is this always true?
+                assert_eq!(pre_sub_explicit, *explicit);
+            }
             Constraint::ImplicitInstance(t1, t2, m) => {
                 t1.apply(sub);
                 t2.apply(sub);

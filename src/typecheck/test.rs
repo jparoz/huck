@@ -555,3 +555,19 @@ fn arity_custom() {
         Ok(_)
     );
 }
+
+#[test]
+fn unify_explicit() {
+    assert_matches!(
+        typ("foo : forall a. a = 5;"),
+        Err(HuckError::Type(TypeError::CouldNotUnifyExplicit(_, _)))
+    )
+}
+
+#[test]
+fn unify_explicit_expr() {
+    assert_matches!(
+        typ("foo = (5 : forall a. a);"),
+        Err(HuckError::Type(TypeError::CouldNotUnifyExplicit(_, _)))
+    )
+}

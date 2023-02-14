@@ -90,7 +90,6 @@ impl ArityChecker {
                         let all_equal = iter.all(|x| x == first);
 
                         if !all_equal {
-                            // @Errors
                             log::error!(
                                 log::TYPECHECK,
                                 "Not all uses of type variable {name} have the same arity!"
