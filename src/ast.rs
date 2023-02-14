@@ -358,6 +358,7 @@ pub enum Term<Name> {
     String(&'static str),
     List(Vec<Expr<Name>>),
     Name(Name),
+    TypedExpr(Box<Expr<Name>>, TypeScheme<Name>),
     Parens(Box<Expr<Name>>),
     Tuple(Vec<Expr<Name>>),
     Unit,
@@ -389,9 +390,12 @@ impl<Name: Display + Copy> Display for Term<Name> {
             Name(n) => {
                 write!(f, "{}", n)
             }
-            Parens(e) => {
-                write!(f, "({})", e)
-            }
+
+            // TypedExpr(e, ts) => write!(f, "({e} : {ts})"),
+            TypedExpr(e, ts) => todo!("finish impl Display for ast::Term"),
+
+            Parens(e) => write!(f, "({e})"),
+
             Unit => write!(f, "()"),
         }
     }
@@ -403,6 +407,26 @@ impl<Name: Display + Copy> Display for Term<Name> {
 pub struct TypeScheme<Name> {
     pub vars: Vec<Name>,
     pub typ: TypeExpr<Name>,
+}
+
+impl<Name: Display> Display for TypeScheme<Name> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if !self.vars.is_empty() {
+            let mut iter = self.vars.iter().peekable();
+            while let Some(var) = iter.next() {
+                write!(f, "{var}")?;
+                if iter.peek().is_some() {
+                    write!(f, " ")?;
+                }
+                write!(f, ". ")?;
+            }
+        }
+
+        // write!(f, "{}", self.typ)
+        todo!("finish impl Display for ast::TypeScheme");
+
+        Ok(())
+    }
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]

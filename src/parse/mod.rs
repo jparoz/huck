@@ -618,9 +618,17 @@ fn term(input: &'static str) -> IResult<&'static str, Term<UnresolvedName>> {
         map(list(expr), Term::List),
         map(name, Term::Name),
         value(Term::Unit, unit),
+        typed_expr,
         map(parens(expr), |e| Term::Parens(Box::new(e))),
         map(tuple(expr), Term::Tuple),
     ))(input)
+}
+
+fn typed_expr(input: &'static str) -> IResult<&'static str, Term<UnresolvedName>> {
+    map(
+        parens(separated_pair(expr, reserved_op(":"), type_scheme)),
+        |(expr, ts)| Term::TypedExpr(Box::new(expr), ts),
+    )(input)
 }
 
 fn lower_ident(input: &'static str) -> IResult<&'static str, &'static str> {

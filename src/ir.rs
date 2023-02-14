@@ -275,7 +275,7 @@ impl From<ast::Expr<Name>> for Expression {
                     Expression::Tuple(es.into_iter().map(Expression::from).collect())
                 }
 
-                ast::Term::Parens(e) => Expression::from(*e),
+                ast::Term::TypedExpr(e, _) | ast::Term::Parens(e) => Expression::from(*e),
             },
 
             ast::Expr::App { func, argument } => Expression::App(

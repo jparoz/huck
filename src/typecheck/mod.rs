@@ -555,6 +555,14 @@ impl Typechecker {
             ast::Expr::Term(ast::Term::String(_)) => Type::Primitive(Primitive::String),
             ast::Expr::Term(ast::Term::Unit) => Type::Primitive(Primitive::Unit),
 
+            ast::Expr::Term(ast::Term::TypedExpr(ast_expr, ast_ts)) => {
+                let expr_typ = self.generate_expr(ast_expr);
+                let ts = self.generate_type_scheme(ast_ts);
+                let typ = self.instantiate(ts);
+                self.constrain(Constraint::Equality(expr_typ, typ.clone()));
+                typ
+            }
+
             ast::Expr::Term(ast::Term::Parens(e)) => self.generate_expr(e),
             ast::Expr::Term(ast::Term::List(es)) => {
                 let beta = self.fresh();

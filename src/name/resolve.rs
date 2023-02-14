@@ -522,6 +522,12 @@ impl<'a> ModuleResolver<'a> {
                     ast::Term::Tuple(res_es)
                 }
 
+                ast::Term::TypedExpr(unres_expr, unres_ts) => {
+                    let res_expr = self.resolve_expr(*unres_expr)?;
+                    let res_ts = self.resolve_type_scheme(unres_ts)?;
+                    ast::Term::TypedExpr(Box::new(res_expr), res_ts)
+                }
+
                 ast::Term::Parens(e) => ast::Term::Parens(Box::new(self.resolve_expr(*e)?)),
 
                 ast::Term::Numeral(s) => ast::Term::Numeral(s),
