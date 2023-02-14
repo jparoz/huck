@@ -95,7 +95,10 @@ impl ArityChecker {
                                 log::TYPECHECK,
                                 "Not all uses of type variable {name} have the same arity!"
                             );
-                            todo!()
+                            let mut arities = assumed_arities;
+                            arities.sort();
+                            arities.dedup();
+                            return Err(Error::IncorrectArityTypeVariable(name, arities));
                         }
                     }
 

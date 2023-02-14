@@ -1,6 +1,6 @@
 use crate::name::ResolvedName;
 use crate::types::Type;
-use crate::utils::debug_iter;
+use crate::utils::{debug_iter, display_iter};
 
 use super::Constraint;
 
@@ -24,4 +24,10 @@ pub enum Error {
     // @Errors: this name/message is probably not that helpful
     #[error("Usage of type `{0}` with incorrect arity {1} (actual arity {2})")]
     IncorrectArity(ResolvedName, usize, usize),
+
+    // @Errors: this name/message is probably not that helpful
+    #[error("Type variable `{0}` is used with multiple different arities: {}",
+        display_iter(.1.iter())
+        )]
+    IncorrectArityTypeVariable(ResolvedName, Vec<usize>),
 }
