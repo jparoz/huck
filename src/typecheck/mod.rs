@@ -348,6 +348,13 @@ impl Typechecker {
         // The constraints to be processed in the next pass.
         let mut next_constraints = Vec::new();
 
+        // This could be const when rust-lang/rust#69821 is closed (const fn is stabilised)
+        let explicit_discriminant: mem::Discriminant<Constraint> =
+            mem::discriminant(&Constraint::ExplicitType(
+                Type::Primitive(Primitive::Unit),
+                Type::Primitive(Primitive::Unit),
+            ));
+
         loop {
             // Keep track of whether we've processed any constraints in this pass.
             let mut processed_any_constraint = false;
@@ -357,22 +364,13 @@ impl Typechecker {
                 let constraint_str = format!("{constraint:?}");
                 let mut new_str = String::new();
 
+                let discriminant = mem::discriminant(&constraint);
+
                 match constraint {
-                    Constraint::Equality(t1, t2) => {
-                        let new_sub = t1.unify(t2)?;
-
-                        for c in constraints.iter_mut().chain(next_constraints.iter_mut()) {
-                            c.apply(&new_sub);
-                        }
-
-                        write!(new_str, "{new_sub:?}").unwrap();
-                        solution = new_sub.then(solution);
-
-                        processed_any_constraint = true;
-                    }
-
-                    Constraint::ExplicitType(inferred, explicit) => {
-                        let new_sub = inferred.unify_explicit(explicit)?;
+                    Constraint::Equality(t1, t2) | Constraint::ExplicitType(t1, t2) => {
+                        // If the constraint is an explicit type constraint,
+                        // then we pass that fact to `unify`.
+                        let new_sub = t1.unify(t2, discriminant == explicit_discriminant)?;
 
                         for c in constraints.iter_mut().chain(next_constraints.iter_mut()) {
                             c.apply(&new_sub);
@@ -1133,15 +1131,23 @@ impl Type {
     }
 
     /// Finds the most general unifier for two types.
-    fn unify(self, other: Self) -> Result<Substitution, Error> {
+    /// If `is_explicit` is true,
+    /// then the unification will be asymmetric
+    /// such that the right-hand-side type (`other`) will remain the same.
+    fn unify(self, other: Self, is_explicit: bool) -> Result<Substitution, Error> {
         let mut sub = Substitution::empty();
 
         let mut pairs = vec![(self, other)];
 
         while let Some((a, b)) = pairs.pop() {
-            match (a, b) {
-                (t1, t2) if t1 == t2 => (),
-                (Type::Var(var), t) | (t, Type::Var(var)) => {
+            match (a, b, is_explicit) {
+                (t1, t2, _) if t1 == t2 => (),
+
+                // If the LHS might be transformed into the RHS,
+                // or the RHS might be transformed inth the LHS
+                // *AND* the unification isn't for an explicit type,
+                // then we can unify the types.
+                (Type::Var(var), t, _) | (t, Type::Var(var), false) => {
                     if t.free_vars().contains(&var) {
                         // @CheckMe
                         return Err(Error::CouldNotUnifyRecursive(t, Type::Var(var)));
@@ -1154,62 +1160,26 @@ impl Type {
                         sub = sub.then(s);
                     }
                 }
-                (Type::List(t1), Type::List(t2)) => pairs.push((*t1, *t2)),
-                (Type::Tuple(ts1), Type::Tuple(ts2)) => {
+
+                (Type::List(t1), Type::List(t2), _) => pairs.push((*t1, *t2)),
+                (Type::Tuple(ts1), Type::Tuple(ts2), _) => {
                     for (t1, t2) in ts1.into_iter().zip(ts2.into_iter()) {
                         pairs.push((t1, t2));
                     }
                 }
-                (Type::Arrow(a1, b1), Type::Arrow(a2, b2))
-                | (Type::App(a1, b1), Type::App(a2, b2)) => {
+                (Type::Arrow(a1, b1), Type::Arrow(a2, b2), _)
+                | (Type::App(a1, b1), Type::App(a2, b2), _) => {
                     pairs.push((*a1, *a2));
                     pairs.push((*b1, *b2));
                 }
                 // @Todo: include `self` and `other` in the error as well
-                (t1, t2) => return Err(Error::CouldNotUnify(t1, t2)),
-            }
-        }
-
-        Ok(sub)
-    }
-
-    /// Unifies one type with another,
-    /// keeping the second type fixed.
-    /// This is used to typecheck explicit type signatures.
-    fn unify_explicit(self, explicit: Self) -> Result<Substitution, Error> {
-        let mut sub = Substitution::empty();
-
-        let mut pairs = vec![(self, explicit)];
-
-        while let Some((a, b)) = pairs.pop() {
-            match (a, b) {
-                (t1, t2) if t1 == t2 => (),
-                (Type::Var(var), t) => {
-                    if t.free_vars().contains(&var) {
-                        // @CheckMe
-                        return Err(Error::CouldNotUnifyRecursive(t, Type::Var(var)));
+                (t1, t2, _) => {
+                    if is_explicit {
+                        return Err(Error::CouldNotUnifyExplicit(t1, t2));
                     } else {
-                        let s = Substitution::single(var.clone(), t.clone());
-                        for (a2, b2) in pairs.iter_mut() {
-                            a2.apply(&s);
-                            b2.apply(&s);
-                        }
-                        sub = sub.then(s);
+                        return Err(Error::CouldNotUnify(t1, t2));
                     }
                 }
-                (Type::List(t1), Type::List(t2)) => pairs.push((*t1, *t2)),
-                (Type::Tuple(ts1), Type::Tuple(ts2)) => {
-                    for (t1, t2) in ts1.into_iter().zip(ts2.into_iter()) {
-                        pairs.push((t1, t2));
-                    }
-                }
-                (Type::Arrow(a1, b1), Type::Arrow(a2, b2))
-                | (Type::App(a1, b1), Type::App(a2, b2)) => {
-                    pairs.push((*a1, *a2));
-                    pairs.push((*b1, *b2));
-                }
-                // @Todo: include `self` and `explicit` in the error as well
-                (t1, t2) => return Err(Error::CouldNotUnifyExplicit(t1, t2)),
             }
         }
 
