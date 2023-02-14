@@ -30,6 +30,11 @@ pub fn resolve<Ty>(
     };
 
     for module in modules.values() {
+        // Add an empty Vec to the map,
+        // so that if the module is empty,
+        // we give this module the empty order.
+        resolver.ordered.entry(module.path).or_default();
+
         for name in module.definitions.keys() {
             resolver.visit(*name)?;
         }
