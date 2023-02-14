@@ -391,8 +391,7 @@ impl<Name: Display + Copy> Display for Term<Name> {
                 write!(f, "{}", n)
             }
 
-            // TypedExpr(e, ts) => write!(f, "({e} : {ts})"),
-            TypedExpr(e, ts) => todo!("finish impl Display for ast::Term"),
+            TypedExpr(e, ts) => write!(f, "({e} : {ts})"),
 
             Parens(e) => write!(f, "({e})"),
 
@@ -422,8 +421,7 @@ impl<Name: Display> Display for TypeScheme<Name> {
             }
         }
 
-        // write!(f, "{}", self.typ)
-        todo!("finish impl Display for ast::TypeScheme");
+        write!(f, "{}", self.typ)?;
 
         Ok(())
     }
@@ -437,6 +435,17 @@ pub enum TypeExpr<Name> {
     // @Future @TypeBinops: type-level binops
 }
 
+impl<Name: Display> Display for TypeExpr<Name> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TypeExpr::Term(term) => term.fmt(f),
+            // @Note: maybe need to add some parens here
+            TypeExpr::App(a, b) => write!(f, "{a} {b}"),
+            TypeExpr::Arrow(a, b) => write!(f, "{a} -> {b}"),
+        }
+    }
+}
+
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub enum TypeTerm<Name> {
     Concrete(Name),
@@ -445,6 +454,30 @@ pub enum TypeTerm<Name> {
     List(Box<TypeExpr<Name>>),
     Tuple(Vec<TypeExpr<Name>>),
     Unit,
+}
+
+impl<Name: Display> Display for TypeTerm<Name> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TypeTerm::Var(name) | TypeTerm::Concrete(name) => name.fmt(f),
+
+            TypeTerm::Parens(e) => write!(f, "({e})"),
+            TypeTerm::List(e) => write!(f, "[{e}]"),
+
+            TypeTerm::Tuple(es) => {
+                write!(
+                    f,
+                    "({})",
+                    es.iter()
+                        .map(|name| format!("{name}"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+
+            TypeTerm::Unit => write!(f, "()"),
+        }
+    }
 }
 
 /// Parsed representation of a new type definition (e.g. `type Foo = Bar;`).
