@@ -114,7 +114,8 @@ pub mod test {
     use super::*;
     use crate::compile::{compile, CompileInfo};
 
-    const PRELUDE_SRC: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/huck/Prelude.hk"));
+    pub const PRELUDE_SRC: &str =
+        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/huck/Prelude.hk"));
 
     /// Takes some Huck and turns it into Lua, doing every step in between.
     pub fn transpile(huck: &'static str) -> Result<String, HuckError> {

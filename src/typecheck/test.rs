@@ -9,7 +9,7 @@ use crate::parse::parse;
 use crate::precedence::ApplyPrecedence;
 use crate::typecheck::{typecheck, Error as TypeError};
 use crate::types::{Primitive, Type};
-use crate::utils::{assert_matches, unwrap_match};
+use crate::utils::{assert_matches, test::PRELUDE_SRC, unwrap_match};
 
 use crate::error::Error as HuckError;
 
@@ -22,8 +22,6 @@ macro_rules! name {
         }
     };
 }
-
-const PRELUDE_SRC: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/huck/Prelude.hk"));
 
 /// Typechecks the given module and returns the resulting GeneratableModule.
 fn typ_module(huck: &'static str) -> Result<Module<ResolvedName, Type>, HuckError> {
