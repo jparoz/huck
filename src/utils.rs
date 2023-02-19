@@ -111,11 +111,77 @@ pub(crate) use leak;
 
 #[cfg(test)]
 pub mod test {
+    use std::collections::BTreeMap;
+
     use super::*;
-    use crate::compile::{compile, CompileInfo};
+    use crate::{
+        ast,
+        compile::{compile, CompileInfo},
+        dependencies,
+        name::{self, ModulePath, ResolvedName},
+        parse::parse,
+        precedence::ApplyPrecedence,
+        typecheck,
+        types::Type,
+    };
 
     pub const PRELUDE_SRC: &str =
         include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/huck/Prelude.hk"));
+
+    /// Typechecks the given module.
+    pub fn typecheck(huck: &'static str) -> Result<ast::Module<ResolvedName, Type>, HuckError> {
+        let module = Box::leak(format!("module Test; {huck}").into_boxed_str());
+
+        // Parse
+        let mut parsed = Vec::new();
+        for src in [PRELUDE_SRC, module] {
+            let (module_path, statements) = parse(src)?;
+            parsed.push((module_path, statements));
+        }
+
+        // Post-parse processing
+        let mut modules = BTreeMap::new();
+        for (path, stats) in parsed {
+            modules.insert(path, ast::Module::from_statements(path, stats)?);
+        }
+
+        // Resolve
+        let mut resolver = name::Resolver::new();
+
+        // Start with the prelude...
+        let prelude_path = ModulePath("Prelude");
+        if let Some(unresolved_prelude) = modules.remove(&prelude_path) {
+            resolver.resolve_prelude(unresolved_prelude)?;
+        }
+
+        // Then resolve all other modules.
+        for module in modules.into_values() {
+            resolver.resolve_module(module)?;
+        }
+
+        // Check that any qualified names used actually exist.
+        let mut resolved_modules = resolver.finish()?;
+
+        // Apply operator precedences
+        let mut precs = BTreeMap::new();
+        for module in resolved_modules.values() {
+            for (name, defn) in module.definitions.iter() {
+                precs.extend(std::iter::repeat(name).zip(defn.precedence.iter()));
+            }
+        }
+
+        for module in resolved_modules.values_mut() {
+            module.apply(&precs);
+        }
+
+        // @Cleanup: this should be enforced by the type of crate::typecheck::typecheck
+        // Dependency resolution (not strictly needed for typechecking, but catches errors)
+        let _generation_orders = dependencies::resolve(&resolved_modules)?;
+
+        // Typecheck
+        let mut typechecked_modules = typecheck::typecheck(resolved_modules)?;
+        Ok(typechecked_modules.remove(&ModulePath("Test")).unwrap())
+    }
 
     /// Takes some Huck and turns it into Lua, doing every step in between.
     pub fn transpile(huck: &'static str) -> Result<String, HuckError> {
