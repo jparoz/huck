@@ -85,6 +85,117 @@ fn typ(s: &'static str) -> Result<Type, HuckError> {
 }
 
 #[test]
+fn error_could_not_unify() {
+    assert_matches!(
+        typ("foo = 5; bar = foo <> foo;"),
+        Err(HuckError::Type(TypeError::CouldNotUnify(
+            Type::Primitive(Primitive::Int),
+            Type::Primitive(Primitive::String)
+        )))
+    );
+}
+
+#[test]
+#[ignore] // @Fixme
+fn error_could_not_unify_recursive() {
+    assert_matches!(
+        typ("type Foo a = Foo a; foo x = Foo (foo x);"),
+        Err(HuckError::Type(TypeError::CouldNotUnifyRecursive(_, _)))
+    );
+}
+
+#[test]
+fn error_could_not_unify_explicit() {
+    assert_matches!(
+        typ("foo : forall a. a = 5;"),
+        Err(HuckError::Type(TypeError::CouldNotUnifyExplicit(_, _)))
+    );
+    assert_matches!(
+        typ("foo = (5 : forall a. a);"),
+        Err(HuckError::Type(TypeError::CouldNotUnifyExplicit(_, _)))
+    );
+}
+
+// @Note: how to test this?
+//
+// The only situation when this comes up is
+// when only ImplicitInstance constraints are remaining,
+// and none of them can be processed.
+//
+// This means that all of the remaining constraints have active type vars,
+// which seems to imply that they must be used in the other constraints,
+// which seems to imply that there is a loop of some kind,
+// which should have been detected and resolved.
+//
+// It could be that it's not really possible,
+// in which case we should replace the error constructor with unreachable!().
+//
+// #[test]
+// fn error_could_not_solve_type_constraints() {}
+
+#[test]
+fn error_incorrect_arity() {
+    // Int correctly
+    assert_matches!(
+        typ("foo : Int; foo = unsafe lua {};"),
+        Ok(Type::Primitive(Primitive::Int))
+    );
+
+    // Int incorrectly
+    assert_matches!(
+        typ("foo : Int (); foo = unsafe lua {};"),
+        Err(HuckError::Type(TypeError::IncorrectArity(_, 1, 0)))
+    );
+
+    // IO correctly
+    let the_typ = typ("foo : IO (); foo = unsafe lua {};");
+
+    assert_matches!(the_typ, Ok(Type::App(..)));
+
+    let (l, r) = unwrap_match!(the_typ, Ok(Type::App(l, r)) => (l, r));
+    assert_matches!(*l, Type::Primitive(Primitive::IO));
+    assert_matches!(*r, Type::Primitive(Primitive::Unit));
+
+    // IO incorrectly
+    assert_matches!(
+        typ("foo : IO; foo = unsafe lua {};"),
+        Err(HuckError::Type(TypeError::IncorrectArity(_, 0, 1)))
+    );
+    assert_matches!(
+        typ("foo : IO () Int; foo = unsafe lua {};"),
+        Err(HuckError::Type(TypeError::IncorrectArity(_, 2, 1)))
+    );
+
+    // Custom type correctly
+    assert_matches!(
+        typ("type Foo a b c = Bar a | Baz b c; foo : Foo Int () Float; foo = unsafe lua {};"),
+        Ok(_)
+    );
+
+    // Custom type incorrectly
+    assert_matches!(
+        typ("type Foo a b c = Bar a | Baz b c; foo : Foo Int; foo = unsafe lua {};"),
+        Err(HuckError::Type(TypeError::IncorrectArity(_, 1, 3)))
+    );
+    assert_matches!(
+        typ("type Foo a b c = Bar a | Baz b c; foo : Foo Int () () Float; foo = unsafe lua {};"),
+        Err(HuckError::Type(TypeError::IncorrectArity(_, 4, 3)))
+    );
+}
+
+#[test]
+fn error_incorrect_arity_type_variable() {
+    // Correct
+    assert_matches!(typ("id : forall a. a -> a; id x = x;"), Ok(_));
+
+    // Incorrect
+    assert_matches!(
+        typ("foo : forall a. a Int -> a; foo = unsafe lua {};"),
+        Err(HuckError::Type(TypeError::IncorrectArityTypeVariable(..)))
+    );
+}
+
+#[test]
 fn tuple_is_ordered() {
     let the_typ = typ(r#"a = (1, "hi");"#).unwrap();
     assert_eq!(the_typ, typ(r#"a = (3, "hello");"#).unwrap());
@@ -502,72 +613,5 @@ fn value_mutually_recursive() {
         Err(HuckError::DependencyResolution(
             DependencyError::CyclicDependency(_)
         ))
-    )
-}
-
-#[test]
-fn arity_int() {
-    assert!(matches!(
-        typ("foo : Int; foo = unsafe lua {};"),
-        Ok(Type::Primitive(Primitive::Int))
-    ));
-    assert!(matches!(
-        typ("foo : Int (); foo = unsafe lua {};"),
-        Err(HuckError::Type(TypeError::IncorrectArity(_, 1, 0)))
-    ));
-}
-
-#[test]
-fn arity_io() {
-    let the_typ = typ("foo : IO (); foo = unsafe lua {};");
-
-    assert_matches!(the_typ, Ok(Type::App(..)));
-
-    let (l, r) = unwrap_match!(the_typ, Ok(Type::App(l, r)) => (l, r));
-    assert_matches!(*l, Type::Primitive(Primitive::IO));
-    assert_matches!(*r, Type::Primitive(Primitive::Unit));
-
-    assert!(matches!(
-        typ("foo : IO; foo = unsafe lua {};"),
-        Err(HuckError::Type(TypeError::IncorrectArity(_, 0, 1)))
-    ));
-
-    assert!(matches!(
-        typ("foo : IO () Int; foo = unsafe lua {};"),
-        Err(HuckError::Type(TypeError::IncorrectArity(_, 2, 1)))
-    ));
-}
-
-#[test]
-fn arity_custom() {
-    assert_matches!(
-        typ("type Foo a b c = Bar a | Baz b c; foo : Foo Int; foo = unsafe lua {};"),
-        Err(HuckError::Type(TypeError::IncorrectArity(_, 1, 3)))
-    );
-
-    assert_matches!(
-        typ("type Foo a b c = Bar a | Baz b c; foo : Foo Int () () Float; foo = unsafe lua {};"),
-        Err(HuckError::Type(TypeError::IncorrectArity(_, 4, 3)))
-    );
-
-    assert_matches!(
-        typ("type Foo a b c = Bar a | Baz b c; foo : Foo Int () Float; foo = unsafe lua {};"),
-        Ok(_)
-    );
-}
-
-#[test]
-fn unify_explicit() {
-    assert_matches!(
-        typ("foo : forall a. a = 5;"),
-        Err(HuckError::Type(TypeError::CouldNotUnifyExplicit(_, _)))
-    )
-}
-
-#[test]
-fn unify_explicit_expr() {
-    assert_matches!(
-        typ("foo = (5 : forall a. a);"),
-        Err(HuckError::Type(TypeError::CouldNotUnifyExplicit(_, _)))
     )
 }
