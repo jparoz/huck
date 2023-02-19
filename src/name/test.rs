@@ -1,8 +1,7 @@
 use test_log::test;
 
 use crate::error::Error as HuckError;
-use crate::test_common::transpile;
-use crate::utils::assert_matches;
+use crate::utils::{assert_matches, test::transpile};
 
 use super::Error as NameError;
 

@@ -3,7 +3,7 @@ use test_log::test;
 use std::collections::BTreeMap;
 
 use crate::ast::Module;
-use crate::dependencies::{self, Error as DependencyError};
+use crate::dependencies;
 use crate::name::{self, ModulePath, ResolvedName, Source};
 use crate::parse::parse;
 use crate::precedence::ApplyPrecedence;
@@ -597,21 +597,4 @@ fn function_mutually_recursive() {
     let (l, r) = unwrap_match!(typ, Type::Arrow(l, r) => (l, r));
     assert_matches!(*l, Type::Var(_));
     assert_matches!(*r, Type::Var(_));
-}
-
-#[test]
-fn value_mutually_recursive() {
-    let module = typ_module(
-        r#"
-            foo = bar;
-            bar = foo;
-        "#,
-    );
-
-    assert_matches!(
-        module,
-        Err(HuckError::DependencyResolution(
-            DependencyError::CyclicDependency(_)
-        ))
-    )
 }

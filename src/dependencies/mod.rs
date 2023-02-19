@@ -7,6 +7,9 @@ use crate::{ast, log};
 mod error;
 pub use error::Error;
 
+#[cfg(test)]
+mod test;
+
 /// Resolves dependencies of definitions in the given module,
 /// and returns a [`GenerationOrder`] representing the topological order of definitions,
 /// such that:

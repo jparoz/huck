@@ -12,9 +12,6 @@ mod typecheck;
 mod types;
 mod utils;
 
-#[cfg(test)]
-mod test_common;
-
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Instant;

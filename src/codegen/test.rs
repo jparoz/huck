@@ -1,7 +1,6 @@
 use test_log::test;
 
-use crate::test_common::transpile;
-use crate::utils::normalize;
+use crate::utils::{normalize, test::transpile};
 
 macro_rules! wrap {
     ($name:literal, $expr:literal) => {
