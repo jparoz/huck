@@ -36,7 +36,7 @@ impl Display for Type {
             // @Future @CST: be smarter about when to include brackets
             Type::Arrow(a, b) => write!(f, "({} -> {})", a, b),
 
-            Type::App(a, b) => write!(f, "{} {}", a, b),
+            Type::App(a, b) => write!(f, "({} {})", a, b),
 
             Type::List(inner) => {
                 write!(f, "[{}]", inner)

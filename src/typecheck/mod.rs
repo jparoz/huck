@@ -94,15 +94,21 @@ impl Debug for Constraint {
     }
 }
 
-/// A simple wrapper around `Vec<Constraint>`,
-/// used to simplify logging and numbering constraints.
+/// Keeps track of all the emitted constraints,
+/// as well as giving them unique IDs for logging.
 #[derive(Debug, Default)]
-struct ConstraintSet(Vec<Constraint>);
+struct ConstraintSet(Vec<(usize, Constraint)>);
 
 impl ConstraintSet {
+    /// Adds the constraint to the set.
     fn add(&mut self, constraint: Constraint) {
-        log::trace!(log::TYPECHECK, "Emitting constraint: {:?}", constraint);
-        self.0.push(constraint)
+        use std::sync::atomic::{self, AtomicUsize};
+
+        static UNIQUE_COUNTER: AtomicUsize = AtomicUsize::new(0);
+        let id = UNIQUE_COUNTER.fetch_add(1, atomic::Ordering::Relaxed);
+
+        log::trace!(log::TYPECHECK, "Emitting constraint [{id}]: {constraint:?}");
+        self.0.push((id, constraint));
     }
 }
 
@@ -338,9 +344,12 @@ impl Typechecker {
         // Before we can solve, we still need to bind all assumptions.
         self.bind_assumptions_top_level()?;
 
+        // Find the length of the string built from formatting the length of constraints
+        let width = format!("{}", self.constraints.0.len()).len();
+
         log::trace!(log::TYPECHECK, "Starting constraint solving, constraints:");
-        for constraint in self.constraints.0.iter() {
-            log::trace!(log::TYPECHECK, "  {:?}", constraint);
+        for (id, constraint) in self.constraints.0.iter() {
+            log::trace!(log::TYPECHECK, "  [{id:width$}] {constraint:?}");
         }
 
         // Solve the type constraints by iterating over them in passes.
@@ -363,11 +372,14 @@ impl Typechecker {
                 Type::Primitive(Primitive::Unit),
             ));
 
+        // Find the width of the id column
+        let id_width = format!("{}", constraints.len()).len();
+
         loop {
             // Keep track of whether we've processed any constraints in this pass.
             let mut processed_any_constraint = false;
 
-            while let Some(constraint) = constraints.pop() {
+            while let Some((id, constraint)) = constraints.pop() {
                 // Keep track of the processing action, for logging
                 let constraint_str = format!("{constraint:?}");
                 let mut new_str = String::new();
@@ -380,7 +392,7 @@ impl Typechecker {
                         // then we pass that fact to `unify`.
                         let new_sub = t1.unify(t2, discriminant == explicit_discriminant)?;
 
-                        for c in constraints.iter_mut().chain(next_constraints.iter_mut()) {
+                        for (_id, c) in constraints.iter_mut().chain(next_constraints.iter_mut()) {
                             c.apply(&new_sub);
                         }
 
@@ -393,7 +405,7 @@ impl Typechecker {
                     Constraint::ExplicitInstance(t, ts) => {
                         let new_constraint = Constraint::Equality(t, self.instantiate(ts));
                         write!(new_str, "{new_constraint:?}").unwrap();
-                        next_constraints.push(new_constraint);
+                        next_constraints.push((id, new_constraint));
 
                         processed_any_constraint = true;
                     }
@@ -411,18 +423,21 @@ impl Typechecker {
                     {
                         let new_constraint = Constraint::ExplicitInstance(t1, t2.generalize(&m));
                         write!(new_str, "{new_constraint:?}").unwrap();
-                        next_constraints.push(new_constraint);
+                        next_constraints.push((id, new_constraint));
 
                         processed_any_constraint = true;
                     }
 
                     constraint @ Constraint::ImplicitInstance(..) => {
                         write!(new_str, "[Skipping for now]").unwrap();
-                        next_constraints.push(constraint);
+                        next_constraints.push((id, constraint));
                     }
                 }
 
-                log::trace!(log::TYPECHECK, "{constraint_str:>60} ==> {new_str}");
+                log::trace!(
+                    log::TYPECHECK,
+                    "[{id:id_width$}]  {constraint_str:>60} ==> {new_str}"
+                );
             }
 
             // If we didn't push any constraints into the queue, we're done.
@@ -455,7 +470,7 @@ impl Typechecker {
 
                 let mut cons = next_constraints.clone();
                 // Safe unwrap: we checked that !is_empty() above
-                let start = cons.pop().unwrap();
+                let (_id, start) = cons.pop().unwrap();
                 let (mut t1, start_t2, mut m) =
                     unwrap_match!(start, Constraint::ImplicitInstance(t1, t2, m) => (t1, t2, m));
 
@@ -463,12 +478,12 @@ impl Typechecker {
                     // @Checkme: is this always true? bit of a punt
                     assert!(m.is_empty());
 
-                    if let Some(pos) = cons.iter().position(|c| {
+                    if let Some(pos) = cons.iter().position(|(_id, c)| {
                         let c_t2 =
                             unwrap_match!(c, Constraint::ImplicitInstance(_t1, t2, _m) => t2);
                         &t1 == c_t2
                     }) {
-                        let removed = cons.remove(pos);
+                        let (_id, removed) = cons.remove(pos);
                         (t1, m) = unwrap_match!(
                             removed,
                             Constraint::ImplicitInstance(t1, _t2, m) => (t1, m)
@@ -494,7 +509,7 @@ impl Typechecker {
                     );
 
                     let new_type = self.fresh();
-                    for c in next_constraints.iter_mut() {
+                    for (_id, c) in next_constraints.iter_mut() {
                         let t1 = unwrap_match!(c, Constraint::ImplicitInstance(t1, _t2, _m) => t1);
                         *c = Constraint::Equality(new_type.clone(), t1.clone())
                     }
@@ -1104,16 +1119,16 @@ impl ActiveVars for Constraint {
     }
 }
 
-impl ActiveVars for &[Constraint] {
+impl ActiveVars for &[(usize, Constraint)] {
     fn active_vars(&self) -> TypeVarSet<ResolvedName> {
         self.iter()
-            .map(Constraint::active_vars)
+            .map(|(_id, c)| c.active_vars())
             .reduce(|vars1, vars2| vars1.union(&vars2))
             .unwrap_or_else(TypeVarSet::empty)
     }
 }
 
-impl ActiveVars for Vec<Constraint> {
+impl ActiveVars for Vec<(usize, Constraint)> {
     fn active_vars(&self) -> TypeVarSet<ResolvedName> {
         self.as_slice().active_vars()
     }
