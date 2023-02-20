@@ -94,6 +94,18 @@ impl Debug for Constraint {
     }
 }
 
+/// A simple wrapper around `Vec<Constraint>`,
+/// used to simplify logging and numbering constraints.
+#[derive(Debug, Default)]
+struct ConstraintSet(Vec<Constraint>);
+
+impl ConstraintSet {
+    fn add(&mut self, constraint: Constraint) {
+        log::trace!(log::TYPECHECK, "Emitting constraint: {:?}", constraint);
+        self.0.push(constraint)
+    }
+}
+
 /// Manages typechecking of a group of modules.
 #[derive(Debug, Default)]
 struct Typechecker {
@@ -102,7 +114,7 @@ struct Typechecker {
 
     /// All of the emitted constraints about the modules being typechecked.
     /// These are solved in [`Typechecker::solve`].
-    constraints: Vec<Constraint>,
+    constraints: ConstraintSet,
 
     /// All the currently assumed types of name uses.
     assumptions: BTreeMap<ResolvedName, Vec<Type>>,
@@ -146,11 +158,6 @@ impl Typechecker {
         }
     }
 
-    fn constrain(&mut self, constraint: Constraint) {
-        log::trace!(log::TYPECHECK, "Emitting constraint: {:?}", constraint);
-        self.constraints.push(constraint);
-    }
-
     /// Constrains all types in the given Vec to be equal, and returns that type.
     fn equate_all(&mut self, typs: Vec<Type>) -> Type {
         if typs.len() == 1 {
@@ -159,7 +166,8 @@ impl Typechecker {
 
         let beta = self.fresh();
         for typ in typs {
-            self.constrain(Constraint::Equality(beta.clone(), typ.clone()));
+            self.constraints
+                .add(Constraint::Equality(beta.clone(), typ.clone()));
         }
         beta
     }
@@ -331,7 +339,7 @@ impl Typechecker {
         self.bind_assumptions_top_level()?;
 
         log::trace!(log::TYPECHECK, "Starting constraint solving, constraints:");
-        for constraint in self.constraints.iter() {
+        for constraint in self.constraints.0.iter() {
             log::trace!(log::TYPECHECK, "  {:?}", constraint);
         }
 
@@ -343,7 +351,7 @@ impl Typechecker {
 
         // The constraints being processed in the current pass.
         // @Note: have to use mem::take so we can later on use self.fresh()
-        let mut constraints = mem::take(&mut self.constraints);
+        let mut constraints = mem::take(&mut self.constraints).0;
 
         // The constraints to be processed in the next pass.
         let mut next_constraints = Vec::new();
@@ -547,7 +555,7 @@ impl Typechecker {
             );
             let ts = self.generate_type_scheme(explicit_type_scheme);
             let explicit_type = self.instantiate(ts);
-            self.constrain(Constraint::ExplicitType(
+            self.constraints.add(Constraint::ExplicitType(
                 inferred_type,
                 explicit_type.clone(),
             ));
@@ -597,7 +605,8 @@ impl Typechecker {
                 let expr_typ = self.generate_expr(ast_expr);
                 let ts = self.generate_type_scheme(ast_ts);
                 let typ = self.instantiate(ts);
-                self.constrain(Constraint::ExplicitType(expr_typ, typ.clone()));
+                self.constraints
+                    .add(Constraint::ExplicitType(expr_typ, typ.clone()));
                 typ
             }
 
@@ -606,7 +615,8 @@ impl Typechecker {
                 let beta = self.fresh();
                 for e in es {
                     let e_type = self.generate_expr(e);
-                    self.constrain(Constraint::Equality(beta.clone(), e_type));
+                    self.constraints
+                        .add(Constraint::Equality(beta.clone(), e_type));
                 }
                 Type::List(Box::new(beta))
             }
@@ -621,7 +631,7 @@ impl Typechecker {
                 let t2 = self.generate_expr(argument);
                 let beta = self.fresh();
 
-                self.constrain(Constraint::Equality(
+                self.constraints.add(Constraint::Equality(
                     t1,
                     Type::Arrow(Box::new(t2), Box::new(beta.clone())),
                 ));
@@ -635,11 +645,11 @@ impl Typechecker {
                 let beta1 = self.fresh();
                 let beta2 = self.fresh();
 
-                self.constrain(Constraint::Equality(
+                self.constraints.add(Constraint::Equality(
                     t1,
                     Type::Arrow(Box::new(t2), Box::new(beta1.clone())),
                 ));
-                self.constrain(Constraint::Equality(
+                self.constraints.add(Constraint::Equality(
                     beta1,
                     Type::Arrow(Box::new(t3), Box::new(beta2.clone())),
                 ));
@@ -674,11 +684,12 @@ impl Typechecker {
                 let then_type = self.generate_expr(then_expr);
                 let else_type = self.generate_expr(else_expr);
 
-                self.constrain(Constraint::Equality(
+                self.constraints.add(Constraint::Equality(
                     cond_type,
                     Type::Primitive(Primitive::Bool),
                 ));
-                self.constrain(Constraint::Equality(then_type.clone(), else_type));
+                self.constraints
+                    .add(Constraint::Equality(then_type.clone(), else_type));
 
                 then_type
             }
@@ -731,7 +742,8 @@ impl Typechecker {
 
                 for (arg, lambda_type) in args.iter().zip(types.into_iter()) {
                     let actual_type = self.bind_pattern(arg);
-                    self.constrain(Constraint::Equality(actual_type, lambda_type))
+                    self.constraints
+                        .add(Constraint::Equality(actual_type, lambda_type))
                 }
 
                 res
@@ -887,7 +899,8 @@ impl Typechecker {
                     let partial_cons_type =
                         Type::Arrow(Box::new(arg_type), Box::new(partial_res_type.clone()));
 
-                    self.constrain(Constraint::Equality(acc, partial_cons_type));
+                    self.constraints
+                        .add(Constraint::Equality(acc, partial_cons_type));
 
                     partial_res_type
                 })
@@ -911,7 +924,7 @@ impl Typechecker {
                 for pat in pats {
                     let typ = self.bind_pattern(pat);
                     self.constraints
-                        .push(Constraint::Equality(beta.clone(), typ));
+                        .add(Constraint::Equality(beta.clone(), typ));
                 }
 
                 Type::List(Box::new(beta))
@@ -942,7 +955,8 @@ impl Typechecker {
     fn bind_assumptions_mono(&mut self, name: &ResolvedName, typ: &Type) {
         if let Some(assumptions) = self.assumptions.remove(name) {
             for assumed in assumptions {
-                self.constrain(Constraint::Equality(assumed, typ.clone()));
+                self.constraints
+                    .add(Constraint::Equality(assumed, typ.clone()));
                 log::trace!(log::TYPECHECK, "Bound (mono): {} to type {}", name, typ);
             }
         }
@@ -952,7 +966,7 @@ impl Typechecker {
     fn bind_assumptions_poly(&mut self, name: &ResolvedName, typ: &Type) {
         if let Some(assumptions) = self.assumptions.remove(name) {
             for assumed in assumptions {
-                self.constrain(Constraint::ImplicitInstance(
+                self.constraints.add(Constraint::ImplicitInstance(
                     assumed,
                     typ.clone(),
                     self.m_stack.iter().cloned().collect(),
@@ -985,8 +999,7 @@ impl Typechecker {
                             defn.typ.clone(),
                             TypeVarSet::empty(),
                         );
-                        log::trace!(log::TYPECHECK, "Emitting constraint: {:?}", constraint);
-                        self.constraints.push(constraint);
+                        self.constraints.add(constraint);
                     }
                 } else {
                     // @Note: If a definition isn't used in any of the typechecked code,
@@ -1030,8 +1043,7 @@ impl Typechecker {
                                 typ.clone(),
                                 TypeVarSet::empty(),
                             );
-                            log::trace!(log::TYPECHECK, "Emitting constraint: {:?}", constraint);
-                            self.constraints.push(constraint);
+                            self.constraints.add(constraint);
                         }
                     } else {
                         // @Errors @Warn: emit a warning for unused imports
@@ -1055,9 +1067,8 @@ impl Typechecker {
                             // but this is at least consistent and correct.
                             let sigma = typ.clone().generalize(&TypeVarSet::empty());
 
-                            let constraint = Constraint::ExplicitInstance(tau, sigma);
-                            log::trace!(log::TYPECHECK, "Emitting constraint: {:?}", constraint);
-                            self.constraints.push(constraint);
+                            self.constraints
+                                .add(Constraint::ExplicitInstance(tau, sigma));
                         }
                     }
                 }
