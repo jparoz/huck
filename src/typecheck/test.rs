@@ -147,6 +147,157 @@ fn error_incorrect_arity_type_variable() {
 }
 
 #[test]
+fn explicit_type_wrap_too_specific() {
+    assert_matches!(
+        utils::test::typecheck("type Wrap a = Wrap a; foo : forall a. a -> Wrap a; foo x = x;"),
+        Err(HuckError::Type(..))
+    );
+}
+
+#[test]
+fn explicit_type_wrap_too_general() {
+    assert_matches!(
+        utils::test::typecheck("type Wrap a = Wrap a; foo : forall a b. a -> b; foo x = Wrap x;"),
+        Err(HuckError::Type(..))
+    );
+}
+
+#[test]
+fn explicit_type_id_too_general() {
+    assert_matches!(
+        utils::test::typecheck("id : forall a b. a -> b; id x = x;"),
+        Err(HuckError::Type(..))
+    );
+}
+
+#[test]
+fn explicit_type_id_wrong_input_type() {
+    assert_matches!(
+        utils::test::typecheck("id : forall a. Int -> a; id x = x;"),
+        Err(HuckError::Type(..))
+    );
+}
+
+#[test]
+fn explicit_type_id_wrong_output_type() {
+    assert_matches!(
+        utils::test::typecheck("id : forall a. a -> Int; id x = x;"),
+        Err(HuckError::Type(..))
+    );
+}
+
+#[test]
+fn linked_list_map() {
+    let module = utils::test::typecheck(
+        r#"
+            type LinkedList a = Cons a (LinkedList a) | Nil;
+
+            map : forall a b. (a -> b) -> LinkedList a -> LinkedList b;
+            map f (Cons x xs) = Cons (f x) (map f xs);
+            map _ Nil = Nil;
+
+            myLinkedList : LinkedList Int = Cons 1 (Cons 2 (Cons 3 Nil));
+            mapped = map (\x -> x*2) myLinkedList;
+        "#,
+    )
+    .unwrap();
+
+    let typ = module.definitions[&name!("map")].typ.clone();
+    let (f, rest) = unwrap_match!(typ, Type::Arrow(f, rest) => (*f, *rest));
+
+    let (f_l, f_r) = unwrap_match!(f, Type::Arrow(l, r) => (*l, *r));
+    assert_matches!(f_l, Type::Var(_));
+    assert_matches!(f_r, Type::Var(_));
+
+    let (list, result) = unwrap_match!(rest, Type::Arrow(l, r) => (*l, *r));
+
+    let (list_cons, list_elem) = unwrap_match!(list, Type::App(cons, elem) => (*cons, *elem));
+    assert_eq!(list_cons, Type::Concrete(name!("LinkedList")));
+    assert_matches!(list_elem, Type::Var(_));
+
+    let (result_cons, result_elem) = unwrap_match!(result, Type::App(cons, elem) => (*cons, *elem));
+    assert_eq!(result_cons, Type::Concrete(name!("LinkedList")));
+    assert_matches!(result_elem, Type::Var(_));
+}
+
+#[test]
+fn linked_list_fold() {
+    let module = utils::test::typecheck(
+        r#"
+            type LinkedList a = Cons a (LinkedList a) | Nil;
+
+            fold : forall a b. ((a, b) -> b) -> b -> LinkedList a -> b;
+            fold f acc (Cons x xs) = fold f (f (x, acc)) xs;
+            fold _ acc Nil = acc;
+
+            myLinkedList : LinkedList Int = Cons 1 (Cons 2 (Cons 3 Nil));
+            sumOfList = fold (\(n, acc) -> n + acc) 0 myLinkedList;
+        "#,
+    )
+    .unwrap();
+
+    let typ = module.definitions[&name!("fold")].typ.clone();
+    let (f, rest) = unwrap_match!(typ, Type::Arrow(f, rest) => (*f, *rest));
+
+    let (f_l, f_r) = unwrap_match!(f, Type::Arrow(l, r) => (*l, *r));
+    assert_matches!(f_l, Type::Tuple(_));
+    assert_matches!(f_r, Type::Var(_));
+
+    let (zero, rest) = unwrap_match!(rest, Type::Arrow(l, r) => (*l, *r));
+    assert_matches!(zero, Type::Var(_));
+
+    let (list, result) = unwrap_match!(rest, Type::Arrow(l, r) => (*l, *r));
+
+    let (list_cons, list_elem) = unwrap_match!(list, Type::App(cons, elem) => (*cons, *elem));
+    assert_eq!(list_cons, Type::Concrete(name!("LinkedList")));
+    assert_matches!(list_elem, Type::Var(_));
+
+    assert_matches!(result, Type::Var(_));
+
+    assert_eq!(zero, result);
+}
+
+#[test]
+fn linked_list_unfold() {
+    let module = utils::test::typecheck(
+        r#"
+            type LinkedList a = Cons a (LinkedList a) | Nil;
+            type Maybe a = Just a | Nothing;
+
+            unfold : forall a b. (b -> Maybe (a, b)) -> b -> LinkedList a;
+            unfold f seed =
+                let go s = case f s of {
+                    (Just (x, s')) -> Cons x (go s');
+                    Nothing -> Nil;
+                } in go seed;
+
+            thousand = unfold (\n -> if n > 0 then Just (n, n-1) else Nothing) 1000;
+        "#,
+    )
+    .unwrap();
+
+    // @Checkme: not yet confirmed that this code is correct, becuase the unwrap above fails first
+    let typ = module.definitions[&name!("unfold")].typ.clone();
+    let (f, rest) = unwrap_match!(typ, Type::Arrow(f, rest) => (*f, *rest));
+
+    let (f_l, f_r) = unwrap_match!(f, Type::Arrow(l, r) => (*l, *r));
+    assert_matches!(f_l, Type::Var(_));
+
+    let (f_r_cons, f_r_elem) = unwrap_match!(f_r, Type::App(cons, elem) => (*cons, *elem));
+    assert_eq!(f_r_cons, Type::Concrete(name!("Maybe")));
+    assert_matches!(f_r_elem, Type::Tuple(_));
+
+    let (seed, result) = unwrap_match!(rest, Type::Arrow(l, r) => (*l, *r));
+    assert_matches!(seed, Type::Var(_));
+
+    let (result_cons, result_elem) = unwrap_match!(result, Type::App(cons, elem) => (*cons, *elem));
+    assert_eq!(result_cons, Type::Concrete(name!("LinkedList")));
+    assert_matches!(result_elem, Type::Var(_));
+
+    assert_eq!(f_l, seed);
+}
+
+#[test]
 fn tuple_is_ordered() {
     let module = utils::test::typecheck(
         r#"
