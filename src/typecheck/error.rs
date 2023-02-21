@@ -1,8 +1,8 @@
 use crate::name::ResolvedName;
 use crate::types::Type;
-use crate::utils::{debug_iter, display_iter};
+use crate::utils::display_iter;
 
-use super::Constraint;
+use super::ConstraintSet;
 
 /// An enum representing all possible type errors.
 #[derive(thiserror::Error, Debug)]
@@ -18,11 +18,11 @@ pub enum Error {
 
     // @Errors: this advice isn't super helpful
     #[error(
-        "Could not solve the following type constraints: {}\n\
-         Maybe try adding some more specific types to recursive definitions.",
-        debug_iter(.0.iter())
+        "Could not solve the following type constraints:\n\
+         {0:?}\n\
+         Maybe try adding some more specific types to recursive definitions."
     )]
-    CouldNotSolveTypeConstraints(Vec<(usize, Constraint)>),
+    CouldNotSolveTypeConstraints(ConstraintSet),
 
     // @Errors: this name/message is probably not that helpful
     #[error("Usage of type `{0}` with incorrect arity {1} (actual arity {2})")]

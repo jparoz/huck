@@ -96,8 +96,8 @@ impl Debug for Constraint {
 
 /// Keeps track of all the emitted constraints,
 /// as well as giving them unique IDs for logging.
-#[derive(Debug, Default)]
-struct ConstraintSet(Vec<(usize, Constraint)>);
+#[derive(Default)]
+pub struct ConstraintSet(Vec<(usize, Constraint)>);
 
 impl ConstraintSet {
     /// Adds the constraint to the set.
@@ -109,6 +109,15 @@ impl ConstraintSet {
 
         log::trace!(log::TYPECHECK, "Emitting constraint [{id}]: {constraint:?}");
         self.0.push((id, constraint));
+    }
+}
+
+impl Debug for ConstraintSet {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (id, constraint) in self.0.iter() {
+            writeln!(f, "[{id}] {constraint:?}")?;
+        }
+        Ok(())
     }
 }
 
@@ -489,8 +498,11 @@ impl Typechecker {
                             Constraint::ImplicitInstance(t1, _t2, m) => (t1, m)
                         );
                     } else {
+                        // @DRY: same error below
                         log::trace!(log::TYPECHECK, "  They did not form a loop.");
-                        return Err(Error::CouldNotSolveTypeConstraints(next_constraints));
+                        return Err(Error::CouldNotSolveTypeConstraints(ConstraintSet(
+                            next_constraints,
+                        )));
                     }
                 }
 
@@ -514,8 +526,11 @@ impl Typechecker {
                         *c = Constraint::Equality(new_type.clone(), t1.clone())
                     }
                 } else {
+                    // @DRY: same error above
                     log::trace!(log::TYPECHECK, "  They did not form a loop.");
-                    return Err(Error::CouldNotSolveTypeConstraints(next_constraints));
+                    return Err(Error::CouldNotSolveTypeConstraints(ConstraintSet(
+                        next_constraints,
+                    )));
                 }
             }
 
@@ -1175,8 +1190,10 @@ impl Type {
                 // then we can unify the types.
                 (Type::Var(var), t, _) | (t, Type::Var(var), false) => {
                     if t.free_vars().contains(&var) {
-                        // @CheckMe
-                        return Err(Error::CouldNotUnifyRecursive(t, Type::Var(var)));
+                        // @CheckMe: is this actually unreachable?
+                        // used to read:
+                        // return Err(Error::CouldNotUnifyRecursive(t, Type::Var(var)));
+                        unreachable!()
                     } else {
                         let s = Substitution::single(var.clone(), t.clone());
                         for (a2, b2) in pairs.iter_mut() {
