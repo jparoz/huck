@@ -9,12 +9,14 @@ repos:
         entry: scripts/empty.sh
         language: script
         pass_filenames: true
+        stages: [commit]
       - id: nocommit
         name: Check for `nocommit` instances
         description: Check if any committed files contain the string `nocommit`
         entry: sh -c "! git grep --ignore-case nocommit -- :/src"
         language: system
         pass_filenames: false
+        stages: [commit]
       - id: cargo-test
         name: cargo test
         description: Run cargo test on the committed code
@@ -22,6 +24,7 @@ repos:
         language: system
         types_or: [rust, toml]
         pass_filenames: false
+        stages: [push]
       - id: cargo-doc
         name: cargo doc
         description: Ensure that documentation builds correctly
@@ -29,3 +32,4 @@ repos:
         language: system
         types_or: [rust, toml]
         pass_filenames: false
+        stages: [push]
