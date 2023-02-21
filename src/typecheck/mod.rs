@@ -1190,10 +1190,7 @@ impl Type {
                 // then we can unify the types.
                 (Type::Var(var), t, _) | (t, Type::Var(var), false) => {
                     if t.free_vars().contains(&var) {
-                        // @CheckMe: is this actually unreachable?
-                        // used to read:
-                        // return Err(Error::CouldNotUnifyRecursive(t, Type::Var(var)));
-                        unreachable!()
+                        return Err(Error::CouldNotUnifyRecursive(t, Type::Var(var)));
                     } else {
                         let s = Substitution::single(var.clone(), t.clone());
                         for (a2, b2) in pairs.iter_mut() {

@@ -150,7 +150,7 @@ fn error_incorrect_arity_type_variable() {
 fn explicit_type_wrap_too_specific() {
     assert_matches!(
         utils::test::typecheck("type Wrap a = Wrap a; foo : forall a. a -> Wrap a; foo x = x;"),
-        Err(HuckError::Type(..))
+        Err(HuckError::Type(TypeError::CouldNotUnifyRecursive(_, _)))
     );
 }
 
