@@ -258,7 +258,46 @@ fn linked_list_fold() {
 }
 
 #[test]
-fn linked_list_unfold() {
+fn linked_list_unfold_direct() {
+    let module = utils::test::typecheck(
+        r#"
+            type LinkedList a = Cons a (LinkedList a) | Nil;
+            type Maybe a = Just a | Nothing;
+
+            unfold : forall a b. (b -> Maybe (a, b)) -> b -> LinkedList a;
+            unfold f seed = case f seed of {
+                    (Just (x, seed')) -> Cons x (unfold f seed');
+                    Nothing -> Nil;
+                };
+
+            thousand = unfold (\n -> if n > 0 then Just (n, n-1) else Nothing) 1000;
+        "#,
+    )
+    .unwrap();
+
+    // @Checkme: not yet confirmed that this code is correct, becuase the unwrap above fails first
+    let typ = module.definitions[&name!("unfold")].typ.clone();
+    let (f, rest) = unwrap_match!(typ, Type::Arrow(f, rest) => (*f, *rest));
+
+    let (f_l, f_r) = unwrap_match!(f, Type::Arrow(l, r) => (*l, *r));
+    assert_matches!(f_l, Type::Var(_));
+
+    let (f_r_cons, f_r_elem) = unwrap_match!(f_r, Type::App(cons, elem) => (*cons, *elem));
+    assert_eq!(f_r_cons, Type::Concrete(name!("Maybe")));
+    assert_matches!(f_r_elem, Type::Tuple(_));
+
+    let (seed, result) = unwrap_match!(rest, Type::Arrow(l, r) => (*l, *r));
+    assert_matches!(seed, Type::Var(_));
+
+    let (result_cons, result_elem) = unwrap_match!(result, Type::App(cons, elem) => (*cons, *elem));
+    assert_eq!(result_cons, Type::Concrete(name!("LinkedList")));
+    assert_matches!(result_elem, Type::Var(_));
+
+    assert_eq!(f_l, seed);
+}
+
+#[test]
+fn linked_list_unfold_let() {
     let module = utils::test::typecheck(
         r#"
             type LinkedList a = Cons a (LinkedList a) | Nil;
@@ -450,6 +489,18 @@ fn function_id_let() {
             Type::Primitive(Primitive::String)
         ])
     );
+}
+
+#[test]
+fn function_id_let_generic() {
+    let module = utils::test::typecheck(r#"foo x = let id a = a in id x;"#).unwrap();
+
+    let foo = module.definitions[&name!("foo")].typ.clone();
+
+    let (l, r) = unwrap_match!(foo, Type::Arrow(l, r) => (*l, *r));
+    assert_matches!(l, Type::Var(_));
+    assert_matches!(r, Type::Var(_));
+    assert_eq!(l, r);
 }
 
 #[test]
