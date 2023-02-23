@@ -1,5 +1,6 @@
-use std::fmt::{self, Debug, Write};
-use std::{collections::BTreeMap, time::Instant};
+use std::collections::BTreeMap;
+use std::fmt::{self, Debug};
+use std::time::Instant;
 use std::{iter, mem};
 
 use crate::ast::{self, Module};
@@ -103,7 +104,7 @@ impl Debug for Constraint {
 /// Keeps track of all the emitted constraints,
 /// as well as giving them unique IDs for logging.
 #[derive(Default)]
-pub struct ConstraintSet(Vec<(usize, Constraint)>);
+pub struct ConstraintSet(Vec<(Constraint, usize)>);
 
 impl ConstraintSet {
     /// Adds the constraint to the set.
@@ -117,13 +118,13 @@ impl ConstraintSet {
             log::TYPECHECK,
             "    Emitting constraint [{id}]: {constraint:?}"
         );
-        self.0.push((id, constraint));
+        self.0.push((constraint, id));
     }
 }
 
 impl Debug for ConstraintSet {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for (id, constraint) in self.0.iter() {
+        for (constraint, id) in self.0.iter() {
             writeln!(f, "[{id}] {constraint:?}")?;
         }
         Ok(())
@@ -361,7 +362,7 @@ impl Typechecker {
         let width = format!("{}", self.constraints.0.len()).len();
 
         log::trace!(log::TYPECHECK, "Starting constraint solving, constraints:");
-        for (id, constraint) in self.constraints.0.iter() {
+        for (constraint, id) in self.constraints.0.iter() {
             log::trace!(log::TYPECHECK, "  [{id:width$}] {constraint:?}");
         }
 
@@ -371,12 +372,23 @@ impl Typechecker {
         // The solution substitution, built up as we go.
         let mut solution = Substitution::empty();
 
-        // The constraints being processed in the current pass.
+        // The constraints as they are being processed.
+        let mut constraints = mem::take(&mut self.constraints.0);
+        constraints.sort_unstable();
+
         // Split out the explicit constraints, to be processed last.
-        let (mut explicit_constraints, mut constraints): (Vec<_>, Vec<_>) =
-            self.constraints.0.drain(..).partition(|(_id, constraint)| {
-                matches!(constraint, Constraint::ExplicitType { .. })
-            });
+        // This is valid because the Ord impl for Constraint sorts ExplicitTypes last.
+        let first_explicit_index = constraints
+            .iter()
+            .position(|(constraint, _id)| matches!(constraint, Constraint::ExplicitType { .. }))
+            .unwrap_or(constraints.len());
+        let mut explicit_constraints = constraints.split_off(first_explicit_index);
+
+        // @Note: This could more succinctly use `constraints.iter().is_partitioned(...)`
+        // when `is_partitioned` is stabilised.
+        debug_assert!(explicit_constraints
+            .iter()
+            .all(|(constraint, _id)| { matches!(constraint, Constraint::ExplicitType { .. }) }));
 
         // The constraints to be processed in the next pass.
         let mut next_constraints = Vec::new();
@@ -388,38 +400,22 @@ impl Typechecker {
             // Keep track of whether we've processed any constraints in this pass.
             let mut processed_any_constraint = false;
 
-            while let Some((id, constraint)) = constraints.pop() {
+            while let Some((constraint, id)) = constraints.pop() {
                 // Keep track of the processing action, for logging
                 let constraint_str = format!("{constraint:?}");
-                let mut new_str = String::new();
 
-                match constraint {
-                    Constraint::Equality(t1, t2) => {
-                        // Find the most general unifier.
-                        let new_sub = t1.unify(t2)?;
+                let sub = match constraint {
+                    Constraint::Equality(t1, t2) => t1.unify(t2)?,
 
-                        // Apply the unifying substitution to the remaining constraints.
-                        for (_id, c) in constraints
-                            .iter_mut()
-                            .chain(next_constraints.iter_mut())
-                            .chain(explicit_constraints.iter_mut())
-                        {
-                            c.apply(&new_sub);
-                        }
-
-                        // Include this substitution in the solution.
-                        write!(new_str, "{new_sub:?}").unwrap();
-                        solution = new_sub.then(solution);
-
-                        processed_any_constraint = true;
-                    }
-
-                    Constraint::ExplicitInstance(t, ts) => {
-                        let new_constraint = Constraint::Equality(t, self.instantiate(ts));
-                        write!(new_str, "{new_constraint:?}").unwrap();
-                        next_constraints.push((id, new_constraint));
-
-                        processed_any_constraint = true;
+                    Constraint::ExplicitInstance(t1, ts) => {
+                        // @Note:
+                        // Conceptually,
+                        // this is turned into an Equality constraint,
+                        // then unified;
+                        // but to reduce iterations,
+                        // we shortcut by doing it all at once.
+                        let new_t2 = self.instantiate(ts);
+                        t1.unify(new_t2)?
                     }
 
                     Constraint::ImplicitInstance(t1, t2, m)
@@ -433,26 +429,49 @@ impl Typechecker {
                             )
                             .is_empty() =>
                     {
-                        let new_constraint = Constraint::ExplicitInstance(t1, t2.generalize(&m));
-                        write!(new_str, "{new_constraint:?}").unwrap();
-                        next_constraints.push((id, new_constraint));
-
-                        processed_any_constraint = true;
+                        // @Note:
+                        // Conceptually,
+                        // this is first turned into an ExplicitInstance constraint,
+                        // then into an Equality constraint,
+                        // then unified;
+                        // but to reduce iterations,
+                        // we shortcut by doing it all at once.
+                        let ts = t2.generalize(&m);
+                        let new_t2 = self.instantiate(ts);
+                        t1.unify(new_t2)?
                     }
 
                     constraint @ Constraint::ImplicitInstance(..) => {
-                        write!(new_str, "[Skipping for now]").unwrap();
-                        next_constraints.push((id, constraint));
+                        // Skip this for now.
+                        next_constraints.push((constraint, id));
+                        continue;
                     }
 
                     // Unreachable, because we partitioned these out to be processed at the end.
                     Constraint::ExplicitType { .. } => unreachable!(),
+                };
+
+                // If we're here,
+                // it means we didn't skip the constraint,
+                // so we've processed something.
+                processed_any_constraint = true;
+
+                // Apply the unifying substitution to the remaining constraints.
+                for (c, _id) in constraints
+                    .iter_mut()
+                    .chain(next_constraints.iter_mut())
+                    .chain(explicit_constraints.iter_mut())
+                {
+                    c.apply(&sub);
                 }
 
                 log::trace!(
                     log::TYPECHECK,
-                    "[{id:id_width$}]  {constraint_str:>60} ==> {new_str}"
+                    "[{id:id_width$}]  {constraint_str:>60} ==> {sub:?}"
                 );
+
+                // Include this substitution in the solution.
+                solution = sub.then(solution);
             }
 
             // If we didn't push any constraints into the queue, we're done.
@@ -485,7 +504,7 @@ impl Typechecker {
 
                 let mut cons = next_constraints.clone();
                 // Safe unwrap: we checked that !is_empty() above
-                let (_id, start) = cons.pop().unwrap();
+                let (start, _id) = cons.pop().unwrap();
                 let (mut t1, start_t2, mut m) =
                     unwrap_match!(start, Constraint::ImplicitInstance(t1, t2, m) => (t1, t2, m));
 
@@ -493,12 +512,12 @@ impl Typechecker {
                     // @Checkme: is this always true? bit of a punt
                     assert!(m.is_empty());
 
-                    if let Some(pos) = cons.iter().position(|(_id, c)| {
+                    if let Some(pos) = cons.iter().position(|(c, _id)| {
                         let c_t2 =
                             unwrap_match!(c, Constraint::ImplicitInstance(_t1, t2, _m) => t2);
                         &t1 == c_t2
                     }) {
-                        let (_id, removed) = cons.remove(pos);
+                        let (removed, _id) = cons.remove(pos);
                         (t1, m) = unwrap_match!(
                             removed,
                             Constraint::ImplicitInstance(t1, _t2, m) => (t1, m)
@@ -527,7 +546,7 @@ impl Typechecker {
                     );
 
                     let new_type = self.fresh();
-                    for (_id, c) in next_constraints.iter_mut() {
+                    for (c, _id) in next_constraints.iter_mut() {
                         let t1 = unwrap_match!(c, Constraint::ImplicitInstance(t1, _t2, _m) => t1);
                         *c = Constraint::Equality(new_type.clone(), t1.clone())
                     }
@@ -547,7 +566,7 @@ impl Typechecker {
 
         // Now we've solved all the inferred type constraints,
         // we can solve explicit type constraints.
-        for (id, constraint) in explicit_constraints {
+        for (constraint, id) in explicit_constraints {
             let constraint_str = format!("{constraint:?}");
 
             let (inferred, explicit) = unwrap_match!(
@@ -559,7 +578,7 @@ impl Typechecker {
             let new_sub = inferred.explicit(explicit)?;
 
             // Apply the unifying substitution to the remaining constraints.
-            for (_id, c) in constraints.iter_mut().chain(next_constraints.iter_mut()) {
+            for (c, _id) in constraints.iter_mut().chain(next_constraints.iter_mut()) {
                 c.apply(&new_sub);
             }
 
@@ -1174,16 +1193,16 @@ impl ActiveVars for Constraint {
     }
 }
 
-impl ActiveVars for &[(usize, Constraint)] {
+impl ActiveVars for &[(Constraint, usize)] {
     fn active_vars(&self) -> TypeVarSet<ResolvedName> {
         self.iter()
-            .map(|(_id, c)| c.active_vars())
+            .map(|(c, _id)| c.active_vars())
             .reduce(|vars1, vars2| vars1.union(&vars2))
             .unwrap_or_else(TypeVarSet::empty)
     }
 }
 
-impl ActiveVars for Vec<(usize, Constraint)> {
+impl ActiveVars for Vec<(Constraint, usize)> {
     fn active_vars(&self) -> TypeVarSet<ResolvedName> {
         self.as_slice().active_vars()
     }

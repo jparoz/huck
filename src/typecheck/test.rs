@@ -22,8 +22,8 @@ fn error_could_not_unify() {
     assert_matches!(
         utils::test::typecheck("foo = 5; bar = foo <> foo;"),
         Err(HuckError::Type(TypeError::CouldNotUnify(
-            Type::Primitive(Primitive::Int),
             Type::Primitive(Primitive::String),
+            Type::Primitive(Primitive::Int),
             _,
             _
         )))
