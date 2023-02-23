@@ -11,7 +11,7 @@ use crate::types;
 /// and collecting statements referring to the same function
 /// into a single `Definition` struct for each function name.
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Module<Name: Ord, Ty> {
+pub struct Module<Name: Ord + Copy, Ty> {
     pub path: ModulePath,
     pub definitions: BTreeMap<Name, Definition<Name, Ty>>,
 
@@ -26,7 +26,7 @@ pub struct Module<Name: Ord, Ty> {
     pub foreign_exports: Vec<(&'static str, Expr<Name>)>,
 }
 
-impl<Name: Ord, Ty> Module<Name, Ty> {
+impl<Name: Ord + Copy, Ty> Module<Name, Ty> {
     pub fn new(path: ModulePath) -> Self {
         Self {
             path,
@@ -66,7 +66,7 @@ impl<Name> Default for Definition<Name, ()> {
 
 /// A Statement is a sum type for any of the top-level Huck constructs.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub enum Statement<Name: Ord, Ty> {
+pub enum Statement<Name: Ord + Copy, Ty> {
     Import(ModulePath, Vec<Name>),
     /// Includes the quotation marks in the require string
     ForeignImport(&'static str, Vec<ForeignImportItem<Name, Ty>>),
@@ -482,7 +482,7 @@ impl<Name: Display> Display for TypeTerm<Name> {
 
 /// Parsed representation of a new type definition (e.g. `type Foo = Bar;`).
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub struct TypeDefinition<Name: Ord, Ty> {
+pub struct TypeDefinition<Name: Ord + Copy, Ty> {
     pub name: Name,
     pub vars: types::TypeVarSet<Name>,
     pub constructors: BTreeMap<Name, ConstructorDefinition<Name, Ty>>,

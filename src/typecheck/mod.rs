@@ -755,7 +755,7 @@ impl Typechecker {
             ast::Expr::Lambda { args, rhs } => {
                 let typevars: Vec<TypeVar<ResolvedName>> =
                     args.iter().map(|_| self.fresh_var()).collect();
-                let types: Vec<Type> = typevars.iter().map(|v| Type::Var(v.clone())).collect();
+                let types: Vec<Type> = typevars.iter().map(|v| Type::Var(*v)).collect();
                 let typevar_count = typevars.len();
 
                 self.m_stack.extend(typevars);
@@ -807,7 +807,7 @@ impl Typechecker {
         for var in vars.iter() {
             // The final returned type of the constructor needs to reflect this type argument;
             // so we mark that here.
-            typ = Type::App(Box::new(typ), Box::new(Type::Var(var.clone())));
+            typ = Type::App(Box::new(typ), Box::new(Type::Var(*var)));
         }
 
         let mut constructors = BTreeMap::new();
@@ -1154,7 +1154,7 @@ impl Type {
         match self {
             Type::Concrete(_) | Type::Primitive(_) => TypeVarSet::empty(),
 
-            Type::Var(var) => TypeVarSet::single(var.clone()),
+            Type::Var(var) => TypeVarSet::single(*var),
             Type::Arrow(a, b) | Type::App(a, b) => a.free_vars().union(&b.free_vars()),
             Type::List(t) => t.free_vars(),
             Type::Tuple(v) => v
@@ -1192,7 +1192,7 @@ impl Type {
                     if t.free_vars().contains(&var) {
                         return Err(Error::CouldNotUnifyRecursive(t, Type::Var(var)));
                     } else {
-                        let s = Substitution::single(var.clone(), t.clone());
+                        let s = Substitution::single(var, t.clone());
                         for (a2, b2) in pairs.iter_mut() {
                             a2.apply(&s);
                             b2.apply(&s);

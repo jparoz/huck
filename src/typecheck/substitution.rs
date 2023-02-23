@@ -22,7 +22,7 @@ impl Substitution {
             let mut new_to = to.clone();
             new_to.apply(&next);
             for (_, b) in next.0.iter_mut() {
-                b.apply(&Substitution::single(fr.clone(), to.clone()));
+                b.apply(&Substitution::single(fr, to.clone()));
             }
 
             // Assert because there should never be a swap already in the sub with the same var!

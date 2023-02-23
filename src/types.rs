@@ -83,13 +83,13 @@ impl Display for TypeScheme {
     }
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
-pub enum TypeVar<Name: Ord> {
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
+pub enum TypeVar<Name: Ord + Copy> {
     Generated(usize),
     Explicit(Name),
 }
 
-impl<Name: Display + Ord> Display for TypeVar<Name> {
+impl<Name: Display + Ord + Copy> Display for TypeVar<Name> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             TypeVar::Generated(id) => write!(f, "t{}", id),
@@ -99,9 +99,9 @@ impl<Name: Display + Ord> Display for TypeVar<Name> {
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
-pub struct TypeVarSet<Name: Ord>(BTreeSet<TypeVar<Name>>);
+pub struct TypeVarSet<Name: Ord + Copy>(BTreeSet<TypeVar<Name>>);
 
-impl<Name: Ord + Clone> TypeVarSet<Name> {
+impl<Name: Ord + Clone + Copy> TypeVarSet<Name> {
     pub fn empty() -> TypeVarSet<Name> {
         TypeVarSet(BTreeSet::new())
     }
@@ -147,7 +147,7 @@ impl<Name: Ord + Clone> TypeVarSet<Name> {
     }
 }
 
-impl<Name: Ord> IntoIterator for TypeVarSet<Name> {
+impl<Name: Ord + Copy> IntoIterator for TypeVarSet<Name> {
     type Item = TypeVar<Name>;
     type IntoIter = <BTreeSet<TypeVar<Name>> as IntoIterator>::IntoIter;
 
@@ -156,7 +156,7 @@ impl<Name: Ord> IntoIterator for TypeVarSet<Name> {
     }
 }
 
-impl<Name: Ord + Clone> Extend<TypeVar<Name>> for TypeVarSet<Name> {
+impl<Name: Ord + Copy> Extend<TypeVar<Name>> for TypeVarSet<Name> {
     fn extend<T>(&mut self, iter: T)
     where
         T: IntoIterator<Item = TypeVar<Name>>,
@@ -167,13 +167,13 @@ impl<Name: Ord + Clone> Extend<TypeVar<Name>> for TypeVarSet<Name> {
     }
 }
 
-impl<Name: Ord> FromIterator<TypeVar<Name>> for TypeVarSet<Name> {
+impl<Name: Ord + Copy> FromIterator<TypeVar<Name>> for TypeVarSet<Name> {
     fn from_iter<I: IntoIterator<Item = TypeVar<Name>>>(iter: I) -> Self {
         TypeVarSet(BTreeSet::from_iter(iter))
     }
 }
 
-impl<Name: Ord + Display> Display for TypeVarSet<Name> {
+impl<Name: Ord + Display + Copy> Display for TypeVarSet<Name> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{{ ")?;
         for v in self.0.iter() {
