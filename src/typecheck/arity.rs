@@ -55,7 +55,7 @@ impl ArityChecker {
     fn assume_arity(&mut self, name: ResolvedName, arity: usize) {
         log::trace!(
             log::TYPECHECK,
-            "Assuming type name {} has arity {}",
+            "    Assuming type name {} has arity {}",
             name,
             arity
         );
@@ -138,7 +138,7 @@ impl ArityChecker {
 
             log::trace!(
                 log::TYPECHECK,
-                "Checking that all assumed arities of {name} matches the actual arity {actual_arity}"
+                "  Checking that all assumed arities of {name} matches the actual arity {actual_arity}"
             );
 
             for assumed_arity in assumed_arities {

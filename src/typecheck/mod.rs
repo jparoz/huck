@@ -62,10 +62,9 @@ pub enum Constraint {
     Equality(Type, Type),
 
     /// Used for explicit type annotations.
-    /// Causes the left type (inferred)
-    /// to be unified with the right type (explicit),
-    /// and a substitution from the left to the right type to be applied.
-    ExplicitType(Type, Type),
+    /// Causes the inferred type to be unified with the explicit type,
+    /// and a corresponding substitution to be applied.
+    ExplicitType { inferred: Type, explicit: Type },
 
     /// Used when one type needs to be an instance of another type,
     /// but the type scheme isn't yet known.
@@ -81,14 +80,16 @@ pub enum Constraint {
 impl Debug for Constraint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Constraint::Equality(a, b) => write!(f, "{} ≡ {}", a, b),
+            Constraint::Equality(a, b) => write!(f, "{a} ≡ {b}"),
             // @Cleanup: better message?
-            Constraint::ExplicitType(a, b) => write!(f, "{} ≡ {} (explicit type)", a, b),
+            Constraint::ExplicitType { inferred, explicit } => {
+                write!(f, "{inferred} ≡ {explicit} (explicit type)")
+            }
             Constraint::ImplicitInstance(a, b, m) => {
-                write!(f, "{} ≤ {} where M is {}", a, b, m)
+                write!(f, "{a} ≤ {b} where M is {m}")
             }
             Constraint::ExplicitInstance(tau, sigma) => {
-                write!(f, "{} ≼ {}", tau, sigma)
+                write!(f, "{tau} ≼ {sigma}")
             }
         }
     }
@@ -107,7 +108,10 @@ impl ConstraintSet {
         static UNIQUE_COUNTER: AtomicUsize = AtomicUsize::new(0);
         let id = UNIQUE_COUNTER.fetch_add(1, atomic::Ordering::Relaxed);
 
-        log::trace!(log::TYPECHECK, "Emitting constraint [{id}]: {constraint:?}");
+        log::trace!(
+            log::TYPECHECK,
+            "    Emitting constraint [{id}]: {constraint:?}"
+        );
         self.0.push((id, constraint));
     }
 }
@@ -164,7 +168,7 @@ impl Typechecker {
             }
         } else {
             let typ = self.fresh();
-            log::trace!(log::TYPECHECK, "Assuming type: {} : {}", name, typ);
+            log::trace!(log::TYPECHECK, "    Assuming type: {} : {}", name, typ);
             self.assumptions
                 .entry(name)
                 .or_insert_with(|| Vec::with_capacity(1))
@@ -206,16 +210,11 @@ impl Typechecker {
 
         // Generate constraints for each definition, while keeping track of inferred types
         for (name, defn) in module.definitions {
-            log::trace!(log::TYPECHECK, "Inferring type for {name}");
+            log::trace!(log::TYPECHECK, "  Inferring type for {name}");
 
             let typ = self.generate_definition(&defn);
 
-            log::trace!(
-                log::TYPECHECK,
-                "Initial inferred type for {}: {}",
-                name,
-                typ
-            );
+            log::trace!(log::TYPECHECK, "  Initial inferred type for {name}: {typ}",);
 
             let typed_defn = {
                 let ast::Definition {
@@ -263,7 +262,7 @@ impl Typechecker {
         for (path, names) in module.imports {
             log::trace!(
                 log::IMPORT,
-                "Inserting into scope of {insert_path}: import {path} ({names:?})",
+                "  Inserting into scope of {insert_path}: import {path} ({names:?})",
                 insert_path = module.path
             );
             // @Errors: check for name clashes
@@ -285,7 +284,7 @@ impl Typechecker {
             {
                 log::trace!(
                     log::IMPORT,
-                    "Inserting into scope of {module_path}: \
+                    "  Inserting into scope of {module_path}: \
                          foreign import {require_string} ({foreign_name} as {name})",
                     module_path = module.path
                 );
@@ -318,7 +317,7 @@ impl Typechecker {
         if module.path != prelude_path {
             log::trace!(
                 log::IMPORT,
-                "Importing contents of Prelude into {}",
+                "  Importing contents of Prelude into {}",
                 module.path
             );
             let prelude = &self.modules[&prelude_path];
@@ -368,18 +367,14 @@ impl Typechecker {
         let mut solution = Substitution::empty();
 
         // The constraints being processed in the current pass.
-        // @Note: have to use mem::take so we can later on use self.fresh()
-        let mut constraints = mem::take(&mut self.constraints).0;
+        // Split out the explicit constraints, to be processed last.
+        let (mut explicit_constraints, mut constraints): (Vec<_>, Vec<_>) =
+            self.constraints.0.drain(..).partition(|(_id, constraint)| {
+                matches!(constraint, Constraint::ExplicitType { .. })
+            });
 
         // The constraints to be processed in the next pass.
         let mut next_constraints = Vec::new();
-
-        // This could be const when rust-lang/rust#69821 is closed (const fn is stabilised)
-        let explicit_discriminant: mem::Discriminant<Constraint> =
-            mem::discriminant(&Constraint::ExplicitType(
-                Type::Primitive(Primitive::Unit),
-                Type::Primitive(Primitive::Unit),
-            ));
 
         // Find the width of the id column
         let id_width = format!("{}", constraints.len()).len();
@@ -393,18 +388,21 @@ impl Typechecker {
                 let constraint_str = format!("{constraint:?}");
                 let mut new_str = String::new();
 
-                let discriminant = mem::discriminant(&constraint);
-
                 match constraint {
-                    Constraint::Equality(t1, t2) | Constraint::ExplicitType(t1, t2) => {
-                        // If the constraint is an explicit type constraint,
-                        // then we pass that fact to `unify`.
-                        let new_sub = t1.unify(t2, discriminant == explicit_discriminant)?;
+                    Constraint::Equality(t1, t2) => {
+                        // Find the most general unifier.
+                        let new_sub = t1.unify(t2)?;
 
-                        for (_id, c) in constraints.iter_mut().chain(next_constraints.iter_mut()) {
+                        // Apply the unifying substitution to the remaining constraints.
+                        for (_id, c) in constraints
+                            .iter_mut()
+                            .chain(next_constraints.iter_mut())
+                            .chain(explicit_constraints.iter_mut())
+                        {
                             c.apply(&new_sub);
                         }
 
+                        // Include this substitution in the solution.
                         write!(new_str, "{new_sub:?}").unwrap();
                         solution = new_sub.then(solution);
 
@@ -441,6 +439,9 @@ impl Typechecker {
                         write!(new_str, "[Skipping for now]").unwrap();
                         next_constraints.push((id, constraint));
                     }
+
+                    // Unreachable, because we partitioned these out to be processed at the end.
+                    Constraint::ExplicitType { .. } => unreachable!(),
                 }
 
                 log::trace!(
@@ -539,6 +540,32 @@ impl Typechecker {
             mem::swap(&mut constraints, &mut next_constraints);
         }
 
+        // Now we've solved all the inferred type constraints,
+        // we can solve explicit type constraints.
+        for (id, constraint) in explicit_constraints {
+            let constraint_str = format!("{constraint:?}");
+
+            let (inferred, explicit) = unwrap_match!(
+                constraint,
+                Constraint::ExplicitType { inferred, explicit } => (inferred, explicit)
+            );
+
+            // Make sure the explicit type is compatible with the inferred type.
+            let new_sub = inferred.explicit(explicit)?;
+
+            // Apply the unifying substitution to the remaining constraints.
+            for (_id, c) in constraints.iter_mut().chain(next_constraints.iter_mut()) {
+                c.apply(&new_sub);
+            }
+
+            // Include this substitution in the solution.
+            log::trace!(
+                log::TYPECHECK,
+                "[{id:id_width$}]  {constraint_str:>60} ==> {new_sub:?}"
+            );
+            solution = new_sub.then(solution);
+        }
+
         log::trace!(log::TYPECHECK, "{:-^100}", " FINISH SOLVING ");
         log::trace!(log::TYPECHECK, "Solution:");
         for (fr, to) in solution.iter() {
@@ -572,26 +599,26 @@ impl Typechecker {
             .collect();
 
         // Constrain that each inferred assignment should all be equal.
-        let inferred_type = self.equate_all(typs);
+        let inferred = self.equate_all(typs);
 
-        // @Cleanup: Maybe just always return inferred_type
+        // @Cleanup: Maybe just always return inferred
         //
         // If there's an explicit type,
         // constrain that the inferred type should be unified with the explicit type.
         if let Some(ref explicit_type_scheme) = definition.explicit_type {
             log::trace!(
                 log::TYPECHECK,
-                "Including explicit type scheme: {explicit_type_scheme:?}",
+                "    Including explicit type scheme: {explicit_type_scheme:?}",
             );
             let ts = self.generate_type_scheme(explicit_type_scheme);
             let explicit_type = self.instantiate(ts);
-            self.constraints.add(Constraint::ExplicitType(
-                inferred_type,
-                explicit_type.clone(),
-            ));
+            self.constraints.add(Constraint::ExplicitType {
+                inferred,
+                explicit: explicit_type.clone(),
+            });
             explicit_type
         } else {
-            inferred_type
+            inferred
         }
     }
 
@@ -635,8 +662,10 @@ impl Typechecker {
                 let expr_typ = self.generate_expr(ast_expr);
                 let ts = self.generate_type_scheme(ast_ts);
                 let typ = self.instantiate(ts);
-                self.constraints
-                    .add(Constraint::ExplicitType(expr_typ, typ.clone()));
+                self.constraints.add(Constraint::ExplicitType {
+                    inferred: expr_typ,
+                    explicit: typ.clone(),
+                });
                 typ
             }
 
@@ -987,7 +1016,12 @@ impl Typechecker {
             for assumed in assumptions {
                 self.constraints
                     .add(Constraint::Equality(assumed, typ.clone()));
-                log::trace!(log::TYPECHECK, "Bound (mono): {} to type {}", name, typ);
+                log::trace!(
+                    log::TYPECHECK,
+                    "      Bound (mono): {} to type {}",
+                    name,
+                    typ
+                );
             }
         }
     }
@@ -1003,7 +1037,7 @@ impl Typechecker {
                 ));
                 log::trace!(
                     log::TYPECHECK,
-                    "Bound (poly): {} to type {} (M = {})",
+                    "      Bound (poly): {} to type {} (M = {})",
                     name,
                     typ,
                     self.m_stack
@@ -1122,9 +1156,10 @@ trait ActiveVars {
 impl ActiveVars for Constraint {
     fn active_vars(&self) -> TypeVarSet<ResolvedName> {
         match self {
-            // @Checkme: same for explicit type?
-            Constraint::Equality(t1, t2) | Constraint::ExplicitType(t1, t2) => {
-                t1.free_vars().union(&t2.free_vars())
+            Constraint::Equality(t1, t2) => t1.free_vars().union(&t2.free_vars()),
+            Constraint::ExplicitType { inferred, explicit } => {
+                // @Checkme: is this the right thing?
+                inferred.free_vars().union(&explicit.free_vars())
             }
             Constraint::ExplicitInstance(t, sigma) => t.free_vars().union(&sigma.free_vars()),
             Constraint::ImplicitInstance(t1, t2, m) => {
@@ -1172,23 +1207,16 @@ impl Type {
     }
 
     /// Finds the most general unifier for two types.
-    /// If `is_explicit` is true,
-    /// then the unification will be asymmetric
-    /// such that the right-hand-side type (`other`) will remain the same.
-    fn unify(self, other: Self, is_explicit: bool) -> Result<Substitution, Error> {
+    fn unify(self, other: Self) -> Result<Substitution, Error> {
         let mut sub = Substitution::empty();
 
         let mut pairs = vec![(self, other)];
 
         while let Some((a, b)) = pairs.pop() {
-            match (a, b, is_explicit) {
-                (t1, t2, _) if t1 == t2 => (),
+            match (a, b) {
+                (t1, t2) if t1 == t2 => (),
 
-                // If the LHS might be transformed into the RHS,
-                // or the RHS might be transformed inth the LHS
-                // *AND* the unification isn't for an explicit type,
-                // then we can unify the types.
-                (Type::Var(var), t, _) | (t, Type::Var(var), false) => {
+                (Type::Var(var), t) | (t, Type::Var(var)) => {
                     if t.free_vars().contains(&var) {
                         return Err(Error::CouldNotUnifyRecursive(t, Type::Var(var)));
                     } else {
@@ -1201,24 +1229,64 @@ impl Type {
                     }
                 }
 
-                (Type::List(t1), Type::List(t2), _) => pairs.push((*t1, *t2)),
-                (Type::Tuple(ts1), Type::Tuple(ts2), _) => {
+                (Type::List(t1), Type::List(t2)) => pairs.push((*t1, *t2)),
+                (Type::Tuple(ts1), Type::Tuple(ts2)) => {
                     for (t1, t2) in ts1.into_iter().zip(ts2.into_iter()) {
                         pairs.push((t1, t2));
                     }
                 }
-                (Type::Arrow(a1, b1), Type::Arrow(a2, b2), _)
-                | (Type::App(a1, b1), Type::App(a2, b2), _) => {
+                (Type::Arrow(a1, b1), Type::Arrow(a2, b2))
+                | (Type::App(a1, b1), Type::App(a2, b2)) => {
                     pairs.push((*a1, *a2));
                     pairs.push((*b1, *b2));
                 }
                 // @Todo: include `self` and `other` in the error as well
-                (t1, t2, _) => {
-                    if is_explicit {
-                        return Err(Error::CouldNotUnifyExplicit(t1, t2));
+                (t1, t2) => {
+                    return Err(Error::CouldNotUnify(t1, t2));
+                }
+            }
+        }
+
+        Ok(sub)
+    }
+
+    /// Finds a unifier which substitutes the inferred type (self) into the explicit type.
+    fn explicit(self, explicit: Self) -> Result<Substitution, Error> {
+        let mut sub = Substitution::empty();
+
+        let mut pairs = vec![(self, explicit)];
+
+        while let Some((a, b)) = pairs.pop() {
+            match (a, b) {
+                (t1, t2) if t1 == t2 => (),
+
+                (Type::Var(var), t) => {
+                    if t.free_vars().contains(&var) {
+                        return Err(Error::CouldNotUnifyRecursive(t, Type::Var(var)));
                     } else {
-                        return Err(Error::CouldNotUnify(t1, t2));
+                        let s = Substitution::single(var, t.clone());
+                        for (a2, b2) in pairs.iter_mut() {
+                            a2.apply(&s);
+                            b2.apply(&s);
+                        }
+                        sub = sub.then(s);
                     }
+                }
+
+                (Type::List(t1), Type::List(t2)) => pairs.push((*t1, *t2)),
+                (Type::Tuple(ts1), Type::Tuple(ts2)) => {
+                    for (t1, t2) in ts1.into_iter().zip(ts2.into_iter()) {
+                        pairs.push((t1, t2));
+                    }
+                }
+                (Type::Arrow(a1, b1), Type::Arrow(a2, b2))
+                | (Type::App(a1, b1), Type::App(a2, b2)) => {
+                    pairs.push((*a1, *a2));
+                    pairs.push((*b1, *b2));
+                }
+                // @Todo: include `self` and `other` in the error as well
+                (t1, t2) => {
+                    return Err(Error::CouldNotUnifyExplicit(t1, t2));
                 }
             }
         }
