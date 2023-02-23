@@ -3,7 +3,7 @@ use std::fmt::{self, Display};
 
 use crate::name::ResolvedName;
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub enum Type {
     Var(TypeVar<ResolvedName>),
     Concrete(ResolvedName),
@@ -53,7 +53,7 @@ impl Display for Type {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub enum Primitive {
     Int,
     Float,
@@ -64,7 +64,7 @@ pub enum Primitive {
     IO,
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub struct TypeScheme {
     pub vars: TypeVarSet<ResolvedName>,
     pub typ: Type,

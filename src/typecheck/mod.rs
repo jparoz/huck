@@ -54,17 +54,21 @@ pub fn typecheck(
     Ok(typechecked_modules)
 }
 
-#[derive(PartialEq, Eq, Clone)]
+// @Note: The order here is important!
+// It's the order that constraints will be processed.
+//
+// In particular,
+// ExplicitType constraints MUST be processed last.
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum Constraint {
     /// Used when two types should be equal.
     /// Causes the two types to be unified,
     /// and a substitution to the most general unifier to be applied.
     Equality(Type, Type),
 
-    /// Used for explicit type annotations.
-    /// Causes the inferred type to be unified with the explicit type,
-    /// and a corresponding substitution to be applied.
-    ExplicitType { inferred: Type, explicit: Type },
+    /// Used when one type needs to be an instance of another type,
+    /// and the type scheme is explicitly known.
+    ExplicitInstance(Type, TypeScheme),
 
     /// Used when one type needs to be an instance of another type,
     /// but the type scheme isn't yet known.
@@ -72,9 +76,10 @@ pub enum Constraint {
     /// which should be excluded from quantification by the resulting type scheme.
     ImplicitInstance(Type, Type, TypeVarSet<ResolvedName>),
 
-    /// Used when one type needs to be an instance of another type,
-    /// and the type scheme is explicitly known.
-    ExplicitInstance(Type, TypeScheme),
+    /// Used for explicit type annotations.
+    /// Causes the inferred type to be unified with the explicit type,
+    /// and a corresponding substitution to be applied.
+    ExplicitType { inferred: Type, explicit: Type },
 }
 
 impl Debug for Constraint {
