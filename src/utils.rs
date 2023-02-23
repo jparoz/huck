@@ -79,7 +79,7 @@ macro_rules! unwrap_match {
         match $matched {
             $pat => $bound,
             _ => panic!(
-                "Tried to unwrap_match {matched:?} with pattern {pat}",
+                "Tried to unwrap_match! {matched:?} with pattern {pat}",
                 matched = $matched,
                 pat = stringify!($pat)
             ),
