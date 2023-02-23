@@ -23,17 +23,18 @@ fn error_could_not_unify() {
         utils::test::typecheck("foo = 5; bar = foo <> foo;"),
         Err(HuckError::Type(TypeError::CouldNotUnify(
             Type::Primitive(Primitive::Int),
-            Type::Primitive(Primitive::String)
+            Type::Primitive(Primitive::String),
+            _,
+            _
         )))
     );
 }
 
 #[test]
-#[ignore] // @Fixme
 fn error_could_not_unify_recursive() {
     assert_matches!(
-        utils::test::typecheck("type Foo a = Foo a; foo x = Foo (foo x);"),
-        Err(HuckError::Type(TypeError::CouldNotUnifyRecursive(_, _)))
+        utils::test::typecheck("type Wrap a = Wrap a; foo x = Wrap (foo x);"),
+        Err(HuckError::Type(TypeError::CouldNotUnifyRecursive(..)))
     );
 }
 
@@ -41,11 +42,11 @@ fn error_could_not_unify_recursive() {
 fn error_could_not_unify_explicit() {
     assert_matches!(
         utils::test::typecheck("foo : forall a. a = 5;"),
-        Err(HuckError::Type(TypeError::CouldNotUnifyExplicit(_, _)))
+        Err(HuckError::Type(TypeError::CouldNotUnifyExplicit(..)))
     );
     assert_matches!(
         utils::test::typecheck("foo = (5 : forall a. a);"),
-        Err(HuckError::Type(TypeError::CouldNotUnifyExplicit(_, _)))
+        Err(HuckError::Type(TypeError::CouldNotUnifyExplicit(..)))
     );
 }
 
@@ -176,14 +177,6 @@ fn explicit_type_id_wrong_input_type() {
 fn explicit_type_id_wrong_output_type() {
     assert_matches!(
         utils::test::typecheck("id : forall a. a -> Int; id x = x;"),
-        Err(HuckError::Type(..))
-    );
-}
-
-#[test]
-fn wrap_recursive() {
-    assert_matches!(
-        utils::test::typecheck("type Wrap a = Wrap a; foo x = Wrap (foo x);"),
         Err(HuckError::Type(..))
     );
 }

@@ -1215,7 +1215,7 @@ impl Type {
     fn unify(self, other: Self) -> Result<Substitution, Error> {
         let mut sub = Substitution::empty();
 
-        let mut pairs = vec![(self, other)];
+        let mut pairs = vec![(self.clone(), other.clone())];
 
         while let Some((a, b)) = pairs.pop() {
             match (a, b) {
@@ -1223,7 +1223,12 @@ impl Type {
 
                 (Type::Var(var), t) | (t, Type::Var(var)) => {
                     if t.free_vars().contains(&var) {
-                        return Err(Error::CouldNotUnifyRecursive(t, Type::Var(var)));
+                        return Err(Error::CouldNotUnifyRecursive(
+                            t,
+                            Type::Var(var),
+                            self,
+                            other,
+                        ));
                     } else {
                         let s = Substitution::single(var, t.clone());
                         for (a2, b2) in pairs.iter_mut() {
@@ -1245,9 +1250,8 @@ impl Type {
                     pairs.push((*a1, *a2));
                     pairs.push((*b1, *b2));
                 }
-                // @Todo: include `self` and `other` in the error as well
                 (t1, t2) => {
-                    return Err(Error::CouldNotUnify(t1, t2));
+                    return Err(Error::CouldNotUnify(t1, t2, self, other));
                 }
             }
         }
@@ -1259,15 +1263,20 @@ impl Type {
     fn explicit(self, explicit: Self) -> Result<Substitution, Error> {
         let mut sub = Substitution::empty();
 
-        let mut pairs = vec![(self, explicit)];
+        let mut pairs = vec![(self.clone(), explicit.clone())];
 
         while let Some((a, b)) = pairs.pop() {
             match (a, b) {
                 (t1, t2) if t1 == t2 => (),
 
-                (Type::Var(var), t) => {
+                (Type::Var(var), t) if !explicit.free_vars().contains(&var) => {
                     if t.free_vars().contains(&var) {
-                        return Err(Error::CouldNotUnifyRecursive(t, Type::Var(var)));
+                        return Err(Error::CouldNotUnifyRecursive(
+                            t,
+                            Type::Var(var),
+                            self,
+                            explicit,
+                        ));
                     } else {
                         let s = Substitution::single(var, t.clone());
                         for (a2, b2) in pairs.iter_mut() {
@@ -1289,11 +1298,19 @@ impl Type {
                     pairs.push((*a1, *a2));
                     pairs.push((*b1, *b2));
                 }
-                // @Todo: include `self` and `other` in the error as well
                 (t1, t2) => {
-                    return Err(Error::CouldNotUnifyExplicit(t1, t2));
+                    return Err(Error::CouldNotUnifyExplicit(t1, t2, self, explicit));
                 }
             }
+        }
+
+        #[cfg(debug_assertions)]
+        {
+            // Check that the substitution we've built
+            // doesn't modify the explicit type at all.
+            let mut explicit_post_sub = explicit.clone();
+            explicit_post_sub.apply(&sub);
+            assert_eq!(explicit, explicit_post_sub);
         }
 
         Ok(sub)
