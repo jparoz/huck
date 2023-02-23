@@ -401,7 +401,7 @@ impl Typechecker {
             let mut processed_any_constraint = false;
 
             while let Some((constraint, id)) = constraints.pop() {
-                // Keep track of the processing action, for logging
+                // Keep a copy of the constraint to log later
                 let constraint_str = format!("{constraint:?}");
 
                 let sub = match constraint {
@@ -479,9 +479,22 @@ impl Typechecker {
                 break;
             }
 
-            // If we pushed constraints but didn't process any of them
+            // As long as we processed at least one constraint,
+            // we're good to continue.
+            if processed_any_constraint {
+                // Swap the just-processed constraints with the next-to-be-processed constraints,
+                // in time for the next pass.
+                mem::swap(&mut constraints, &mut next_constraints);
+                continue;
+            }
+
+            // Because we pushed some new constraints
+            // and didn't process any others
             // (i.e. if we skipped all the constraints),
-            // then we can't proceed any further.
+            // we can't proceed any further.
+            // So, we try to detect a dependency loop,
+            // in which case we can assign an arbitrary type and continue.
+            //
             // This situation might arise when typing a recursive function
             // (mutually or otherwise).
             //
@@ -489,69 +502,40 @@ impl Typechecker {
             // It's possible that we could pick this up during dependency resolution,
             // and then leave some sort of hint for the type system.
             // For now though, that's too clever.
-            if !processed_any_constraint {
-                // Here we try to detect cyclic type dependencies.
-                // If the remaining constraints form a closed loop,
-                // the type may be assigned arbitrarily.
-                log::trace!(
-                    log::TYPECHECK,
-                    "Completed a pass of all constraints without processing any"
-                );
-                log::trace!(
-                    log::TYPECHECK,
-                    "  Checking if the remaining constraints form a closed loop:"
-                );
+            //
+            // Here we try to detect cyclic type dependencies.
+            // If the remaining constraints form a closed loop,
+            // the type may be assigned arbitrarily.
+            log::trace!(
+                log::TYPECHECK,
+                "Completed a pass of all constraints without processing any"
+            );
+            log::trace!(
+                log::TYPECHECK,
+                "  Checking if the remaining constraints form a closed loop:"
+            );
 
-                let mut cons = next_constraints.clone();
-                // Safe unwrap: we checked that !is_empty() above
-                let (start, _id) = cons.pop().unwrap();
-                let (mut t1, start_t2, mut m) =
-                    unwrap_match!(start, Constraint::ImplicitInstance(t1, t2, m) => (t1, t2, m));
+            let mut cons = next_constraints.clone();
+            // Safe unwrap: we checked that !is_empty() above
+            let (start, _id) = cons.pop().unwrap();
+            let (mut t1, start_t2, mut m) =
+                unwrap_match!(start, Constraint::ImplicitInstance(t1, t2, m) => (t1, t2, m));
 
-                while !cons.is_empty() {
-                    // @Checkme: is this always true? bit of a punt
-                    assert!(m.is_empty());
+            while !cons.is_empty() {
+                // @Checkme: is this always true? bit of a punt
+                assert!(m.is_empty());
 
-                    if let Some(pos) = cons.iter().position(|(c, _id)| {
-                        let c_t2 =
-                            unwrap_match!(c, Constraint::ImplicitInstance(_t1, t2, _m) => t2);
-                        &t1 == c_t2
-                    }) {
-                        let (removed, _id) = cons.remove(pos);
-                        (t1, m) = unwrap_match!(
-                            removed,
-                            Constraint::ImplicitInstance(t1, _t2, m) => (t1, m)
-                        );
-                    } else {
-                        // @DRY: same error below
-                        log::trace!(log::TYPECHECK, "  They did not form a loop.");
-                        return Err(Error::CouldNotSolveTypeConstraints(ConstraintSet(
-                            next_constraints,
-                        )));
-                    }
-                }
-
-                // Since we made it out of the loop,
-                // the constraints Vec is empty.
-                debug_assert!(cons.is_empty());
-
-                // Check if the loop is closed.
-                if t1 == start_t2 {
-                    // The loop is closed,
-                    // so add constraints binding all the types to a new variable.
-                    log::trace!(log::TYPECHECK, "  The constraints did form a closed loop.");
-                    log::trace!(
-                        log::TYPECHECK,
-                        "  Binding all involved types to the same new type variable."
+                if let Some(pos) = cons.iter().position(|(c, _id)| {
+                    let c_t2 = unwrap_match!(c, Constraint::ImplicitInstance(_t1, t2, _m) => t2);
+                    &t1 == c_t2
+                }) {
+                    let (removed, _id) = cons.remove(pos);
+                    (t1, m) = unwrap_match!(
+                        removed,
+                        Constraint::ImplicitInstance(t1, _t2, m) => (t1, m)
                     );
-
-                    let new_type = self.fresh();
-                    for (c, _id) in next_constraints.iter_mut() {
-                        let t1 = unwrap_match!(c, Constraint::ImplicitInstance(t1, _t2, _m) => t1);
-                        *c = Constraint::Equality(new_type.clone(), t1.clone())
-                    }
                 } else {
-                    // @DRY: same error above
+                    // @DRY: same error below
                     log::trace!(log::TYPECHECK, "  They did not form a loop.");
                     return Err(Error::CouldNotSolveTypeConstraints(ConstraintSet(
                         next_constraints,
@@ -559,9 +543,40 @@ impl Typechecker {
                 }
             }
 
-            // Swap the just-processed constraints with the next-to-be-processed constraints,
-            // in time for the next pass.
+            // Since we made it out of the loop,
+            // the constraints Vec is empty.
+            debug_assert!(cons.is_empty());
+
+            // Check if the loop is closed.
+            if t1 == start_t2 {
+                // The loop is closed,
+                // so add constraints binding all the types to a new variable.
+                log::trace!(log::TYPECHECK, "  The constraints did form a closed loop.");
+                log::trace!(
+                    log::TYPECHECK,
+                    "  Binding all involved types to the same new type variable."
+                );
+
+                let new_type = self.fresh();
+                for (c, _id) in next_constraints.iter_mut() {
+                    let t1 = unwrap_match!(c, Constraint::ImplicitInstance(t1, _t2, _m) => t1);
+                    *c = Constraint::Equality(new_type.clone(), t1.clone())
+                }
+            } else {
+                // @DRY: same error above
+                log::trace!(log::TYPECHECK, "  They did not form a loop.");
+                return Err(Error::CouldNotSolveTypeConstraints(ConstraintSet(
+                    next_constraints,
+                )));
+            }
+
+            // If we've made it this far,
+            // we've recovered,
+            // and are okay to continue looping through constraints.
             mem::swap(&mut constraints, &mut next_constraints);
+
+            // This is the end of the loop block,
+            // so away we go back to the top!
         }
 
         // Now we've solved all the inferred type constraints,
