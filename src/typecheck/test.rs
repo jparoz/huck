@@ -147,19 +147,13 @@ fn error_incorrect_arity_type_variable() {
 }
 
 #[test]
-fn explicit_type_wrap_too_specific() {
-    assert_matches!(
-        utils::test::typecheck("type Wrap a = Wrap a; foo : forall a. a -> Wrap a; foo x = x;"),
-        Err(HuckError::Type(TypeError::CouldNotUnifyRecursive(_, _)))
-    );
+fn explicit_type_id_general() {
+    utils::test::typecheck("id : forall a. a -> a; id x = x;").expect("should typecheck correctly");
 }
 
 #[test]
-fn explicit_type_wrap_too_general() {
-    assert_matches!(
-        utils::test::typecheck("type Wrap a = Wrap a; foo : forall a b. a -> b; foo x = Wrap x;"),
-        Err(HuckError::Type(..))
-    );
+fn explicit_type_id_specific() {
+    utils::test::typecheck("id : Int -> Int; id x = x;").expect("should typecheck correctly");
 }
 
 #[test]
@@ -182,6 +176,22 @@ fn explicit_type_id_wrong_input_type() {
 fn explicit_type_id_wrong_output_type() {
     assert_matches!(
         utils::test::typecheck("id : forall a. a -> Int; id x = x;"),
+        Err(HuckError::Type(..))
+    );
+}
+
+#[test]
+fn wrap_recursive() {
+    assert_matches!(
+        utils::test::typecheck("type Wrap a = Wrap a; foo x = Wrap (foo x);"),
+        Err(HuckError::Type(..))
+    );
+}
+
+#[test]
+fn wrap_recursive_wrong_explicit_type() {
+    assert_matches!(
+        utils::test::typecheck("type Wrap a = Wrap a; foo : forall a b. a -> b; foo x = Wrap x;"),
         Err(HuckError::Type(..))
     );
 }
