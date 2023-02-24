@@ -550,28 +550,41 @@ impl Typechecker {
     }
 
     fn generate_assignment(&mut self, assign: &ast::Assignment<ResolvedName>) -> Type {
-        let (lhs, expr) = assign;
+        let (lhs, rhs) = assign;
+        self.generate_lambda(&lhs.args(), rhs)
+    }
 
-        match lhs {
-            ast::Lhs::Func { args, .. } => {
-                args.iter()
-                    .rev()
-                    .fold(self.generate_expr(expr), |acc, arg| {
-                        let beta = self.bind_pattern(arg);
-                        Type::Arrow(Box::new(beta), Box::new(acc))
-                    })
-            }
-            ast::Lhs::Binop { a, b, .. } => {
-                let res = self.generate_expr(expr);
-                let beta_a = self.bind_pattern(a);
-                let beta_b = self.bind_pattern(b);
+    /// Emits type constraints for a Huck function,
+    /// whether that's an assignment as part of a definition,
+    /// or a lambda.
+    fn generate_lambda(
+        &mut self,
+        args: &[ast::Pattern<ResolvedName>],
+        rhs: &ast::Expr<ResolvedName>,
+    ) -> Type {
+        let typevars: Vec<TypeVar<ResolvedName>> = args.iter().map(|_| self.fresh_var()).collect();
+        let types: Vec<Type> = typevars.iter().map(|v| Type::Var(*v)).collect();
+        let typevar_count = typevars.len();
 
-                Type::Arrow(
-                    Box::new(beta_a),
-                    Box::new(Type::Arrow(Box::new(beta_b), Box::new(res))),
-                )
-            }
+        self.m_stack.extend(typevars);
+
+        let res = types
+            .iter()
+            .rev()
+            .fold(self.generate_expr(rhs), |acc, beta| {
+                Type::Arrow(Box::new(beta.clone()), Box::new(acc))
+            });
+
+        let total_len = self.m_stack.len();
+        self.m_stack.truncate(total_len - typevar_count);
+
+        for (arg, lambda_type) in args.iter().zip(types.into_iter()) {
+            let actual_type = self.bind_pattern(arg);
+            self.constraints
+                .add(Constraint::Equality(actual_type, lambda_type))
         }
+
+        res
     }
 
     fn generate_expr(&mut self, expr: &ast::Expr<ResolvedName>) -> Type {
@@ -708,32 +721,7 @@ impl Typechecker {
                 self.equate_all(arm_types)
             }
 
-            ast::Expr::Lambda { args, rhs } => {
-                let typevars: Vec<TypeVar<ResolvedName>> =
-                    args.iter().map(|_| self.fresh_var()).collect();
-                let types: Vec<Type> = typevars.iter().map(|v| Type::Var(*v)).collect();
-                let typevar_count = typevars.len();
-
-                self.m_stack.extend(typevars);
-
-                let res = types
-                    .iter()
-                    .rev()
-                    .fold(self.generate_expr(rhs), |acc, beta| {
-                        Type::Arrow(Box::new(beta.clone()), Box::new(acc))
-                    });
-
-                let total_len = self.m_stack.len();
-                self.m_stack.truncate(total_len - typevar_count);
-
-                for (arg, lambda_type) in args.iter().zip(types.into_iter()) {
-                    let actual_type = self.bind_pattern(arg);
-                    self.constraints
-                        .add(Constraint::Equality(actual_type, lambda_type))
-                }
-
-                res
-            }
+            ast::Expr::Lambda { args, rhs } => self.generate_lambda(args, rhs),
 
             ast::Expr::Lua(_) => Type::App(
                 Box::new(Type::Primitive(Primitive::IO)),
