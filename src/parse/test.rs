@@ -300,6 +300,7 @@ fn case_int() {
                     1 -> "one";
                     2 -> "two";
                     3 -> "three";
+                    -1 -> "minus one";
                 };"#
         )
         .unwrap()
@@ -325,6 +326,10 @@ fn case_int() {
                         (
                             ast::Pattern::Int("3"),
                             ast::Expr::Term(ast::Term::String(r#""three""#)),
+                        ),
+                        (
+                            ast::Pattern::Int("-1"),
+                            ast::Expr::Term(ast::Term::String(r#""minus one""#)),
                         ),
                     ],
                 },

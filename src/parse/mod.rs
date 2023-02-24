@@ -397,7 +397,7 @@ fn pattern(input: &'static str) -> IResult<&'static str, Pattern<UnresolvedName>
         }),
         map(list(pattern), Pattern::List),
         map(tuple(pattern), Pattern::Tuple),
-        map(ws(numeral_int), Pattern::Int),
+        map(numeral_int, Pattern::Int),
         map(string, Pattern::String),
         parens(pattern_destructure),
         map(upper_name, Pattern::UnaryConstructor),
@@ -583,10 +583,12 @@ fn case_arm(
 
 fn case_pattern(input: &'static str) -> IResult<&'static str, Pattern<UnresolvedName>> {
     alt((
-        // Allow matching constructors without parens.
+        // Allow matching some patterns without parens,
+        // including destructuring and negative ints.
         // This isn't ambiguous,
         // because the case can only have one expression being scrutinised.
         pattern_destructure,
+        map(ws(negative(numeral_string_int)), Pattern::Int),
         pattern,
     ))(input)
 }
