@@ -140,11 +140,7 @@ impl Typechecker {
 
         // Generate constraints for each definition, while keeping track of inferred types
         for (name, defn) in module.definitions {
-            log::trace!(log::TYPECHECK, "  Inferring type for {name}");
-
             let typ = self.typecheck_definition(&defn);
-
-            log::trace!(log::TYPECHECK, "  Initial inferred type for {name}: {typ}",);
 
             let typed_defn = {
                 let ast::Definition {
@@ -518,6 +514,9 @@ impl Typechecker {
     // Value-level typechecking methods
 
     fn typecheck_definition(&mut self, definition: &ast::Definition<ResolvedName, ()>) -> Type {
+        let name = definition.assignments[0].0.name();
+        log::trace!(log::TYPECHECK, "  Inferring type for {name}");
+
         // Typecheck each assignment in the definition.
         let typs: Vec<Type> = definition
             .assignments
@@ -532,7 +531,7 @@ impl Typechecker {
         //
         // If there's an explicit type,
         // constrain that the inferred type should be unified with the explicit type.
-        if let Some(ref explicit_type_scheme) = definition.explicit_type {
+        let typ = if let Some(ref explicit_type_scheme) = definition.explicit_type {
             log::trace!(
                 log::TYPECHECK,
                 "    Including explicit type scheme: {explicit_type_scheme:?}",
@@ -546,7 +545,11 @@ impl Typechecker {
             explicit_type
         } else {
             inferred
-        }
+        };
+
+        log::trace!(log::TYPECHECK, "  Initial inferred type for {name}: {typ}");
+
+        typ
     }
 
     fn typecheck_assignment(&mut self, assign: &ast::Assignment<ResolvedName>) -> Type {
@@ -744,6 +747,8 @@ impl Typechecker {
             constructors: constrs,
             typ: (),
         } = type_defn;
+
+        log::trace!(log::TYPECHECK, "  Typechecking type definition {name}");
 
         // We'll build the type by iterating over the type arguments.
         let mut typ = Type::Concrete(name);
