@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::fmt::{self, Debug};
 
-use super::Constraint;
+use super::{Constraint, ExplicitTypeConstraint};
 use crate::name::ResolvedName;
 use crate::types::{Type, TypeScheme, TypeVar, TypeVarSet};
 
@@ -76,14 +76,6 @@ impl ApplySub for Constraint {
                 t1.apply(sub);
                 t2.apply(sub);
             }
-            Constraint::ExplicitType { inferred, explicit } => {
-                inferred.apply(sub);
-
-                let pre_sub_explicit = explicit.clone();
-                explicit.apply(sub);
-                // @Checkme: is this always true?
-                assert_eq!(pre_sub_explicit, *explicit);
-            }
             Constraint::ImplicitInstance(t1, t2, m) => {
                 t1.apply(sub);
                 t2.apply(sub);
@@ -94,6 +86,19 @@ impl ApplySub for Constraint {
                 sigma.apply(sub);
             }
         }
+    }
+}
+
+impl ApplySub for ExplicitTypeConstraint {
+    fn apply(&mut self, sub: &Substitution) {
+        let ExplicitTypeConstraint { inferred, explicit } = self;
+
+        inferred.apply(sub);
+
+        let pre_sub_explicit = explicit.clone();
+        explicit.apply(sub);
+        // @Checkme: is this always true?
+        assert_eq!(pre_sub_explicit, *explicit);
     }
 }
 

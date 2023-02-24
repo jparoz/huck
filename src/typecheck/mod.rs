@@ -76,21 +76,12 @@ pub enum Constraint {
     /// Includes a [`TypeVarSet`] of the monomorphically-bound type variables in scope,
     /// which should be excluded from quantification by the resulting type scheme.
     ImplicitInstance(Type, Type, TypeVarSet<ResolvedName>),
-
-    /// Used for explicit type annotations.
-    /// Causes the inferred type to be unified with the explicit type,
-    /// and a corresponding substitution to be applied.
-    ExplicitType { inferred: Type, explicit: Type },
 }
 
 impl Debug for Constraint {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Constraint::Equality(a, b) => write!(f, "{a} ≡ {b}"),
-            // @Cleanup: better message?
-            Constraint::ExplicitType { inferred, explicit } => {
-                write!(f, "{inferred} ≡ {explicit} (explicit type)")
-            }
             Constraint::ImplicitInstance(a, b, m) => {
                 write!(f, "{a} ≤ {b} where M is {m}")
             }
@@ -101,14 +92,37 @@ impl Debug for Constraint {
     }
 }
 
+/// Used for explicit type annotations.
+/// Causes the inferred type to be unified with the explicit type,
+/// and a corresponding substitution to be applied.
+/// Solved after all the inferred type constraints.
+#[derive(Clone)]
+struct ExplicitTypeConstraint {
+    inferred: Type,
+    explicit: Type,
+}
+
+impl Debug for ExplicitTypeConstraint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let ExplicitTypeConstraint { inferred, explicit } = self;
+        // @Cleanup: better message?
+        write!(f, "{inferred} ≡ {explicit} (explicit type)")
+    }
+}
+
 /// Keeps track of all the emitted constraints,
 /// as well as giving them unique IDs for logging.
-#[derive(Default)]
-pub struct ConstraintSet(Vec<(Constraint, usize)>);
+pub struct ConstraintSet<Cons>(Vec<(Cons, usize)>);
 
-impl ConstraintSet {
+impl<Cons> Default for ConstraintSet<Cons> {
+    fn default() -> Self {
+        ConstraintSet(Vec::new())
+    }
+}
+
+impl<Cons: Debug> ConstraintSet<Cons> {
     /// Adds the constraint to the set.
-    fn add(&mut self, constraint: Constraint) {
+    fn add(&mut self, constraint: Cons) {
         use std::sync::atomic::{self, AtomicUsize};
 
         static UNIQUE_COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -122,7 +136,7 @@ impl ConstraintSet {
     }
 }
 
-impl Debug for ConstraintSet {
+impl<Cons: Debug> Debug for ConstraintSet<Cons> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for (constraint, id) in self.0.iter() {
             writeln!(f, "[{id}] {constraint:?}")?;
@@ -139,7 +153,10 @@ struct Typechecker {
 
     /// All of the emitted constraints about the modules being typechecked.
     /// These are solved in [`Typechecker::solve`].
-    constraints: ConstraintSet,
+    constraints: ConstraintSet<Constraint>,
+
+    /// All of the explicit type constraints.
+    explicit_constraints: ConstraintSet<ExplicitTypeConstraint>,
 
     /// All the currently assumed types of name uses.
     assumptions: BTreeMap<ResolvedName, Vec<Type>>,
@@ -376,19 +393,8 @@ impl Typechecker {
         let mut constraints = mem::take(&mut self.constraints.0);
         constraints.sort_unstable();
 
-        // Split out the explicit constraints, to be processed last.
-        // This is valid because the Ord impl for Constraint sorts ExplicitTypes last.
-        let first_explicit_index = constraints
-            .iter()
-            .position(|(constraint, _id)| matches!(constraint, Constraint::ExplicitType { .. }))
-            .unwrap_or(constraints.len());
-        let mut explicit_constraints = constraints.split_off(first_explicit_index);
-
-        // @Note: This could more succinctly use `constraints.iter().is_partitioned(...)`
-        // when `is_partitioned` is stabilised.
-        debug_assert!(explicit_constraints
-            .iter()
-            .all(|(constraint, _id)| { matches!(constraint, Constraint::ExplicitType { .. }) }));
+        // The explicit type constraints.
+        let mut explicit_constraints = mem::take(&mut self.explicit_constraints.0);
 
         // The constraints to be processed in the next pass.
         let mut next_constraints = Vec::new();
@@ -446,9 +452,6 @@ impl Typechecker {
                         next_constraints.push((constraint, id));
                         continue;
                     }
-
-                    // Unreachable, because we partitioned these out to be processed at the end.
-                    Constraint::ExplicitType { .. } => unreachable!(),
                 };
 
                 // If we're here,
@@ -457,11 +460,10 @@ impl Typechecker {
                 processed_any_constraint = true;
 
                 // Apply the unifying substitution to the remaining constraints.
-                for (c, _id) in constraints
-                    .iter_mut()
-                    .chain(next_constraints.iter_mut())
-                    .chain(explicit_constraints.iter_mut())
-                {
+                for (c, _id) in constraints.iter_mut().chain(next_constraints.iter_mut()) {
+                    c.apply(&sub);
+                }
+                for (c, _id) in explicit_constraints.iter_mut() {
                     c.apply(&sub);
                 }
 
@@ -581,19 +583,16 @@ impl Typechecker {
 
         // Now we've solved all the inferred type constraints,
         // we can solve explicit type constraints.
-        for (constraint, id) in explicit_constraints {
+        while let Some((constraint, id)) = explicit_constraints.pop() {
             let constraint_str = format!("{constraint:?}");
 
-            let (inferred, explicit) = unwrap_match!(
-                constraint,
-                Constraint::ExplicitType { inferred, explicit } => (inferred, explicit)
-            );
+            let ExplicitTypeConstraint { inferred, explicit } = constraint;
 
             // Make sure the explicit type is compatible with the inferred type.
             let new_sub = inferred.explicit(explicit)?;
 
             // Apply the unifying substitution to the remaining constraints.
-            for (c, _id) in constraints.iter_mut().chain(next_constraints.iter_mut()) {
+            for (c, _id) in explicit_constraints.iter_mut() {
                 c.apply(&new_sub);
             }
 
@@ -651,7 +650,7 @@ impl Typechecker {
             );
             let ts = self.generate_type_scheme(explicit_type_scheme);
             let explicit_type = self.instantiate(ts);
-            self.constraints.add(Constraint::ExplicitType {
+            self.explicit_constraints.add(ExplicitTypeConstraint {
                 inferred,
                 explicit: explicit_type.clone(),
             });
@@ -701,7 +700,7 @@ impl Typechecker {
                 let expr_typ = self.generate_expr(ast_expr);
                 let ts = self.generate_type_scheme(ast_ts);
                 let typ = self.instantiate(ts);
-                self.constraints.add(Constraint::ExplicitType {
+                self.explicit_constraints.add(ExplicitTypeConstraint {
                     inferred: expr_typ,
                     explicit: typ.clone(),
                 });
@@ -1196,15 +1195,19 @@ impl ActiveVars for Constraint {
     fn active_vars(&self) -> TypeVarSet<ResolvedName> {
         match self {
             Constraint::Equality(t1, t2) => t1.free_vars().union(&t2.free_vars()),
-            Constraint::ExplicitType { inferred, explicit } => {
-                // @Checkme: is this the right thing?
-                inferred.free_vars().union(&explicit.free_vars())
-            }
             Constraint::ExplicitInstance(t, sigma) => t.free_vars().union(&sigma.free_vars()),
             Constraint::ImplicitInstance(t1, t2, m) => {
                 t1.free_vars().union(&m.intersection(&t2.free_vars()))
             }
         }
+    }
+}
+
+impl ActiveVars for ExplicitTypeConstraint {
+    fn active_vars(&self) -> TypeVarSet<ResolvedName> {
+        let ExplicitTypeConstraint { inferred, explicit } = self;
+        // @Checkme: is this the right thing?
+        inferred.free_vars().union(&explicit.free_vars())
     }
 }
 

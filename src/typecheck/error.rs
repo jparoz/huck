@@ -2,7 +2,7 @@ use crate::name::ResolvedName;
 use crate::types::Type;
 use crate::utils::display_iter;
 
-use super::ConstraintSet;
+use super::{Constraint, ConstraintSet};
 
 /// An enum representing all possible type errors.
 #[derive(thiserror::Error, Debug)]
@@ -31,7 +31,7 @@ pub enum Error {
          {0:?}\n\
          Maybe try adding some more specific types to recursive definitions."
     )]
-    CouldNotSolveTypeConstraints(ConstraintSet),
+    CouldNotSolveTypeConstraints(ConstraintSet<Constraint>),
 
     // @Errors: this name/message is probably not that helpful
     #[error("Usage of type `{0}` with incorrect arity {1} (actual arity {2})")]
