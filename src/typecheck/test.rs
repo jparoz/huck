@@ -818,3 +818,26 @@ fn function_mutually_recursive() {
     assert_matches!(*l, Type::Var(_));
     assert_matches!(*r, Type::Var(_));
 }
+
+#[test]
+fn let_binding_doesnt_change_type() {
+    let direct = utils::test::typecheck("foo f = f 0;")
+        .unwrap()
+        .definitions
+        .remove(&name!("foo"))
+        .unwrap();
+
+    let with_let = utils::test::typecheck("foo f = let x = f 0 in x;")
+        .unwrap()
+        .definitions
+        .remove(&name!("foo"))
+        .unwrap();
+
+    for typ in [direct.typ, with_let.typ] {
+        let (f, res) = unwrap_match!(typ, Type::Arrow(f, res) => (*f, *res));
+
+        let (f_l, f_r) = unwrap_match!(f, Type::Arrow(f_l, f_r) => (*f_l, *f_r));
+        assert_eq!(f_l, Type::Primitive(Primitive::Int));
+        assert_eq!(f_r, res);
+    }
+}
