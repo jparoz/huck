@@ -2,11 +2,10 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 use std::{iter, mem};
 
-use crate::ast::{self, Module};
-use crate::log;
 use crate::name::{ModulePath, ResolvedName, Source};
 use crate::types::{Primitive, Type, TypeScheme, TypeVar, TypeVarSet};
 use crate::utils::unwrap_match;
+use crate::{ast, log};
 
 mod arity;
 mod constraint;
@@ -24,8 +23,8 @@ mod test;
 
 /// Typechecks the given Huck modules.
 pub fn typecheck(
-    mut modules: BTreeMap<ModulePath, Module<ResolvedName, ()>>,
-) -> Result<BTreeMap<ModulePath, Module<ResolvedName, Type>>, Error> {
+    mut modules: BTreeMap<ModulePath, ast::Module<ResolvedName, ()>>,
+) -> Result<BTreeMap<ModulePath, ast::Module<ResolvedName, Type>>, Error> {
     // Start the timer to measure how long typechecking takes.
     let start_time = Instant::now();
     log::info!(log::TYPECHECK, "Typechecking all modules...");
@@ -60,7 +59,7 @@ pub fn typecheck(
 #[derive(Debug, Default)]
 struct Typechecker {
     /// The modules for which constraints have so far been generated.
-    modules: BTreeMap<ModulePath, Module<ResolvedName, Type>>,
+    modules: BTreeMap<ModulePath, ast::Module<ResolvedName, Type>>,
 
     /// All of the emitted constraints about the modules being typechecked.
     /// These are solved in [`Typechecker::solve`].
@@ -134,16 +133,16 @@ impl Typechecker {
         typ
     }
 
-    fn typecheck_module(&mut self, module: Module<ResolvedName, ()>) -> Result<(), Error> {
+    fn typecheck_module(&mut self, module: ast::Module<ResolvedName, ()>) -> Result<(), Error> {
         log::trace!(log::TYPECHECK, "Typechecking: module {};", module.path);
         // Set the new `Module`'s path.
-        let mut typechecked_module = Module::new(module.path);
+        let mut typechecked_module = ast::Module::new(module.path);
 
         // Generate constraints for each definition, while keeping track of inferred types
         for (name, defn) in module.definitions {
             log::trace!(log::TYPECHECK, "  Inferring type for {name}");
 
-            let typ = self.generate_definition(&defn);
+            let typ = self.typecheck_definition(&defn);
 
             log::trace!(log::TYPECHECK, "  Initial inferred type for {name}: {typ}",);
 
@@ -173,7 +172,7 @@ impl Typechecker {
 
         // Generate constraints for each type definition
         for (_name, ast_type_defn) in module.type_definitions {
-            let type_defn = self.generate_type_definition(ast_type_defn);
+            let type_defn = self.typecheck_type_definition(ast_type_defn);
 
             for (constr_name, constr_defn) in type_defn.constructors.iter() {
                 typechecked_module
@@ -220,7 +219,7 @@ impl Typechecker {
                     module_path = module.path
                 );
 
-                let ts = self.generate_type_scheme(&type_scheme);
+                let ts = self.typecheck_type_scheme(&type_scheme);
                 let typ = self.instantiate(ts);
 
                 // @Errors: check for name clashes
@@ -279,7 +278,8 @@ impl Typechecker {
     /// and return the typechecked modules.
     fn solve(
         mut self,
-    ) -> Result<BTreeMap<ModulePath, Module<ResolvedName, Type>>, crate::typecheck::Error> {
+    ) -> Result<BTreeMap<ModulePath, ast::Module<ResolvedName, Type>>, crate::typecheck::Error>
+    {
         // Before we can solve, we still need to bind all assumptions.
         self.bind_assumptions_top_level()?;
 
@@ -515,14 +515,14 @@ impl Typechecker {
         Ok(self.modules)
     }
 
-    // Generation methods
+    // Value-level typechecking methods
 
-    fn generate_definition(&mut self, definition: &ast::Definition<ResolvedName, ()>) -> Type {
+    fn typecheck_definition(&mut self, definition: &ast::Definition<ResolvedName, ()>) -> Type {
         // Typecheck each assignment in the definition.
         let typs: Vec<Type> = definition
             .assignments
             .iter()
-            .map(|assign| self.generate_assignment(assign))
+            .map(|assign| self.typecheck_assignment(assign))
             .collect();
 
         // Constrain that each inferred assignment should all be equal.
@@ -537,7 +537,7 @@ impl Typechecker {
                 log::TYPECHECK,
                 "    Including explicit type scheme: {explicit_type_scheme:?}",
             );
-            let ts = self.generate_type_scheme(explicit_type_scheme);
+            let ts = self.typecheck_type_scheme(explicit_type_scheme);
             let explicit_type = self.instantiate(ts);
             self.constraints.add_explicit(ExplicitTypeConstraint {
                 inferred,
@@ -549,15 +549,15 @@ impl Typechecker {
         }
     }
 
-    fn generate_assignment(&mut self, assign: &ast::Assignment<ResolvedName>) -> Type {
+    fn typecheck_assignment(&mut self, assign: &ast::Assignment<ResolvedName>) -> Type {
         let (lhs, rhs) = assign;
-        self.generate_lambda(&lhs.args(), rhs)
+        self.typecheck_lambda(&lhs.args(), rhs)
     }
 
     /// Emits type constraints for a Huck function,
     /// whether that's an assignment as part of a definition,
     /// or a lambda.
-    fn generate_lambda(
+    fn typecheck_lambda(
         &mut self,
         args: &[ast::Pattern<ResolvedName>],
         rhs: &ast::Expr<ResolvedName>,
@@ -571,7 +571,7 @@ impl Typechecker {
         let res = types
             .iter()
             .rev()
-            .fold(self.generate_expr(rhs), |acc, beta| {
+            .fold(self.typecheck_expr(rhs), |acc, beta| {
                 Type::Arrow(Box::new(beta.clone()), Box::new(acc))
             });
 
@@ -587,7 +587,7 @@ impl Typechecker {
         res
     }
 
-    fn generate_expr(&mut self, expr: &ast::Expr<ResolvedName>) -> Type {
+    fn typecheck_expr(&mut self, expr: &ast::Expr<ResolvedName>) -> Type {
         match expr {
             ast::Expr::Term(ast::Term::Numeral(ast::Numeral::Int(_))) => {
                 Type::Primitive(Primitive::Int)
@@ -599,8 +599,8 @@ impl Typechecker {
             ast::Expr::Term(ast::Term::Unit) => Type::Primitive(Primitive::Unit),
 
             ast::Expr::Term(ast::Term::TypedExpr(ast_expr, ast_ts)) => {
-                let expr_typ = self.generate_expr(ast_expr);
-                let ts = self.generate_type_scheme(ast_ts);
+                let expr_typ = self.typecheck_expr(ast_expr);
+                let ts = self.typecheck_type_scheme(ast_ts);
                 let typ = self.instantiate(ts);
                 self.constraints.add_explicit(ExplicitTypeConstraint {
                     inferred: expr_typ,
@@ -609,25 +609,25 @@ impl Typechecker {
                 typ
             }
 
-            ast::Expr::Term(ast::Term::Parens(e)) => self.generate_expr(e),
+            ast::Expr::Term(ast::Term::Parens(e)) => self.typecheck_expr(e),
             ast::Expr::Term(ast::Term::List(es)) => {
                 let beta = self.fresh();
                 for e in es {
-                    let e_type = self.generate_expr(e);
+                    let e_type = self.typecheck_expr(e);
                     self.constraints
                         .add(Constraint::Equality(beta.clone(), e_type));
                 }
                 Type::List(Box::new(beta))
             }
             ast::Expr::Term(ast::Term::Tuple(es)) => {
-                Type::Tuple(es.iter().map(|e| self.generate_expr(e)).collect())
+                Type::Tuple(es.iter().map(|e| self.typecheck_expr(e)).collect())
             }
 
             ast::Expr::Term(ast::Term::Name(name)) => self.assume(*name),
 
             ast::Expr::App { func, argument } => {
-                let t1 = self.generate_expr(func);
-                let t2 = self.generate_expr(argument);
+                let t1 = self.typecheck_expr(func);
+                let t2 = self.typecheck_expr(argument);
                 let beta = self.fresh();
 
                 self.constraints.add(Constraint::Equality(
@@ -639,8 +639,8 @@ impl Typechecker {
             }
             ast::Expr::Binop { operator, lhs, rhs } => {
                 let t1 = self.assume(*operator);
-                let t2 = self.generate_expr(lhs);
-                let t3 = self.generate_expr(rhs);
+                let t2 = self.typecheck_expr(lhs);
+                let t3 = self.typecheck_expr(rhs);
                 let beta1 = self.fresh();
                 let beta2 = self.fresh();
 
@@ -660,12 +660,12 @@ impl Typechecker {
                 definitions,
                 in_expr,
             } => {
-                let beta = self.generate_expr(in_expr);
+                let beta = self.typecheck_expr(in_expr);
 
                 for (name, assignments) in definitions {
                     let typs = assignments
                         .iter()
-                        .map(|assign| self.generate_assignment(assign))
+                        .map(|assign| self.typecheck_assignment(assign))
                         .collect();
                     let typ = self.equate_all(typs);
                     self.bind_assumptions_poly(name, &typ);
@@ -679,9 +679,9 @@ impl Typechecker {
                 then_expr,
                 else_expr,
             } => {
-                let cond_type = self.generate_expr(cond);
-                let then_type = self.generate_expr(then_expr);
-                let else_type = self.generate_expr(else_expr);
+                let cond_type = self.typecheck_expr(cond);
+                let then_type = self.typecheck_expr(then_expr);
+                let else_type = self.typecheck_expr(else_expr);
 
                 self.constraints.add(Constraint::Equality(
                     cond_type,
@@ -700,9 +700,9 @@ impl Typechecker {
                     // Use a fresh type variable to represent the newly bound pattern.
                     let typevar = self.fresh_var();
 
-                    // Push the typevar onto the stack while generating the expression.
+                    // Push the typevar onto the stack while typechecking the expression.
                     self.m_stack.push(typevar);
-                    arm_types.push(self.generate_expr(e));
+                    arm_types.push(self.typecheck_expr(e));
                     let typevar = self.m_stack.pop().unwrap();
 
                     // Equate the fresh variable to the rest of the pattern types.
@@ -712,7 +712,7 @@ impl Typechecker {
                 }
 
                 // Equate the type of the scrutinised expression to the pattern types.
-                pat_types.push(self.generate_expr(expr));
+                pat_types.push(self.typecheck_expr(expr));
 
                 // Actually equate all the pattern types
                 self.equate_all(pat_types);
@@ -721,7 +721,7 @@ impl Typechecker {
                 self.equate_all(arm_types)
             }
 
-            ast::Expr::Lambda { args, rhs } => self.generate_lambda(args, rhs),
+            ast::Expr::Lambda { args, rhs } => self.typecheck_lambda(args, rhs),
 
             ast::Expr::Lua(_) => Type::App(
                 Box::new(Type::Primitive(Primitive::IO)),
@@ -732,9 +732,9 @@ impl Typechecker {
         }
     }
 
-    // Type-level generation methods
+    // Type-level typechecking methods
 
-    fn generate_type_definition(
+    fn typecheck_type_definition(
         &mut self,
         type_defn: ast::TypeDefinition<ResolvedName, ()>,
     ) -> ast::TypeDefinition<ResolvedName, Type> {
@@ -761,7 +761,7 @@ impl Typechecker {
                 .args
                 .iter()
                 .rev()
-                .map(|term| self.generate_type_term(term))
+                .map(|term| self.typecheck_type_term(term))
                 .fold(typ.clone(), |res, a| {
                     Type::Arrow(Box::new(a), Box::new(res))
                 });
@@ -788,8 +788,8 @@ impl Typechecker {
         }
     }
 
-    fn generate_type_scheme(&mut self, input: &ast::TypeScheme<ResolvedName>) -> TypeScheme {
-        // Recursively generate arity assumptions for this type expression.
+    fn typecheck_type_scheme(&mut self, input: &ast::TypeScheme<ResolvedName>) -> TypeScheme {
+        // Recursively check arity assumptions for this type expression.
         //
         // @Cleanup:
         // This doesn't really need to be here,
@@ -801,26 +801,26 @@ impl Typechecker {
         let vars: TypeVarSet<ResolvedName> =
             input.vars.iter().map(|v| TypeVar::Explicit(*v)).collect();
 
-        let typ = self.generate_type_expr(&input.typ);
+        let typ = self.typecheck_type_expr(&input.typ);
 
         TypeScheme { vars, typ }
     }
 
-    fn generate_type_expr(&mut self, input: &ast::TypeExpr<ResolvedName>) -> Type {
+    fn typecheck_type_expr(&mut self, input: &ast::TypeExpr<ResolvedName>) -> Type {
         match input {
-            ast::TypeExpr::Term(term) => self.generate_type_term(term),
+            ast::TypeExpr::Term(term) => self.typecheck_type_term(term),
             ast::TypeExpr::App(f, x) => Type::App(
-                Box::new(self.generate_type_expr(f)),
-                Box::new(self.generate_type_expr(x)),
+                Box::new(self.typecheck_type_expr(f)),
+                Box::new(self.typecheck_type_expr(x)),
             ),
             ast::TypeExpr::Arrow(a, b) => Type::Arrow(
-                Box::new(self.generate_type_expr(a)),
-                Box::new(self.generate_type_expr(b)),
+                Box::new(self.typecheck_type_expr(a)),
+                Box::new(self.typecheck_type_expr(b)),
             ),
         }
     }
 
-    fn generate_type_term(&mut self, input: &ast::TypeTerm<ResolvedName>) -> Type {
+    fn typecheck_type_term(&mut self, input: &ast::TypeTerm<ResolvedName>) -> Type {
         match input {
             ast::TypeTerm::Concrete(ResolvedName {
                 source: Source::Builtin,
@@ -853,12 +853,12 @@ impl Typechecker {
 
             ast::TypeTerm::Var(v) => Type::Var(TypeVar::Explicit(*v)),
 
-            ast::TypeTerm::Parens(e) => self.generate_type_expr(e),
+            ast::TypeTerm::Parens(e) => self.typecheck_type_expr(e),
 
-            ast::TypeTerm::List(e) => Type::List(Box::new(self.generate_type_expr(e))),
+            ast::TypeTerm::List(e) => Type::List(Box::new(self.typecheck_type_expr(e))),
 
             ast::TypeTerm::Tuple(exprs) => {
-                Type::Tuple(exprs.iter().map(|e| self.generate_type_expr(e)).collect())
+                Type::Tuple(exprs.iter().map(|e| self.typecheck_type_expr(e)).collect())
             }
         }
     }
