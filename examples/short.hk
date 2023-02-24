@@ -1,40 +1,16 @@
 module Short;
 
-good1 x = good1 x;
+type Wrap a = Wrap a;
+wrapLoop x = Wrap (wrapLoop x);
 
 type LinkedList a = Cons a (LinkedList a) | Nil;
+type Maybe a = Just a | Nothing;
 
-map : forall a b. (a -> b) -> LinkedList a -> LinkedList b;
-map f (Cons x xs) = Cons (f x) (map f xs);
-map _ Nil = Nil;
+(* unfold : forall a b. (b -> Maybe (a, b)) -> b -> LinkedList a; *)
+unfold f seed =
+    let go s = case f s of {
+        (Just (x, s')) -> Cons x (go s');
+        Nothing -> Nil;
+    } in go seed;
 
-myLinkedList : LinkedList Int = Cons 1 (Cons 2 (Cons 3 Nil));
-mapped = map (\x -> x) myLinkedList;
-
-fold : forall a b. ((a, b) -> b) -> b -> LinkedList a -> b;
-fold f acc (Cons x xs) = fold f (f (x, acc)) xs;
-fold _ acc Nil = acc;
-
-sumOfList = fold (\(n, acc) -> n + acc) 0 myLinkedList;
-
-
-
-type Wrap a = Wrap a;
-
-bad1 : forall a b. a -> Wrap b;
-bad1 x = Wrap (bad1 x);
-
-bad2 x = Wrap (bad2 x);
-
-(* These raise an error currently *)
-(* bad3 x = Wrap (bad4 x); *)
-(* bad4 x = Wrap (bad3 x); *)
-
-bad5 : forall a. Int -> a;
-bad5 x = x;
-
-bad6 : forall a. a -> Int;
-bad6 x = x;
-
-bad7 : forall a b. a -> b;
-bad7 x = x;
+thousand = unfold (\n -> if n > 0 then Just (n, n-1) else Nothing) 1000;

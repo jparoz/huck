@@ -267,7 +267,7 @@ fn linked_list_unfold_direct() {
             type LinkedList a = Cons a (LinkedList a) | Nil;
             type Maybe a = Just a | Nothing;
 
-            unfold : forall a b. (b -> Maybe (a, b)) -> b -> LinkedList a;
+            (* unfold : forall a b. (b -> Maybe (a, b)) -> b -> LinkedList a; *)
             unfold f seed = case f seed of {
                     (Just (x, seed')) -> Cons x (unfold f seed');
                     Nothing -> Nil;
@@ -278,7 +278,7 @@ fn linked_list_unfold_direct() {
     )
     .unwrap();
 
-    // @Checkme: not yet confirmed that this code is correct, becuase the unwrap above fails first
+    // Check that the shape of the type is correct
     let typ = module.definitions[&name!("unfold")].typ.clone();
     let (f, rest) = unwrap_match!(typ, Type::Arrow(f, rest) => (*f, *rest));
 
@@ -287,7 +287,10 @@ fn linked_list_unfold_direct() {
 
     let (f_r_cons, f_r_elem) = unwrap_match!(f_r, Type::App(cons, elem) => (*cons, *elem));
     assert_eq!(f_r_cons, Type::Concrete(name!("Maybe")));
-    assert_matches!(f_r_elem, Type::Tuple(_));
+
+    let f_r_vec = unwrap_match!(f_r_elem, Type::Tuple(vec) => vec);
+    assert_matches!(f_r_vec[0], Type::Var(_));
+    assert_matches!(f_r_vec[1], Type::Var(_));
 
     let (seed, result) = unwrap_match!(rest, Type::Arrow(l, r) => (*l, *r));
     assert_matches!(seed, Type::Var(_));
@@ -296,6 +299,11 @@ fn linked_list_unfold_direct() {
     assert_eq!(result_cons, Type::Concrete(name!("LinkedList")));
     assert_matches!(result_elem, Type::Var(_));
 
+    // Check that all the `a`s are correct
+    assert_eq!(f_r_vec[0], result_elem);
+
+    // Check that all the `b`s are correct
+    assert_eq!(f_l, f_r_vec[1]);
     assert_eq!(f_l, seed);
 }
 
@@ -306,7 +314,7 @@ fn linked_list_unfold_let() {
             type LinkedList a = Cons a (LinkedList a) | Nil;
             type Maybe a = Just a | Nothing;
 
-            unfold : forall a b. (b -> Maybe (a, b)) -> b -> LinkedList a;
+            (* unfold : forall a b. (b -> Maybe (a, b)) -> b -> LinkedList a; *)
             unfold f seed =
                 let go s = case f s of {
                     (Just (x, s')) -> Cons x (go s');
@@ -318,7 +326,7 @@ fn linked_list_unfold_let() {
     )
     .unwrap();
 
-    // @Checkme: not yet confirmed that this code is correct, becuase the unwrap above fails first
+    // Check that the shape of the type is correct
     let typ = module.definitions[&name!("unfold")].typ.clone();
     let (f, rest) = unwrap_match!(typ, Type::Arrow(f, rest) => (*f, *rest));
 
@@ -327,7 +335,10 @@ fn linked_list_unfold_let() {
 
     let (f_r_cons, f_r_elem) = unwrap_match!(f_r, Type::App(cons, elem) => (*cons, *elem));
     assert_eq!(f_r_cons, Type::Concrete(name!("Maybe")));
-    assert_matches!(f_r_elem, Type::Tuple(_));
+
+    let f_r_vec = unwrap_match!(f_r_elem, Type::Tuple(vec) => vec);
+    assert_matches!(f_r_vec[0], Type::Var(_));
+    assert_matches!(f_r_vec[1], Type::Var(_));
 
     let (seed, result) = unwrap_match!(rest, Type::Arrow(l, r) => (*l, *r));
     assert_matches!(seed, Type::Var(_));
@@ -336,6 +347,11 @@ fn linked_list_unfold_let() {
     assert_eq!(result_cons, Type::Concrete(name!("LinkedList")));
     assert_matches!(result_elem, Type::Var(_));
 
+    // Check that all the `a`s are correct
+    assert_eq!(f_r_vec[0], result_elem);
+
+    // Check that all the `b`s are correct
+    assert_eq!(f_l, f_r_vec[1]);
     assert_eq!(f_l, seed);
 }
 
