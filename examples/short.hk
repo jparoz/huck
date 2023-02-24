@@ -1,4 +1,8 @@
 module Short;
 
-type Wrap a = Wrap a;
-wrapLoop x = Wrap (wrapLoop x);
+type Maybe a = Just a | Nothing;
+
+foo x = case x of {
+        Just n -> n;
+        Nothing -> 0;
+    };

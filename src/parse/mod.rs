@@ -399,10 +399,7 @@ fn pattern(input: &'static str) -> IResult<&'static str, Pattern<UnresolvedName>
         map(tuple(pattern), Pattern::Tuple),
         map(numeral, Pattern::Numeral),
         map(string, Pattern::String),
-        map(
-            parens(nom_tuple((upper_name, many1(pattern)))),
-            |(constructor, args)| Pattern::Destructure { constructor, args },
-        ),
+        parens(pattern_destructure),
         map(upper_name, Pattern::UnaryConstructor),
         value(Pattern::Unit, unit),
         parens(pattern_binop),
@@ -428,6 +425,13 @@ fn pattern_underscore(input: &'static str) -> IResult<&'static str, Pattern<Unre
             many0(satisfy(is_name_char)),
         )))),
         Pattern::Underscore,
+    )(input)
+}
+
+fn pattern_destructure(input: &'static str) -> IResult<&'static str, Pattern<UnresolvedName>> {
+    map(
+        nom_tuple((upper_name, many1(pattern))),
+        |(constructor, args)| Pattern::Destructure { constructor, args },
     )(input)
 }
 
@@ -574,7 +578,17 @@ fn case(input: &'static str) -> IResult<&'static str, Expr<UnresolvedName>> {
 fn case_arm(
     input: &'static str,
 ) -> IResult<&'static str, (Pattern<UnresolvedName>, Expr<UnresolvedName>)> {
-    separated_pair(pattern, reserved_op("->"), expr)(input)
+    separated_pair(case_pattern, reserved_op("->"), expr)(input)
+}
+
+fn case_pattern(input: &'static str) -> IResult<&'static str, Pattern<UnresolvedName>> {
+    alt((
+        // Allow matching constructors without parens.
+        // This isn't ambiguous,
+        // because the case can only have one expression being scrutinised.
+        pattern_destructure,
+        pattern,
+    ))(input)
 }
 
 fn lambda(input: &'static str) -> IResult<&'static str, Expr<UnresolvedName>> {
