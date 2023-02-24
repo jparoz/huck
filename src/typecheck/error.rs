@@ -2,7 +2,7 @@ use crate::name::ResolvedName;
 use crate::types::Type;
 use crate::utils::display_iter;
 
-use super::{Constraint, ConstraintSet};
+use super::ConstraintSet;
 
 /// An enum representing all possible type errors.
 #[derive(thiserror::Error, Debug)]

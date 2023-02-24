@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::fmt::{self, Debug};
 
+use super::constraint::ConstraintSet;
 use super::{Constraint, ExplicitTypeConstraint};
 use crate::name::ResolvedName;
 use crate::types::{Type, TypeScheme, TypeVar, TypeVarSet};
@@ -97,8 +98,22 @@ impl ApplySub for ExplicitTypeConstraint {
 
         let pre_sub_explicit = explicit.clone();
         explicit.apply(sub);
-        // @Checkme: is this always true?
         assert_eq!(pre_sub_explicit, *explicit);
+    }
+}
+
+impl<C: ApplySub> ApplySub for [(C, usize)] {
+    fn apply(&mut self, sub: &Substitution) {
+        for (c, _id) in self.iter_mut() {
+            c.apply(sub);
+        }
+    }
+}
+
+impl ApplySub for ConstraintSet {
+    fn apply(&mut self, sub: &Substitution) {
+        self.constraints.apply(sub);
+        self.explicit_constraints.apply(sub);
     }
 }
 

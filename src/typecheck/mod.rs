@@ -296,11 +296,8 @@ impl Typechecker {
         let mut solution = Substitution::empty();
 
         // The constraints as they are being processed.
-        let mut constraints = mem::take(&mut self.constraints.constraints);
-        constraints.sort_unstable();
-
-        // The explicit type constraints.
-        let mut explicit_constraints = mem::take(&mut self.constraints.explicit_constraints);
+        let mut constraint_set = mem::take(&mut self.constraints);
+        constraint_set.constraints.sort_unstable();
 
         // The constraints to be processed in the next pass.
         let mut next_constraints = Vec::new();
@@ -309,7 +306,7 @@ impl Typechecker {
             // Keep track of whether we've processed any constraints in this pass.
             let mut processed_any_constraint = false;
 
-            while let Some((constraint, id)) = constraints.pop() {
+            while let Some((constraint, id)) = constraint_set.constraints.pop() {
                 // Keep a copy of the constraint to log later
                 let constraint_str = format!("{constraint:?}");
 
@@ -332,7 +329,7 @@ impl Typechecker {
                             .free_vars()
                             .difference(&m)
                             .intersection(
-                                &constraints
+                                &constraint_set
                                     .active_vars()
                                     .union(&next_constraints.active_vars()),
                             )
@@ -363,12 +360,8 @@ impl Typechecker {
                 processed_any_constraint = true;
 
                 // Apply the unifying substitution to the remaining constraints.
-                for (c, _id) in constraints.iter_mut().chain(next_constraints.iter_mut()) {
-                    c.apply(&sub);
-                }
-                for (c, _id) in explicit_constraints.iter_mut() {
-                    c.apply(&sub);
-                }
+                constraint_set.apply(&sub);
+                next_constraints.apply(&sub);
 
                 log::trace!(
                     log::TYPECHECK,
@@ -384,12 +377,13 @@ impl Typechecker {
                 break;
             }
 
+            // Swap the just-processed constraints with the next-to-be-processed constraints,
+            // in time for the next pass.
+            mem::swap(&mut constraint_set.constraints, &mut next_constraints);
+
             // As long as we processed at least one constraint,
             // we're good to continue.
             if processed_any_constraint {
-                // Swap the just-processed constraints with the next-to-be-processed constraints,
-                // in time for the next pass.
-                mem::swap(&mut constraints, &mut next_constraints);
                 continue;
             }
 
@@ -420,7 +414,7 @@ impl Typechecker {
                 "  Checking if the remaining constraints form a closed loop:"
             );
 
-            let mut cons = next_constraints.clone();
+            let mut cons = constraint_set.constraints.clone();
             // Safe unwrap: we checked that !is_empty() above
             let (start, _id) = cons.pop().unwrap();
             let (mut t1, start_t2, mut m) =
@@ -442,10 +436,7 @@ impl Typechecker {
                 } else {
                     // @DRY: same error below
                     log::trace!(log::TYPECHECK, "  They did not form a loop.");
-                    return Err(Error::CouldNotSolveTypeConstraints(ConstraintSet {
-                        constraints: next_constraints,
-                        explicit_constraints,
-                    }));
+                    return Err(Error::CouldNotSolveTypeConstraints(constraint_set));
                 }
             }
 
@@ -464,31 +455,26 @@ impl Typechecker {
                 );
 
                 let new_type = self.fresh();
-                for (c, _id) in next_constraints.iter_mut() {
+                for (c, _id) in constraint_set.constraints.iter_mut() {
                     let t1 = unwrap_match!(c, Constraint::ImplicitInstance(t1, _t2, _m) => t1);
                     *c = Constraint::Equality(new_type.clone(), t1.clone())
                 }
             } else {
                 // @DRY: same error above
                 log::trace!(log::TYPECHECK, "  They did not form a loop.");
-                return Err(Error::CouldNotSolveTypeConstraints(ConstraintSet {
-                    constraints: next_constraints,
-                    explicit_constraints,
-                }));
+                return Err(Error::CouldNotSolveTypeConstraints(constraint_set));
             }
 
             // If we've made it this far,
             // we've recovered,
             // and are okay to continue looping through constraints.
-            mem::swap(&mut constraints, &mut next_constraints);
-
             // This is the end of the loop block,
             // so away we go back to the top!
         }
 
         // Now we've solved all the inferred type constraints,
         // we can solve explicit type constraints.
-        while let Some((constraint, id)) = explicit_constraints.pop() {
+        while let Some((constraint, id)) = constraint_set.explicit_constraints.pop() {
             let constraint_str = format!("{constraint:?}");
 
             let ExplicitTypeConstraint { inferred, explicit } = constraint;
@@ -497,9 +483,7 @@ impl Typechecker {
             let new_sub = inferred.explicit(explicit)?;
 
             // Apply the unifying substitution to the remaining constraints.
-            for (c, _id) in explicit_constraints.iter_mut() {
-                c.apply(&new_sub);
-            }
+            constraint_set.apply(&new_sub);
 
             // Include this substitution in the solution.
             log::trace!(
@@ -1108,26 +1092,19 @@ impl ActiveVars for Constraint {
     }
 }
 
-impl ActiveVars for ExplicitTypeConstraint {
+impl ActiveVars for ConstraintSet {
     fn active_vars(&self) -> TypeVarSet<ResolvedName> {
-        let ExplicitTypeConstraint { inferred, explicit } = self;
-        // @Checkme: is this the right thing?
-        inferred.free_vars().union(&explicit.free_vars())
+        // @Note: in particular, we don't include explicit constraints in active vars.
+        self.constraints.active_vars()
     }
 }
 
-impl ActiveVars for &[(Constraint, usize)] {
+impl<C: ActiveVars> ActiveVars for [(C, usize)] {
     fn active_vars(&self) -> TypeVarSet<ResolvedName> {
         self.iter()
             .map(|(c, _id)| c.active_vars())
             .reduce(|vars1, vars2| vars1.union(&vars2))
             .unwrap_or_else(TypeVarSet::empty)
-    }
-}
-
-impl ActiveVars for Vec<(Constraint, usize)> {
-    fn active_vars(&self) -> TypeVarSet<ResolvedName> {
-        self.as_slice().active_vars()
     }
 }
 
