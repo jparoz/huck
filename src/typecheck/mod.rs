@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::fmt::{self, Debug};
 use std::time::Instant;
 use std::{iter, mem};
 
@@ -10,9 +9,11 @@ use crate::types::{Primitive, Type, TypeScheme, TypeVar, TypeVarSet};
 use crate::utils::unwrap_match;
 
 mod arity;
+mod constraint;
 mod substitution;
 
 use arity::ArityChecker;
+use constraint::{Constraint, ConstraintSet, ExplicitTypeConstraint};
 use substitution::{ApplySub, Substitution};
 
 mod error;
@@ -55,96 +56,6 @@ pub fn typecheck(
     Ok(typechecked_modules)
 }
 
-// @Note: The order here is important!
-// It's the order that constraints will be processed.
-//
-// In particular,
-// ExplicitType constraints MUST be processed last.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub enum Constraint {
-    /// Used when two types should be equal.
-    /// Causes the two types to be unified,
-    /// and a substitution to the most general unifier to be applied.
-    Equality(Type, Type),
-
-    /// Used when one type needs to be an instance of another type,
-    /// and the type scheme is explicitly known.
-    ExplicitInstance(Type, TypeScheme),
-
-    /// Used when one type needs to be an instance of another type,
-    /// but the type scheme isn't yet known.
-    /// Includes a [`TypeVarSet`] of the monomorphically-bound type variables in scope,
-    /// which should be excluded from quantification by the resulting type scheme.
-    ImplicitInstance(Type, Type, TypeVarSet<ResolvedName>),
-}
-
-impl Debug for Constraint {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Constraint::Equality(a, b) => write!(f, "{a} ≡ {b}"),
-            Constraint::ImplicitInstance(a, b, m) => {
-                write!(f, "{a} ≤ {b} where M is {m}")
-            }
-            Constraint::ExplicitInstance(tau, sigma) => {
-                write!(f, "{tau} ≼ {sigma}")
-            }
-        }
-    }
-}
-
-/// Used for explicit type annotations.
-/// Causes the inferred type to be unified with the explicit type,
-/// and a corresponding substitution to be applied.
-/// Solved after all the inferred type constraints.
-#[derive(Clone)]
-struct ExplicitTypeConstraint {
-    inferred: Type,
-    explicit: Type,
-}
-
-impl Debug for ExplicitTypeConstraint {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let ExplicitTypeConstraint { inferred, explicit } = self;
-        // @Cleanup: better message?
-        write!(f, "{inferred} ≡ {explicit} (explicit type)")
-    }
-}
-
-/// Keeps track of all the emitted constraints,
-/// as well as giving them unique IDs for logging.
-pub struct ConstraintSet<Cons>(Vec<(Cons, usize)>);
-
-impl<Cons> Default for ConstraintSet<Cons> {
-    fn default() -> Self {
-        ConstraintSet(Vec::new())
-    }
-}
-
-impl<Cons: Debug> ConstraintSet<Cons> {
-    /// Adds the constraint to the set.
-    fn add(&mut self, constraint: Cons) {
-        use std::sync::atomic::{self, AtomicUsize};
-
-        static UNIQUE_COUNTER: AtomicUsize = AtomicUsize::new(0);
-        let id = UNIQUE_COUNTER.fetch_add(1, atomic::Ordering::Relaxed);
-
-        log::trace!(
-            log::TYPECHECK,
-            "    Emitting constraint [{id}]: {constraint:?}"
-        );
-        self.0.push((constraint, id));
-    }
-}
-
-impl<Cons: Debug> Debug for ConstraintSet<Cons> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for (constraint, id) in self.0.iter() {
-            writeln!(f, "[{id}] {constraint:?}")?;
-        }
-        Ok(())
-    }
-}
-
 /// Manages typechecking of a group of modules.
 #[derive(Debug, Default)]
 struct Typechecker {
@@ -153,10 +64,7 @@ struct Typechecker {
 
     /// All of the emitted constraints about the modules being typechecked.
     /// These are solved in [`Typechecker::solve`].
-    constraints: ConstraintSet<Constraint>,
-
-    /// All of the explicit type constraints.
-    explicit_constraints: ConstraintSet<ExplicitTypeConstraint>,
+    constraints: ConstraintSet,
 
     /// All the currently assumed types of name uses.
     assumptions: BTreeMap<ResolvedName, Vec<Type>>,
@@ -375,13 +283,11 @@ impl Typechecker {
         // Before we can solve, we still need to bind all assumptions.
         self.bind_assumptions_top_level()?;
 
-        // Find the length of the string built from formatting the length of constraints
-        let width = format!("{}", self.constraints.0.len()).len();
+        log::trace!(log::TYPECHECK, "Starting constraint solving");
+        log::trace!(log::TYPECHECK, "{:?}", self.constraints);
 
-        log::trace!(log::TYPECHECK, "Starting constraint solving, constraints:");
-        for (constraint, id) in self.constraints.0.iter() {
-            log::trace!(log::TYPECHECK, "  [{id:width$}] {constraint:?}");
-        }
+        // Find the width of the id column
+        let id_width = format!("{}", self.constraints.len() - 1).len();
 
         // Solve the type constraints by iterating over them in passes.
         log::trace!(log::TYPECHECK, "{:-^100}", " START SOLVING ");
@@ -390,17 +296,14 @@ impl Typechecker {
         let mut solution = Substitution::empty();
 
         // The constraints as they are being processed.
-        let mut constraints = mem::take(&mut self.constraints.0);
+        let mut constraints = mem::take(&mut self.constraints.constraints);
         constraints.sort_unstable();
 
         // The explicit type constraints.
-        let mut explicit_constraints = mem::take(&mut self.explicit_constraints.0);
+        let mut explicit_constraints = mem::take(&mut self.constraints.explicit_constraints);
 
         // The constraints to be processed in the next pass.
         let mut next_constraints = Vec::new();
-
-        // Find the width of the id column
-        let id_width = format!("{}", constraints.len()).len();
 
         loop {
             // Keep track of whether we've processed any constraints in this pass.
@@ -539,9 +442,10 @@ impl Typechecker {
                 } else {
                     // @DRY: same error below
                     log::trace!(log::TYPECHECK, "  They did not form a loop.");
-                    return Err(Error::CouldNotSolveTypeConstraints(ConstraintSet(
-                        next_constraints,
-                    )));
+                    return Err(Error::CouldNotSolveTypeConstraints(ConstraintSet {
+                        constraints: next_constraints,
+                        explicit_constraints,
+                    }));
                 }
             }
 
@@ -567,9 +471,10 @@ impl Typechecker {
             } else {
                 // @DRY: same error above
                 log::trace!(log::TYPECHECK, "  They did not form a loop.");
-                return Err(Error::CouldNotSolveTypeConstraints(ConstraintSet(
-                    next_constraints,
-                )));
+                return Err(Error::CouldNotSolveTypeConstraints(ConstraintSet {
+                    constraints: next_constraints,
+                    explicit_constraints,
+                }));
             }
 
             // If we've made it this far,
@@ -650,7 +555,7 @@ impl Typechecker {
             );
             let ts = self.generate_type_scheme(explicit_type_scheme);
             let explicit_type = self.instantiate(ts);
-            self.explicit_constraints.add(ExplicitTypeConstraint {
+            self.constraints.add_explicit(ExplicitTypeConstraint {
                 inferred,
                 explicit: explicit_type.clone(),
             });
@@ -700,7 +605,7 @@ impl Typechecker {
                 let expr_typ = self.generate_expr(ast_expr);
                 let ts = self.generate_type_scheme(ast_ts);
                 let typ = self.instantiate(ts);
-                self.explicit_constraints.add(ExplicitTypeConstraint {
+                self.constraints.add_explicit(ExplicitTypeConstraint {
                     inferred: expr_typ,
                     explicit: typ.clone(),
                 });

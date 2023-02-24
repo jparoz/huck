@@ -31,7 +31,7 @@ pub enum Error {
          {0:?}\n\
          Maybe try adding some more specific types to recursive definitions."
     )]
-    CouldNotSolveTypeConstraints(ConstraintSet<Constraint>),
+    CouldNotSolveTypeConstraints(ConstraintSet),
 
     // @Errors: this name/message is probably not that helpful
     #[error("Usage of type `{0}` with incorrect arity {1} (actual arity {2})")]
