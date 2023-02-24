@@ -387,7 +387,7 @@ impl From<ast::Pattern<Name>> for Pattern {
                 Pattern::Tuple(pats.into_iter().map(Pattern::from).collect())
             }
 
-            ast::Pattern::Numeral(numeral) => Pattern::Literal(Literal::Numeral(numeral)),
+            ast::Pattern::Int(s) => Pattern::Literal(Literal::Numeral(Numeral::Int(s))),
             ast::Pattern::String(s) => Pattern::Literal(Literal::String(s)),
             ast::Pattern::Unit => Pattern::Literal(Literal::Unit),
 

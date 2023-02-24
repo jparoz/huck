@@ -156,7 +156,7 @@ pub enum Pattern<Name> {
     Underscore(&'static str),
     List(Vec<Pattern<Name>>),
     Tuple(Vec<Pattern<Name>>),
-    Numeral(Numeral),
+    Int(&'static str),
     String(&'static str),
     Binop {
         operator: Name,
@@ -178,7 +178,7 @@ impl<Name> Pattern<Name> {
             Pattern::Bind(_) | Pattern::Underscore(_) | Pattern::Unit => true,
             Pattern::List(_)
             | Pattern::Tuple(_)
-            | Pattern::Numeral(_)
+            | Pattern::Int(_)
             | Pattern::String(_)
             | Pattern::Binop { .. }
             | Pattern::UnaryConstructor(_)
@@ -203,7 +203,7 @@ impl<Name: Copy> Pattern<Name> {
                 names
             }
 
-            Pattern::Numeral(_)
+            Pattern::Int(_)
             | Pattern::String(_)
             | Pattern::UnaryConstructor(_)
             | Pattern::Unit
@@ -234,7 +234,7 @@ impl<Name: Display> Display for Pattern<Name> {
                     .collect::<Vec<std::string::String>>()
                     .join(", ")
             ),
-            Numeral(n) => write!(f, "{n}"),
+            Int(n) => write!(f, "{n}"),
             String(s) => write!(f, "{s}"),
             Binop { operator, lhs, rhs } => write!(f, "({lhs} {operator} {rhs})"),
 

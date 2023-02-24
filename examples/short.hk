@@ -1,8 +1,15 @@
 module Short;
 
+foo n = if n == 0.3 then True else False;
+
+(++) : Float -> Float -> Float;
+a ++ b = unsafe lua { a + b };
+
+bar = foo (0.1 ++ 0.2);
+
+baz 1 2 3 = 4.56;
+baz a b c = 7.89;
+
 type Maybe a = Just a | Nothing;
 
-foo x = case x of {
-        Just n -> n;
-        Nothing -> 0;
-    };
+thousand = (\n -> if n > 0 then Just (n, n-1) else Nothing) 1000;

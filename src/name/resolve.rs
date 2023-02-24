@@ -814,7 +814,7 @@ impl<'a> ModuleResolver<'a> {
                 ast::Pattern::UnaryConstructor(self.resolve_name(constructor)?)
             }
 
-            ast::Pattern::Numeral(s) => ast::Pattern::Numeral(s),
+            ast::Pattern::Int(s) => ast::Pattern::Int(s),
             ast::Pattern::String(s) => ast::Pattern::String(s),
             ast::Pattern::Unit => ast::Pattern::Unit,
             ast::Pattern::Underscore(s) => ast::Pattern::Underscore(s),

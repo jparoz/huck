@@ -920,8 +920,7 @@ impl Typechecker {
                 Type::Tuple(pats.iter().map(|pat| self.bind_pattern(pat)).collect())
             }
 
-            ast::Pattern::Numeral(ast::Numeral::Int(_)) => Type::Primitive(Primitive::Int),
-            ast::Pattern::Numeral(ast::Numeral::Float(_)) => Type::Primitive(Primitive::Float),
+            ast::Pattern::Int(_) => Type::Primitive(Primitive::Int),
             ast::Pattern::String(_) => Type::Primitive(Primitive::String),
             ast::Pattern::Unit => Type::Primitive(Primitive::Unit),
 

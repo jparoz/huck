@@ -237,6 +237,62 @@ fn apply_to_unit() {
 }
 
 #[test]
+fn pattern_int() {
+    assert_eq!(parse::pattern("123 ").unwrap().1, ast::Pattern::Int("123"))
+}
+
+#[test]
+fn pattern_float() {
+    assert!(parse::pattern("1.23 ").is_err())
+}
+
+#[test]
+fn literal_int() {
+    assert_eq!(
+        parse::expr("123 ").unwrap().1,
+        ast::Expr::Term(ast::Term::Numeral(ast::Numeral::Int("123")))
+    )
+}
+
+#[test]
+fn literal_int_subtract() {
+    assert_eq!(
+        parse::expr("1-123 ").unwrap().1,
+        ast::Expr::Binop {
+            operator: name!("-"),
+            lhs: Box::new(ast::Expr::Term(ast::Term::Numeral(ast::Numeral::Int("1")))),
+            rhs: Box::new(ast::Expr::Term(ast::Term::Numeral(ast::Numeral::Int(
+                "123"
+            )))),
+        }
+    )
+}
+
+#[test]
+fn literal_float() {
+    assert_eq!(
+        parse::expr("1.23 ").unwrap().1,
+        ast::Expr::Term(ast::Term::Numeral(ast::Numeral::Float("1.23")))
+    )
+}
+
+#[test]
+fn literal_float_subtract() {
+    assert_eq!(
+        parse::expr("1.2-3.4 ").unwrap().1,
+        ast::Expr::Binop {
+            operator: name!("-"),
+            lhs: Box::new(ast::Expr::Term(ast::Term::Numeral(ast::Numeral::Float(
+                "1.2"
+            )))),
+            rhs: Box::new(ast::Expr::Term(ast::Term::Numeral(ast::Numeral::Float(
+                "3.4"
+            )))),
+        }
+    )
+}
+
+#[test]
 fn case_int() {
     assert_eq!(
         parse::statement(
@@ -259,15 +315,15 @@ fn case_int() {
                     expr: Box::new(ast::Expr::Term(ast::Term::Name(name!("x")))),
                     arms: vec![
                         (
-                            ast::Pattern::Numeral(ast::Numeral::Int("1")),
+                            ast::Pattern::Int("1"),
                             ast::Expr::Term(ast::Term::String(r#""one""#)),
                         ),
                         (
-                            ast::Pattern::Numeral(ast::Numeral::Int("2")),
+                            ast::Pattern::Int("2"),
                             ast::Expr::Term(ast::Term::String(r#""two""#)),
                         ),
                         (
-                            ast::Pattern::Numeral(ast::Numeral::Int("3")),
+                            ast::Pattern::Int("3"),
                             ast::Expr::Term(ast::Term::String(r#""three""#)),
                         ),
                     ],

@@ -1,6 +1,6 @@
 use nom::branch::alt;
 use nom::bytes::complete::{escaped, is_not, tag};
-use nom::character::complete::{anychar, char, hex_digit1, one_of, satisfy};
+use nom::character::complete::{anychar, char, digit1, hex_digit1, one_of, satisfy};
 use nom::character::complete::{none_of, u8 as nom_u8};
 use nom::combinator::{map, not, opt, peek, recognize, success, value, verify};
 use nom::multi::{many0, many1, separated_list0, separated_list1};
@@ -397,7 +397,7 @@ fn pattern(input: &'static str) -> IResult<&'static str, Pattern<UnresolvedName>
         }),
         map(list(pattern), Pattern::List),
         map(tuple(pattern), Pattern::Tuple),
-        map(numeral, Pattern::Numeral),
+        map(ws(numeral_int), Pattern::Int),
         map(string, Pattern::String),
         parens(pattern_destructure),
         map(upper_name, Pattern::UnaryConstructor),
@@ -756,32 +756,62 @@ fn type_vars(input: &'static str) -> IResult<&'static str, types::TypeVarSet<Unr
 }
 
 fn numeral(input: &'static str) -> IResult<&'static str, Numeral> {
-    map(alt((numeral_positive, parens(numeral_negative))), |s| {
-        if s.contains(&['.', 'e', 'E'][..]) {
-            Numeral::Float(s)
-        } else {
-            Numeral::Int(s)
-        }
-    })(input)
+    map(
+        ws(alt((
+            positive(numeral_string),
+            parens(negative(numeral_string)),
+        ))),
+        |s| {
+            if s.contains(&['.', 'e', 'E'][..]) {
+                Numeral::Float(s)
+            } else {
+                Numeral::Int(s)
+            }
+        },
+    )(input)
 }
 
-fn numeral_string(input: &'static str) -> IResult<&'static str, &'static str> {
+fn numeral_int(input: &'static str) -> IResult<&'static str, &'static str> {
     ws(alt((
-        recognize(nom_tuple((alt((tag("0x"), tag("0X"))), hex_digit1))),
-        recognize(nom_tuple((
-            alt((tag("0b"), tag("0B"))),
-            many1(alt((char('0'), char('1')))),
-        ))),
-        preceded(not(tag("+")), recognize_float),
+        positive(numeral_string_int),
+        parens(negative(numeral_string_int)),
     )))(input)
 }
 
-fn numeral_positive(input: &'static str) -> IResult<&'static str, &'static str> {
-    preceded(not(tag("-")), numeral_string)(input)
+fn positive<F>(inner: F) -> impl FnMut(&'static str) -> IResult<&'static str, &'static str>
+where
+    F: FnMut(&'static str) -> IResult<&'static str, &'static str>,
+{
+    preceded(not(tag("-")), inner)
 }
 
-fn numeral_negative(input: &'static str) -> IResult<&'static str, &'static str> {
-    recognize(nom_tuple((tag("-"), numeral_string)))(input)
+fn negative<F>(inner: F) -> impl FnMut(&'static str) -> IResult<&'static str, &'static str>
+where
+    F: FnMut(&'static str) -> IResult<&'static str, &'static str>,
+{
+    recognize(nom_tuple((tag("-"), inner)))
+}
+
+fn numeral_string(input: &'static str) -> IResult<&'static str, &'static str> {
+    alt((numeral_string_int, numeral_string_float))(input)
+}
+
+fn numeral_string_int(input: &'static str) -> IResult<&'static str, &'static str> {
+    terminated(
+        alt((
+            recognize(nom_tuple((alt((tag("0x"), tag("0X"))), hex_digit1))),
+            recognize(nom_tuple((
+                alt((tag("0b"), tag("0B"))),
+                many1(alt((char('0'), char('1')))),
+            ))),
+            digit1,
+        )),
+        not(tag(".")),
+    )(input)
+}
+
+fn numeral_string_float(input: &'static str) -> IResult<&'static str, &'static str> {
+    preceded(not(tag("+")), recognize_float)(input)
 }
 
 fn string(input: &'static str) -> IResult<&'static str, &'static str> {
