@@ -331,6 +331,14 @@ impl Typechecker {
                             )
                             .is_empty() =>
                     {
+                        // Make sure that this isn't a recursive constraint.
+                        // This is done by temporarily pretending that it's an equality constraint,
+                        // because [`unify`](Type::unify) already implements this logic.
+                        //
+                        // @Errors: this should be done a bit more properly,
+                        // and a more specific message given.
+                        let _ = t1.clone().unify(t2.clone())?;
+
                         // @Note:
                         // Conceptually,
                         // this is first turned into an ExplicitInstance constraint,

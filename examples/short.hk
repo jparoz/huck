@@ -2,15 +2,3 @@ module Short;
 
 type Wrap a = Wrap a;
 wrapLoop x = Wrap (wrapLoop x);
-
-type LinkedList a = Cons a (LinkedList a) | Nil;
-type Maybe a = Just a | Nothing;
-
-(* unfold : forall a b. (b -> Maybe (a, b)) -> b -> LinkedList a; *)
-unfold f seed =
-    let go s = case f s of {
-        (Just (x, s')) -> Cons x (go s');
-        Nothing -> Nil;
-    } in go seed;
-
-thousand = unfold (\n -> if n > 0 then Just (n, n-1) else Nothing) 1000;
