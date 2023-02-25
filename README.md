@@ -10,4 +10,5 @@ and is not currently ready for production use!
 
 See [the associated Github Project](https://github.com/users/jparoz/projects/1)
 for the roadmap of planned features;
-and see the `examples` directory for some examples of Huck code.
+and see the [`examples`](examples) directory
+for some examples of Huck code.
