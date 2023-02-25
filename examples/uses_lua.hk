@@ -1,0 +1,13 @@
+module LuaWrapper;
+
+foreign import "lua_library" (new : () -> IO Object);
+type Object = Object;
+
+newObject : () -> IO Object;
+newObject = new;
+
+activateObject : Object -> IO ();
+activateObject obj = lua { obj:activate() };
+
+getObjectVal : Object -> IO Int;
+getObjectVal obj = lua { obj:getVal() };
