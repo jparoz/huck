@@ -160,3 +160,23 @@ fn tuple() {
         normalize(wrap!("tuple", r#"{1, "hi"}"#)).unwrap()
     )
 }
+
+#[test]
+fn import() {
+    assert_eq!(
+        transpile(
+            r#"
+                import Prelude (length as getLength);
+                foo = getLength [3, 4, 5];
+            "#
+        )
+        .unwrap(),
+        normalize(wrap!(
+            "foo",
+            r#"
+                (require("huck.Prelude")["length"])({3, 4, 5})
+            "#
+        ))
+        .unwrap()
+    )
+}
