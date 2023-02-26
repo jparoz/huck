@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::fmt::{self, Display};
 
-use crate::name::ModulePath;
+use crate::name::{Ident, ModulePath, ResolvedName, UnresolvedName};
 use crate::precedence::Precedence;
 use crate::types;
 
@@ -21,7 +21,7 @@ pub struct Module<Name: Ord + Copy, Ty> {
     /// in the values of the `type_definitions` field.
     pub constructors: BTreeMap<Name, ConstructorDefinition<Name, Ty>>,
 
-    pub imports: BTreeMap<ModulePath, Vec<Name>>,
+    pub imports: BTreeMap<ModulePath, Vec<ImportItem<Name>>>,
     pub foreign_imports: BTreeMap<&'static str, Vec<ForeignImportItem<Name, Ty>>>,
     pub foreign_exports: Vec<(&'static str, Expr<Name>)>,
 }
@@ -67,7 +67,7 @@ impl<Name> Default for Definition<Name, ()> {
 /// A Statement is a sum type for any of the top-level Huck constructs.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum Statement<Name: Ord + Copy, Ty> {
-    Import(ModulePath, Vec<Name>),
+    Import(ModulePath, Vec<ImportItem<Name>>),
     /// Includes the quotation marks in the require string
     ForeignImport(&'static str, Vec<ForeignImportItem<Name, Ty>>),
 
@@ -494,6 +494,40 @@ pub struct ConstructorDefinition<Name, Ty> {
     pub name: Name,
     pub args: Vec<TypeTerm<Name>>,
     pub typ: Ty,
+}
+
+/// An item being imported from another Huck module.
+/// In the case of a renamed import,
+/// e.g. `import Foo (foo as bar);`,
+/// the field `name` contains `bar`,
+/// while `defined_name` contains `foo`.
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub struct ImportItem<Name> {
+    /// This is the identifier which is in scope due to this import.
+    /// It may be the same as the identifier of the `name` part of this `ImportItem`,
+    /// or it may be another identifier,
+    /// renamed using `(foo as bar)` syntax.
+    pub ident: Ident,
+    /// This is the name of the item as in its definition.
+    pub name: Name,
+}
+
+impl From<UnresolvedName> for ImportItem<UnresolvedName> {
+    fn from(name: UnresolvedName) -> Self {
+        ImportItem {
+            ident: name.ident(),
+            name,
+        }
+    }
+}
+
+impl From<ResolvedName> for ImportItem<ResolvedName> {
+    fn from(name: ResolvedName) -> Self {
+        ImportItem {
+            ident: name.ident,
+            name,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]

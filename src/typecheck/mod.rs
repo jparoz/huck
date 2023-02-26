@@ -257,7 +257,9 @@ impl Typechecker {
                     prelude
                         .definitions
                         .keys()
-                        .chain(prelude.constructors.keys()),
+                        .chain(prelude.constructors.keys())
+                        .cloned()
+                        .map(ast::ImportItem::from),
                 );
         }
 
@@ -1004,21 +1006,21 @@ impl Typechecker {
             }
 
             // Constrain assumptions about Huck imports.
-            for (import_path, import_names) in module.imports.iter() {
+            for (import_path, import_items) in module.imports.iter() {
                 // Get the imported module.
                 let import_module = &self.modules[import_path];
 
                 // Constrain that each assumed type is an instance of the name's inferred type.
-                for import_name in import_names {
+                for import_item in import_items {
                     // Find the inferred type.
                     let typ = import_module
                         .constructors
-                        .get(import_name)
+                        .get(&import_item.name)
                         .map(|constr_defn| constr_defn.typ.clone())
                         .or_else(|| {
                             import_module
                                 .definitions
-                                .get(import_name)
+                                .get(&import_item.name)
                                 .map(|defn| defn.typ.clone())
                         })
                         .expect(
@@ -1026,7 +1028,7 @@ impl Typechecker {
                         );
 
                     // If there are any assumptions about the variable, bind them.
-                    if let Some(assumed_types) = self.assumptions.remove(import_name) {
+                    if let Some(assumed_types) = self.assumptions.remove(&import_item.name) {
                         // Constrain that the assumed types are instances of the inferred type.
                         for assumed_type in assumed_types {
                             let constraint = Constraint::ImplicitInstance(
@@ -1038,8 +1040,11 @@ impl Typechecker {
                         }
                     } else {
                         // @Errors @Warn: emit a warning for unused imports
+                        // @Note: it's possible that a name could be used,
+                        // and still not have any assumptions drawn about its type;
+                        // so this doesn't necessarily mean it's unused.
                         if import_path != &ModulePath("Prelude") {
-                            log::warn!(log::IMPORT, "unused: import {import_path} ({import_name})");
+                            // log::warn!(log::IMPORT, "unused: import {import_path} ({import_name})");
                         }
                     }
                 }

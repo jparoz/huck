@@ -35,10 +35,20 @@ fn statement_import_qualified() {
 #[test]
 fn statement_import_unqualified() {
     assert_eq!(
-        parse::statement(r#"import Foo.Bar (foo, Bar);"#),
+        parse::statement(r#"import Foo.Bar (foo, Bar, baz as quux);"#),
         Ok((
             "",
-            ast::Statement::Import(ModulePath("Foo.Bar"), vec![name!("foo"), name!("Bar")])
+            ast::Statement::Import(
+                ModulePath("Foo.Bar"),
+                vec![
+                    name!("foo").into(),
+                    name!("Bar").into(),
+                    ast::ImportItem {
+                        name: name!("baz"),
+                        ident: "quux",
+                    },
+                ]
+            )
         ))
     )
 }

@@ -274,18 +274,7 @@ fn statement(input: &'static str) -> IResult<&'static str, Statement<UnresolvedN
         // Precedence declaration
         map(prec, |(name, prec)| Statement::Precedence(name, prec)),
         // Huck import statement
-        map(
-            delimited(
-                reserved("import"),
-                nom_tuple((module_path, tuple(name))),
-                semi,
-            ),
-            |(path, names)| Statement::Import(path, names),
-        ),
-        // Huck import statement (qualified i.e. empty)
-        map(delimited(reserved("import"), module_path, semi), |path| {
-            Statement::Import(path, vec![])
-        }),
+        import_statement,
         // Foreign (Lua) import statement
         map(
             delimited(
@@ -306,6 +295,37 @@ fn statement(input: &'static str) -> IResult<&'static str, Statement<UnresolvedN
             |(lhs, expr)| Statement::ForeignExport(lhs, expr),
         ),
     ))(input)
+}
+
+fn import_statement(input: &'static str) -> IResult<&'static str, Statement<UnresolvedName, ()>> {
+    alt((
+        // Import with list of names
+        map(
+            delimited(
+                reserved("import"),
+                nom_tuple((module_path, tuple(import_item))),
+                semi,
+            ),
+            |(path, names)| Statement::Import(path, names),
+        ),
+        // Qualified (i.e. empty)
+        map(delimited(reserved("import"), module_path, semi), |path| {
+            Statement::Import(path, vec![])
+        }),
+    ))(input)
+}
+
+fn import_item(input: &'static str) -> IResult<&'static str, ImportItem<UnresolvedName>> {
+    map(
+        alt((
+            separated_pair(unqualified_name, reserved("as"), unqualified_name),
+            map(unqualified_name, |n| (n, n)),
+        )),
+        |(name, as_name)| ImportItem {
+            name,
+            ident: as_name.ident(),
+        },
+    )(input)
 }
 
 fn foreign_import_item(
@@ -670,6 +690,10 @@ fn ident(input: &'static str) -> IResult<&'static str, &'static str> {
 
 fn name(input: &'static str) -> IResult<&'static str, UnresolvedName> {
     alt((qualified(ident), unqualified(ident), parens(operator)))(input)
+}
+
+fn unqualified_name(input: &'static str) -> IResult<&'static str, UnresolvedName> {
+    alt((unqualified(ident), parens(operator)))(input)
 }
 
 fn qualified<F>(inner: F) -> impl FnMut(&'static str) -> IResult<&'static str, UnresolvedName>

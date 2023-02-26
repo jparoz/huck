@@ -39,19 +39,19 @@ impl Resolver {
     pub fn new() -> Self {
         let scope = Scope {
             idents: BTreeMap::from([
-                ("True", vec![Source::Builtin]),
-                ("False", vec![Source::Builtin]),
+                ("True", vec![ResolvedName::builtin("True")]),
+                ("False", vec![ResolvedName::builtin("False")]),
             ]),
             ..Scope::default()
         };
 
         let type_scope = TypeScope {
             idents: BTreeMap::from([
-                ("Int", vec![Source::Builtin]),
-                ("Float", vec![Source::Builtin]),
-                ("String", vec![Source::Builtin]),
-                ("Bool", vec![Source::Builtin]),
-                ("IO", vec![Source::Builtin]),
+                ("Int", vec![ResolvedName::builtin("Int")]),
+                ("Float", vec![ResolvedName::builtin("Float")]),
+                ("String", vec![ResolvedName::builtin("String")]),
+                ("Bool", vec![ResolvedName::builtin("Bool")]),
+                ("IO", vec![ResolvedName::builtin("IO")]),
             ]),
             ..Scope::default()
         };
@@ -248,7 +248,8 @@ impl<'a> ModuleResolver<'a> {
 
         for name in defns_iter.chain(constrs_iter) {
             log::trace!(log::RESOLVE, "Adding `{name}` to the top-level scope");
-            self.bind(ResolvedName::module(module.path, name.ident()));
+            let ident = name.ident();
+            self.bind(ident, ResolvedName::module(module.path, ident));
         }
 
         // Add all the type names to the scope
@@ -257,46 +258,41 @@ impl<'a> ModuleResolver<'a> {
                 log::RESOLVE,
                 "Adding `{type_name}` to the top-level type scope"
             );
-            self.bind_type(ResolvedName::module(module.path, type_name.ident()));
+            let ident = type_name.ident();
+            self.bind_type(ident, ResolvedName::module(module.path, ident));
         }
 
         // Add all the imports to the scope as well as resolving the names.
-        for (path, names) in module.imports {
+        for (path, import_items) in module.imports {
             // Assume that the module exists, to be checked later.
             self.resolver.module_assumptions.push(path);
+            log::trace!(log::RESOLVE, "  Assumed module `{path}` exists");
 
             // Handle the imported names.
-            for name in names {
+            for ast::ImportItem { ident, name } in import_items {
                 log::trace!(
                     log::RESOLVE,
-                    "Importing `{path}.{name}` to the top-level scope"
+                    "Importing `{path}.{ident}` to the top-level scope"
                 );
 
-                // Check that it's the right type of name.
-                // @Errors: this should throw an error
-                //   (that is, if this is reachable; maybe it's already a parse error.
-                //   Actually, this should definitely be a parse error.)
-                assert!(matches!(name, UnresolvedName::Unqualified(_)));
+                let resolved_name = ResolvedName::module(path, name.ident());
 
-                let resolved = ResolvedName {
-                    source: Source::Module(path),
-                    ident: name.ident(),
-                };
-
-                // Assume that the module and the imported name both exist,
-                // to be checked later.
-                self.resolver.assumptions.push(resolved);
-                log::trace!(log::RESOLVE, "  Assumed name `{resolved}` exists");
+                // Assume that the imported name exists, to be checked later.
+                self.resolver.assumptions.push(resolved_name);
+                log::trace!(log::RESOLVE, "  Assumed name `{name}` exists");
 
                 // Replicate into the new module, resolving the import's name.
                 resolved_module
                     .imports
                     .entry(path)
                     .or_default()
-                    .push(resolved);
+                    .push(ast::ImportItem {
+                        ident,
+                        name: resolved_name,
+                    });
 
                 // Insert it into the scope
-                self.bind(ResolvedName::module(path, name.ident()));
+                self.bind(ident, resolved_name);
             }
         }
 
@@ -342,7 +338,8 @@ impl<'a> ModuleResolver<'a> {
                     });
 
                 // Insert it into the scope
-                self.bind(ResolvedName::foreign(require, foreign_name, name.ident()));
+                let ident = name.ident();
+                self.bind(ident, ResolvedName::foreign(require, foreign_name, ident));
             }
         }
 
@@ -398,36 +395,36 @@ impl<'a> ModuleResolver<'a> {
         Ok((resolved_module, self.scope, self.type_scope))
     }
 
-    /// Adds the given `ResolvedName` to the value scope.
-    fn bind(&mut self, b @ ResolvedName { source, ident }: ResolvedName) {
-        log::trace!(log::RESOLVE, "    Binding name `{ident}` (from {source})");
-        self.scope.bind(b)
+    /// Binds an identifier to a `ResolvedName` in the value scope.
+    fn bind(&mut self, ident: Ident, name: ResolvedName) {
+        log::trace!(
+            log::RESOLVE,
+            "    Binding name `{ident}` to resolved name {name}"
+        );
+        self.scope.bind(ident, name)
     }
 
     /// Removes the `ResolvedName` on top of the value scope stack,
     /// and asserts that it's equal to the given `ResolvedName`.
-    fn unbind(&mut self, b @ ResolvedName { source, ident }: ResolvedName) {
-        log::trace!(log::RESOLVE, "    Unbinding name `{ident}` (from {source})");
-        self.scope.unbind(b)
+    fn unbind(&mut self, ident: Ident, name: ResolvedName) {
+        log::trace!(log::RESOLVE, "    Unbinding ident `{ident}` ({name})");
+        self.scope.unbind(ident, name)
     }
 
-    /// Adds the given `ResolvedName` to the type scope.
-    fn bind_type(&mut self, b @ ResolvedName { source, ident }: ResolvedName) {
+    /// Binds an identifier to a `ResolvedName` in the type scope.
+    fn bind_type(&mut self, ident: Ident, name: ResolvedName) {
         log::trace!(
             log::RESOLVE,
-            "    Binding type name `{ident}` (from {source})"
+            "    Binding type name `{ident}` to resolved name {name}"
         );
-        self.type_scope.bind(b)
+        self.type_scope.bind(ident, name)
     }
 
     /// Removes the `ResolvedName` on top of the type scope stack,
     /// and asserts that it's equal to the given `ResolvedName`.
-    fn unbind_type(&mut self, b @ ResolvedName { source, ident }: ResolvedName) {
-        log::trace!(
-            log::RESOLVE,
-            "    Unbinding type name `{ident}` (from {source})"
-        );
-        self.type_scope.unbind(b)
+    fn unbind_type(&mut self, ident: Ident, name: ResolvedName) {
+        log::trace!(log::RESOLVE, "    Unbinding type ident `{ident}` ({name})");
+        self.type_scope.unbind(ident, name)
     }
 
     // Resolution methods
@@ -485,7 +482,7 @@ impl<'a> ModuleResolver<'a> {
         // Bind the arguments on the LHS
         let (arg_bindings, lhs) = self.resolve_lhs(assign.0)?;
         for b in arg_bindings.iter() {
-            self.bind(*b);
+            self.bind(b.ident, *b);
         }
 
         // Resolve the RHS, possibly including the bound arguments
@@ -493,7 +490,7 @@ impl<'a> ModuleResolver<'a> {
 
         // Unbind the arguments
         for b in arg_bindings {
-            self.unbind(b);
+            self.unbind(b.ident, b);
         }
 
         Ok((lhs, rhs))
@@ -562,9 +559,10 @@ impl<'a> ModuleResolver<'a> {
                 let mut definitions = BTreeMap::new();
                 let mut to_unbind = Vec::new();
                 for (unres_name, unres_assigns) in unres_defns {
-                    let res_name = ResolvedName::local(unres_name.ident());
-                    self.bind(res_name);
-                    to_unbind.push(res_name);
+                    let ident = unres_name.ident();
+                    let res_name = ResolvedName::local(ident);
+                    self.bind(ident, res_name);
+                    to_unbind.push((ident, res_name));
 
                     let mut res_assigns = Vec::new();
                     for unres_assign in unres_assigns {
@@ -577,8 +575,8 @@ impl<'a> ModuleResolver<'a> {
                 // Resolve the expression while the variables are in scope.
                 let in_expr = Box::new(self.resolve_expr(*unres_in)?);
 
-                for binding in to_unbind {
-                    self.unbind(binding);
+                for (ident, name) in to_unbind {
+                    self.unbind(ident, name);
                 }
 
                 Ok(ast::Expr::Let {
@@ -611,11 +609,11 @@ impl<'a> ModuleResolver<'a> {
                 for (unres_pat, unres_rhs) in unres_arms {
                     let (bindings, res_pat) = self.resolve_pattern(unres_pat)?;
                     for b in bindings.iter() {
-                        self.bind(*b);
+                        self.bind(b.ident, *b);
                     }
                     let res_rhs = self.resolve_expr(unres_rhs)?;
                     for b in bindings {
-                        self.unbind(b);
+                        self.unbind(b.ident, b);
                     }
                     arms.push((res_pat, res_rhs));
                 }
@@ -628,11 +626,11 @@ impl<'a> ModuleResolver<'a> {
             } => {
                 let (bindings, args) = self.resolve_args(unres_args)?;
                 for b in bindings.iter() {
-                    self.bind(*b);
+                    self.bind(b.ident, *b);
                 }
                 let rhs = Box::new(self.resolve_expr(*unres_rhs)?);
                 for b in bindings {
-                    self.unbind(b);
+                    self.unbind(b.ident, b);
                 }
                 Ok(ast::Expr::Lambda { args, rhs })
             }
@@ -843,7 +841,7 @@ impl<'a> ModuleResolver<'a> {
 
         // Add the type variables from the type definition LHS into the scope
         for b in bindings.iter() {
-            self.bind_type(*b);
+            self.bind_type(b.ident, *b);
         }
 
         let mut constructors = BTreeMap::new();
@@ -878,7 +876,7 @@ impl<'a> ModuleResolver<'a> {
 
         // Take the type variables out of scope
         for b in bindings {
-            self.unbind_type(b);
+            self.unbind_type(b.ident, b);
         }
 
         Ok(ast::TypeDefinition {
@@ -900,7 +898,7 @@ impl<'a> ModuleResolver<'a> {
             .collect();
 
         for b in bindings.iter() {
-            self.bind_type(*b);
+            self.bind_type(b.ident, *b);
         }
 
         let typ = self.resolve_type_expr(unres_ts.typ)?;
@@ -911,7 +909,7 @@ impl<'a> ModuleResolver<'a> {
         }
 
         for b in bindings {
-            self.unbind_type(b);
+            self.unbind_type(b.ident, b);
         }
 
         Ok(ast::TypeScheme { vars, typ })
@@ -1003,7 +1001,8 @@ impl<'a> fmt::Debug for ModuleResolver<'a> {
 #[derive(Debug, Default, Clone)]
 struct Scope {
     /// Identifiers which are in scope.
-    idents: BTreeMap<Ident, Vec<Source>>,
+    /// Maps the bare identifier to its resolved name.
+    idents: BTreeMap<Ident, Vec<ResolvedName>>,
 
     /// This field records assumptions made that names will exist in external modules.
     /// See [`resolve_name`](Scope::resolve_name) for more information.
@@ -1014,18 +1013,18 @@ struct Scope {
 type TypeScope = Scope;
 
 impl Scope {
-    /// Adds the given `ResolvedName` to the scope.
-    fn bind(&mut self, ResolvedName { source, ident }: ResolvedName) {
-        self.idents.entry(ident).or_default().push(source);
+    /// Binds an identifier to a `ResolvedName` in the scope.
+    fn bind(&mut self, ident: Ident, name: ResolvedName) {
+        self.idents.entry(ident).or_default().push(name);
     }
 
-    /// Removes the `ResolvedName` on top of the scope stack,
+    /// Removes the `ResolvedName` on top of the identifier's scope stack,
     /// and asserts that it's equal to the given `ResolvedName`.
-    fn unbind(&mut self, ResolvedName { source, ident }: ResolvedName) {
-        let popped_source = self.idents.get_mut(&ident).and_then(|idents| idents.pop());
+    fn unbind(&mut self, ident: Ident, name: ResolvedName) {
+        let popped_name = self.idents.get_mut(ident).and_then(|names| names.pop());
         assert_eq!(
-            Some(source),
-            popped_source,
+            Some(name),
+            popped_name,
             "Internal compiler error: unbound the wrong variable"
         );
     }
@@ -1041,10 +1040,7 @@ impl Scope {
     ) -> Result<ResolvedName, Error> {
         match name {
             UnresolvedName::Qualified(path, ident) => {
-                let resolved = ResolvedName {
-                    source: Source::Module(path),
-                    ident,
-                };
+                let resolved = ResolvedName::module(path, ident);
 
                 // @Note:
                 // Here we need to check that the name actually exists in the module,
@@ -1058,19 +1054,15 @@ impl Scope {
 
                 Ok(resolved)
             }
-            UnresolvedName::Unqualified(ident) => self
-                .idents
-                .get(&ident)
-                .and_then(|sources| sources.last())
-                .map(|source| {
-                    let resolved = ResolvedName {
-                        source: *source,
-                        ident,
-                    };
-                    log::trace!(log::RESOLVE, "  Resolved name `{resolved}`");
-                    resolved
-                })
-                .ok_or(Error::NotInScope(module_path, ident)),
+            UnresolvedName::Unqualified(ident) => {
+                let resolved = self
+                    .idents
+                    .get(&ident)
+                    .and_then(|names| names.last())
+                    .ok_or(Error::NotInScope(module_path, ident))?;
+                log::trace!(log::RESOLVE, "  Resolved name `{resolved}`");
+                Ok(*resolved)
+            }
         }
     }
 }
