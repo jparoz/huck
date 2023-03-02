@@ -68,9 +68,10 @@ struct Typechecker {
     /// All the currently assumed types of name uses.
     assumptions: BTreeMap<ResolvedName, Vec<Type>>,
 
-    // @Todo @Cleanup: this has nothing to do with constraints, it's just here for convenience.
+    /// The [`ArityChecker`] which checks that types are used with the correct arity.
     arity_checker: ArityChecker,
 
+    /// The stack of monomorphically-bound type variables.
     m_stack: Vec<TypeVar<ResolvedName>>,
 }
 
@@ -278,8 +279,13 @@ impl Typechecker {
         mut self,
     ) -> Result<BTreeMap<ModulePath, ast::Module<ResolvedName, Type>>, crate::typecheck::Error>
     {
-        // Before we can solve, we still need to bind all assumptions.
+        // Bind all remaining assumptions.
         self.bind_assumptions_top_level()?;
+
+        // Check that all the arity assumptions are true within the given modules.
+        self.arity_checker.finish(&self.modules)?;
+
+        // Now we can solve the type constraints.
 
         log::trace!(log::TYPECHECK, "Starting constraint solving");
         log::trace!(log::TYPECHECK, "{:?}", self.constraints);
@@ -805,12 +811,6 @@ impl Typechecker {
 
     fn typecheck_type_scheme(&mut self, input: &ast::TypeScheme<ResolvedName>) -> TypeScheme {
         // Recursively check arity assumptions for this type expression.
-        //
-        // @Cleanup:
-        // This doesn't really need to be here,
-        // it's just convenient to call this here
-        // while we're already traversing the AST.
-        // It might be neater to place this outside of `constraint`.
         self.arity_checker.type_expr(&input.typ, 0);
 
         let vars: TypeVarSet<ResolvedName> =
@@ -959,21 +959,13 @@ impl Typechecker {
     fn bind_assumptions_poly(&mut self, name: &ResolvedName, typ: &Type) {
         if let Some(assumptions) = self.assumptions.remove(name) {
             for assumed in assumptions {
-                self.constraints.add(Constraint::ImplicitInstance(
+                let constraint = Constraint::ImplicitInstance(
                     assumed,
                     typ.clone(),
                     self.m_stack.iter().cloned().collect(),
-                ));
-                log::trace!(
-                    log::TYPECHECK,
-                    "      Bound (poly): {} to type {} (M = {})",
-                    name,
-                    typ,
-                    self.m_stack
-                        .iter()
-                        .cloned()
-                        .collect::<TypeVarSet<ResolvedName>>()
                 );
+                log::trace!(log::TYPECHECK, "      Bound (poly) {name}: {constraint:?}");
+                self.constraints.add(constraint);
             }
         }
     }
@@ -1073,9 +1065,6 @@ impl Typechecker {
 
         // We should have removed all assumptions by now.
         assert_eq!(self.assumptions, BTreeMap::new());
-
-        // Checks all the arity assumptions are true within the given modules.
-        self.arity_checker.finish(&self.modules)?;
 
         Ok(())
     }
