@@ -81,6 +81,13 @@ impl ResolvedName {
         }
     }
 
+    pub fn constructor(path: ModulePath, type_ident: Ident, cons_ident: Ident) -> Self {
+        ResolvedName {
+            source: Source::Constructor(path, type_ident),
+            ident: cons_ident,
+        }
+    }
+
     pub fn foreign(require: &'static str, foreign_name: ast::ForeignName, ident: Ident) -> Self {
         ResolvedName {
             source: Source::Foreign {
@@ -121,6 +128,11 @@ pub enum Source {
     /// From a Huck module.
     Module(ModulePath),
 
+    /// A type constructor.
+    /// Contains the defining module's path,
+    /// and the `Ident` of the type associated with the constructor.
+    Constructor(ModulePath, Ident),
+
     /// From a foreign (Lua) module.
     Foreign {
         /// Includes the quotation marks.
@@ -141,6 +153,7 @@ impl Display for Source {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Source::Module(path) => path.fmt(f),
+            Source::Constructor(path, typ) => write!(f, "{path}.{typ}"),
             Source::Foreign {
                 require,
                 foreign_name,

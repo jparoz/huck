@@ -15,6 +15,9 @@ pub enum Error {
     #[error("Type `{0}` doesn't exist in module `{1}`")]
     NonexistentTypeName(Ident, Source),
 
+    #[error("Type constructor `{0}` doesn't exist in module `{1}`")]
+    NonexistentConstructorName(Ident, Source),
+
     #[error("Identifier `{0}` doesn't exist in module `{1}`")]
     NonexistentName(Ident, Source),
 

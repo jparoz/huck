@@ -75,6 +75,8 @@ impl ArityChecker {
             let actual_arity = match name.source {
                 Source::Module(path) => modules[&path].type_definitions[&name].vars.len(),
 
+                Source::Constructor(..) => unreachable!("constructors can't be used at type level"),
+
                 Source::Local(_id) => {
                     // @Typeclasses: this code will need to change when implementing type classes
 

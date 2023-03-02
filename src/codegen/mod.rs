@@ -498,7 +498,8 @@ impl<'a> CodeGenerator<'a> {
 
     fn reference(&mut self, name: ResolvedName) -> Result<String, fmt::Error> {
         match name.source {
-            Source::Module(path) if path == self.module.path => {
+            // @CheckMe: same for Constructor okay?
+            Source::Module(path) | Source::Constructor(path, ..) if path == self.module.path => {
                 // It's a top-level definition from this module,
                 // so we should emit e.g. _Module_Name["var"]
                 Ok(format!(
@@ -508,7 +509,8 @@ impl<'a> CodeGenerator<'a> {
                 ))
             }
 
-            Source::Module(path) => {
+            // @CheckMe: same for Constructor okay?
+            Source::Module(path) | Source::Constructor(path, ..) => {
                 // It's a top-level definition from a different module,
                 // so we should emit e.g. require("Bar")["var"]
                 Ok(format!(

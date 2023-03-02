@@ -155,21 +155,53 @@ impl Resolver {
 
         // Assumptions arising from imports (so we don't know if type- or value-level)
         for assumption in self.assumptions.drain(..) {
-            let path = unwrap_match!(assumption.source, Source::Module(path) => path);
+            match assumption.source {
+                Source::Module(path) => {
+                    let module = self
+                        .modules
+                        .get(&path)
+                        .ok_or(Error::NonexistentModule(path))?;
 
-            let module = self
-                .modules
-                .get(&path)
-                .ok_or(Error::NonexistentModule(path))?;
+                    if !(module.definitions.contains_key(&assumption)
+                        || module.type_definitions.contains_key(&assumption))
+                    {
+                        return Err(Error::NonexistentName(assumption.ident, assumption.source));
+                    }
 
-            if !(module.definitions.contains_key(&assumption)
-                || module.constructors.contains_key(&assumption)
-                || module.type_definitions.contains_key(&assumption))
-            {
-                return Err(Error::NonexistentName(assumption.ident, assumption.source));
+                    log::trace!(log::RESOLVE, "  Found name {assumption}");
+                }
+
+                Source::Constructor(path, type_ident) => {
+                    let module = self
+                        .modules
+                        .get(&path)
+                        .ok_or(Error::NonexistentModule(path))?;
+
+                    if !(module
+                        .type_definitions
+                        .get(&ResolvedName::module(path, type_ident))
+                        .map(|type_definition| {
+                            type_definition.constructors.contains_key(&assumption)
+                        })
+                        .unwrap_or(false))
+                    {
+                        return Err(Error::NonexistentConstructorName(
+                            assumption.ident,
+                            assumption.source,
+                        ));
+                    }
+                }
+
+                Source::Foreign { .. } => {
+                    unreachable!("import assumptions can't be generated for foreign names")
+                }
+                Source::Local(_) => {
+                    unreachable!("import assumptions can't be generated for local names")
+                }
+                Source::Builtin => {
+                    unreachable!("import assumptions can't be generated for builtin names")
+                }
             }
-
-            log::trace!(log::RESOLVE, "  Found name {assumption}");
         }
 
         Ok(self.modules)
@@ -238,28 +270,34 @@ impl<'a> ModuleResolver<'a> {
         // This is the new module we'll be building as we resolve names.
         let mut resolved_module: Module<ResolvedName, ()> = Module::new(module.path);
 
-        // Add all the top-level definitions (including type constructors) to the scope
-        let defns_iter = module.definitions.keys();
-        let constrs_iter = module
-            .type_definitions
-            .values()
-            .flat_map(|td| td.constructors.iter())
-            .map(|(name, _term)| name);
-
-        for name in defns_iter.chain(constrs_iter) {
+        // Add all the top-level definitions to the scope
+        for name in module.definitions.keys() {
             log::trace!(log::RESOLVE, "Adding `{name}` to the top-level scope");
             let ident = name.ident();
             self.bind(ident, ResolvedName::module(module.path, ident));
         }
 
-        // Add all the type names to the scope
-        for type_name in module.type_definitions.keys() {
+        // Add all the type names (and constructors) to the scope
+        for (type_name, type_defn) in module.type_definitions.iter() {
             log::trace!(
                 log::RESOLVE,
                 "Adding `{type_name}` to the top-level type scope"
             );
-            let ident = type_name.ident();
-            self.bind_type(ident, ResolvedName::module(module.path, ident));
+            let type_ident = type_name.ident();
+            self.bind_type(type_ident, ResolvedName::module(module.path, type_ident));
+
+            // Add its constructors
+            for cons_name in type_defn.constructors.keys() {
+                let cons_ident = cons_name.ident();
+                log::trace!(
+                    log::RESOLVE,
+                    "Adding constructor `{type_ident}.{cons_ident}` to the top-level scope"
+                );
+                self.bind(
+                    cons_ident,
+                    ResolvedName::constructor(module.path, type_ident, cons_ident),
+                );
+            }
         }
 
         // Add all the imports to the scope as well as resolving the names.
@@ -269,7 +307,16 @@ impl<'a> ModuleResolver<'a> {
             log::trace!(log::RESOLVE, "  Assumed module `{path}` exists");
 
             // Handle the imported names.
-            for ast::ImportItem { ident, name } in import_items {
+            for import_item in import_items {
+                let (is_value, ident, name, constructors) = match import_item {
+                    ast::ImportItem::Value { ident, name } => (true, ident, name, Vec::new()),
+                    ast::ImportItem::Type {
+                        ident,
+                        name,
+                        constructors,
+                    } => (false, ident, name, constructors),
+                };
+
                 log::trace!(
                     log::RESOLVE,
                     "Importing `{path}.{ident}` to the top-level scope"
@@ -281,18 +328,54 @@ impl<'a> ModuleResolver<'a> {
                 self.resolver.assumptions.push(resolved_name);
                 log::trace!(log::RESOLVE, "  Assumed name `{name}` exists");
 
+                // Assume that any constructors exist, to be checked later.
+                let mut resolved_constructors = Vec::new();
+                for (cons_name, cons_ident) in constructors {
+                    // There's only ever constructors if resolved_name is a type name.
+                    assert!(!is_value);
+
+                    let cons_resolved_name =
+                        ResolvedName::constructor(path, resolved_name.ident, cons_name.ident());
+                    // @Errors: is this the right place to push the assumption?
+                    // Maybe should be into a value-level specific assumption vec, e.g.
+                    // self.scope.assumptions.push(cons_resolved_name);
+                    self.resolver.assumptions.push(cons_resolved_name);
+                    resolved_constructors.push((cons_resolved_name, cons_ident));
+                    log::trace!(
+                        log::RESOLVE,
+                        "    Assumed type constructor `{cons_resolved_name}` exists"
+                    )
+                }
+
+                // Insert the name into the scope
+                if is_value {
+                    self.bind(ident, resolved_name);
+                } else {
+                    self.bind_type(ident, resolved_name);
+                }
+
+                // Insert any constructors into the scope
+                for (cons_name, cons_ident) in resolved_constructors.iter().cloned() {
+                    self.bind(cons_ident, cons_name);
+                }
+
                 // Replicate into the new module, resolving the import's name.
                 resolved_module
                     .imports
                     .entry(path)
                     .or_default()
-                    .push(ast::ImportItem {
-                        ident,
-                        name: resolved_name,
+                    .push(if is_value {
+                        ast::ImportItem::Value {
+                            ident,
+                            name: resolved_name,
+                        }
+                    } else {
+                        ast::ImportItem::Type {
+                            ident,
+                            name: resolved_name,
+                            constructors: resolved_constructors,
+                        }
                     });
-
-                // Insert it into the scope
-                self.bind(ident, resolved_name);
             }
         }
 
@@ -1050,7 +1133,7 @@ impl Scope {
                 // when we've resolved all the rest of the names in all modules.
                 // This `assumptions` entry is to mark that we still need to do this check.
                 self.assumptions.push(resolved);
-                log::trace!(log::RESOLVE, "  Assumed name `{resolved}` exists");
+                log::trace!(log::RESOLVE, "    Assumed name `{resolved}` exists");
 
                 Ok(resolved)
             }
@@ -1059,8 +1142,12 @@ impl Scope {
                     .idents
                     .get(&ident)
                     .and_then(|names| names.last())
+                    // @Todo @Errors:
+                    // This error should be different for type- and value-level names.
+                    // This means the error handling will have to be pushed back up
+                    // to ModuleResolver::{resolve_name, resolve_type_name}.
                     .ok_or(Error::NotInScope(module_path, ident))?;
-                log::trace!(log::RESOLVE, "  Resolved name `{resolved}`");
+                log::trace!(log::RESOLVE, "    Resolved name `{resolved}`");
                 Ok(*resolved)
             }
         }

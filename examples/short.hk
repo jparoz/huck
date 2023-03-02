@@ -1,5 +1,6 @@
 module Short;
 
-import Basic (isEven as even);
+import Basic (LinkedList (Cons, Nil, Map));
 
-foo = even 3;
+foo : () -> LinkedList Int;
+foo () = Cons 2 Nil;

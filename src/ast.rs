@@ -501,20 +501,49 @@ pub struct ConstructorDefinition<Name, Ty> {
 /// e.g. `import Foo (foo as bar);`,
 /// the field `name` contains `bar`,
 /// while `defined_name` contains `foo`.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub struct ImportItem<Name> {
-    /// This is the identifier which is in scope due to this import.
-    /// It may be the same as the identifier of the `name` part of this `ImportItem`,
-    /// or it may be another identifier,
-    /// renamed using `(foo as bar)` syntax.
-    pub ident: Ident,
-    /// This is the name of the item as in its definition.
-    pub name: Name,
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+pub enum ImportItem<Name> {
+    // Import a value-level name
+    Value {
+        /// The identifier which is in scope due to this import.
+        /// It may be the same as the identifier of the `name` part of this `ImportItem`,
+        /// or it may be another identifier,
+        /// renamed using `(foo as bar)` syntax.
+        ident: Ident,
+
+        /// The name of the item as in its definition.
+        name: Name,
+    },
+
+    // Import a type-level name
+    Type {
+        /// The identifier which is in scope due to this import.
+        /// It may be the same as the identifier of the `name` part of this `ImportItem`,
+        /// or it may be another identifier,
+        /// renamed using `(foo as bar)` syntax.
+        ident: Ident,
+
+        /// The name of the item as in its definition.
+        name: Name,
+
+        /// This is the type's imported constructors.
+        /// Note: This could be thought of an `ImportItem` variant as well.
+        /// (defined_name, as_name)
+        constructors: Vec<(Name, Ident)>,
+    },
+}
+
+impl<Name: Copy> ImportItem<Name> {
+    pub fn name(&self) -> Name {
+        match self {
+            ImportItem::Value { name, .. } | ImportItem::Type { name, .. } => *name,
+        }
+    }
 }
 
 impl From<UnresolvedName> for ImportItem<UnresolvedName> {
     fn from(name: UnresolvedName) -> Self {
-        ImportItem {
+        ImportItem::Value {
             ident: name.ident(),
             name,
         }
@@ -523,7 +552,7 @@ impl From<UnresolvedName> for ImportItem<UnresolvedName> {
 
 impl From<ResolvedName> for ImportItem<ResolvedName> {
     fn from(name: ResolvedName) -> Self {
-        ImportItem {
+        ImportItem::Value {
             ident: name.ident,
             name,
         }

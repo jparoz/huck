@@ -42,8 +42,12 @@ fn statement_import_unqualified() {
                 ModulePath("Foo.Bar"),
                 vec![
                     name!("foo").into(),
-                    name!("Bar").into(),
-                    ast::ImportItem {
+                    ast::ImportItem::Type {
+                        name: name!("Bar"),
+                        ident: "Bar",
+                        constructors: Vec::new(),
+                    },
+                    ast::ImportItem::Value {
                         name: name!("baz"),
                         ident: "quux",
                     },

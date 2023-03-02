@@ -306,7 +306,7 @@ fn import_statement(input: &'static str) -> IResult<&'static str, Statement<Unre
                 nom_tuple((module_path, tuple(import_item))),
                 semi,
             ),
-            |(path, names)| Statement::Import(path, names),
+            |(path, items)| Statement::Import(path, items),
         ),
         // Qualified (i.e. empty)
         map(delimited(reserved("import"), module_path, semi), |path| {
@@ -316,14 +316,51 @@ fn import_statement(input: &'static str) -> IResult<&'static str, Statement<Unre
 }
 
 fn import_item(input: &'static str) -> IResult<&'static str, ImportItem<UnresolvedName>> {
+    alt((
+        // Value name, possibly renamed with `as`
+        import_value,
+        // Type name, possibly renamed with `as`, and possibly with constructors (possibly renamed)
+        import_type,
+    ))(input)
+}
+
+fn import_value(input: &'static str) -> IResult<&'static str, ImportItem<UnresolvedName>> {
     map(
-        alt((
-            separated_pair(unqualified_name, reserved("as"), unqualified_name),
-            map(unqualified_name, |n| (n, n)),
+        nom_tuple((
+            unqualified(lower_ident),
+            opt(preceded(reserved("as"), unqualified(lower_ident))),
         )),
-        |(name, as_name)| ImportItem {
+        |(name, as_name)| ImportItem::Value {
             name,
-            ident: as_name.ident(),
+            ident: as_name.unwrap_or(name).ident(),
+        },
+    )(input)
+}
+
+fn import_type(input: &'static str) -> IResult<&'static str, ImportItem<UnresolvedName>> {
+    map(
+        nom_tuple((
+            nom_tuple((
+                unqualified(upper_ident),
+                opt(preceded(reserved("as"), unqualified(upper_ident))),
+            )),
+            opt(tuple(nom_tuple((
+                unqualified(upper_ident),
+                opt(preceded(reserved("as"), unqualified(upper_ident))),
+            )))),
+            // @Todo: (..) glob import syntax for constructors?
+        )),
+        |((name, as_name), opt_cons)| {
+            let constructors = opt_cons
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(name, as_name)| (name, as_name.unwrap_or(name).ident()))
+                .collect();
+            ImportItem::Type {
+                name,
+                ident: as_name.unwrap_or(name).ident(),
+                constructors,
+            }
         },
     )(input)
 }
@@ -690,10 +727,6 @@ fn ident(input: &'static str) -> IResult<&'static str, &'static str> {
 
 fn name(input: &'static str) -> IResult<&'static str, UnresolvedName> {
     alt((qualified(ident), unqualified(ident), parens(operator)))(input)
-}
-
-fn unqualified_name(input: &'static str) -> IResult<&'static str, UnresolvedName> {
-    alt((unqualified(ident), parens(operator)))(input)
 }
 
 fn qualified<F>(inner: F) -> impl FnMut(&'static str) -> IResult<&'static str, UnresolvedName>

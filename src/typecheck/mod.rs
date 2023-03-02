@@ -1004,39 +1004,69 @@ impl Typechecker {
 
                 // Constrain that each assumed type is an instance of the name's inferred type.
                 for import_item in import_items {
-                    // Find the inferred type.
-                    let typ = import_module
-                        .constructors
-                        .get(&import_item.name)
-                        .map(|constr_defn| constr_defn.typ.clone())
-                        .or_else(|| {
-                            import_module
+                    match import_item {
+                        ast::ImportItem::Value { ident, name } => {
+                            // Find the inferred type.
+                            let typ = import_module
                                 .definitions
-                                .get(&import_item.name)
+                                .get(name)
                                 .map(|defn| defn.typ.clone())
-                        })
-                        .expect(
-                            "module should have been assigned types before binding assumptions",
-                        );
+                                .expect("should have resolved this name to a value");
 
-                    // If there are any assumptions about the variable, bind them.
-                    if let Some(assumed_types) = self.assumptions.remove(&import_item.name) {
-                        // Constrain that the assumed types are instances of the inferred type.
-                        for assumed_type in assumed_types {
-                            let constraint = Constraint::ImplicitInstance(
-                                assumed_type,
-                                typ.clone(),
-                                TypeVarSet::empty(),
-                            );
-                            self.constraints.add(constraint);
+                            // If there are any assumptions about the variable, bind them.
+                            if let Some(assumed_types) = self.assumptions.remove(name) {
+                                // Constrain that the assumed types are instances of the inferred type.
+                                for assumed_type in assumed_types {
+                                    let constraint = Constraint::ImplicitInstance(
+                                        assumed_type,
+                                        typ.clone(),
+                                        TypeVarSet::empty(),
+                                    );
+                                    self.constraints.add(constraint);
+                                }
+                            } else {
+                                // @Errors @Warn: emit a warning for unused imports
+                                // @Note: it's possible that a name could be used,
+                                // and still not have any assumptions drawn about its type;
+                                // so this doesn't necessarily mean it's unused.
+                                if import_path != &ModulePath("Prelude") {
+                                    // log::warn!(log::IMPORT, "unused: import {import_path} ({import_name})");
+                                }
+                            }
                         }
-                    } else {
-                        // @Errors @Warn: emit a warning for unused imports
-                        // @Note: it's possible that a name could be used,
-                        // and still not have any assumptions drawn about its type;
-                        // so this doesn't necessarily mean it's unused.
-                        if import_path != &ModulePath("Prelude") {
-                            // log::warn!(log::IMPORT, "unused: import {import_path} ({import_name})");
+                        ast::ImportItem::Type {
+                            ident,
+                            name,
+                            constructors,
+                        } => {
+                            for (cons_name, _cons_ident) in constructors {
+                                let typ = import_module
+                                    .constructors
+                                    .get(cons_name)
+                                    .map(|constr_defn| constr_defn.typ.clone())
+                                    .expect("should have resolved this name to a type constructor");
+
+                                // If there are any assumptions about the constructor, bind them.
+                                if let Some(assumed_types) = self.assumptions.remove(cons_name) {
+                                    // Constrain that the assumed types are instances of the inferred type.
+                                    for assumed_type in assumed_types {
+                                        let constraint = Constraint::ImplicitInstance(
+                                            assumed_type,
+                                            typ.clone(),
+                                            TypeVarSet::empty(),
+                                        );
+                                        self.constraints.add(constraint);
+                                    }
+                                } else {
+                                    // @Errors @Warn: emit a warning for unused imports
+                                    // @Note: it's possible that a name could be used,
+                                    // and still not have any assumptions drawn about its type;
+                                    // so this doesn't necessarily mean it's unused.
+                                    if import_path != &ModulePath("Prelude") {
+                                        // log::warn!(log::IMPORT, "unused: import {import_path} ({import_name})");
+                                    }
+                                }
+                            }
                         }
                     }
                 }
