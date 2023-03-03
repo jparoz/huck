@@ -50,23 +50,6 @@ fn error_could_not_unify_explicit() {
     );
 }
 
-// @Note: how to test this?
-//
-// The only situation when this comes up is
-// when only ImplicitInstance constraints are remaining,
-// and none of them can be processed.
-//
-// This means that all of the remaining constraints have active type vars,
-// which seems to imply that they must be used in the other constraints,
-// which seems to imply that there is a loop of some kind,
-// which should have been detected and resolved.
-//
-// It could be that it's not really possible,
-// in which case we should replace the error constructor with unreachable!().
-//
-// #[test]
-// fn error_could_not_solve_type_constraints() {}
-
 #[test]
 fn error_incorrect_arity() {
     // Int correctly

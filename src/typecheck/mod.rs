@@ -449,7 +449,12 @@ impl Typechecker {
                 } else {
                     // @DRY: same error below
                     log::trace!(log::TYPECHECK, "  They did not form a loop.");
-                    return Err(Error::CouldNotSolveTypeConstraints(constraint_set));
+                    // @Cleanup @Deleteme
+                    // return Err(Error::CouldNotSolveTypeConstraints(constraint_set));
+                    unreachable!(
+                        "unresolvable type constraints should arise from recursive definitions, \
+                         and be resolved by loop detection"
+                    )
                 }
             }
 
@@ -475,7 +480,12 @@ impl Typechecker {
             } else {
                 // @DRY: same error above
                 log::trace!(log::TYPECHECK, "  They did not form a loop.");
-                return Err(Error::CouldNotSolveTypeConstraints(constraint_set));
+                // @Cleanup @Deleteme
+                // return Err(Error::CouldNotSolveTypeConstraints(constraint_set));
+                unreachable!(
+                    "unresolvable type constraints should arise from recursive definitions, \
+                    and be resolved by loop detection"
+                )
             }
 
             // If we've made it this far,
