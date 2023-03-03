@@ -1,5 +1,8 @@
 module Short;
 
-import Prelude (length as getLength);
+import Prelude (length as getLength, Maybe (Just, Nothing));
+(* import Basic (LinkedList(Cons, Nil)); *)
+
+foo = Just 1;
 
 baz = getLength [1, 2, 3];

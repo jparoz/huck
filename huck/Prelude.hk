@@ -89,3 +89,6 @@ a <> b = unsafe lua { a .. b };
 (* Length operator *)
 length : forall a. [a] -> Int;
 length xs = unsafe lua { #xs };
+
+(* Maybe type *)
+type Maybe a = Just a | Nothing;

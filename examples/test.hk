@@ -140,8 +140,6 @@ unitArgument x = usesUnit ();
 (* baz "hello" = "goodbye"; *)
 (* baz s = s ++ "."; *)
 
-type Maybe a = Just a | Nothing;
-
 quux (Just 1) = 1;
 quux (Just x) = x + 2;
 quux Nothing = 123;

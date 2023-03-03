@@ -248,7 +248,6 @@ fn linked_list_unfold_direct() {
     let module = utils::test::typecheck(
         r#"
             type LinkedList a = Cons a (LinkedList a) | Nil;
-            type Maybe a = Just a | Nothing;
 
             (* unfold : forall a b. (b -> Maybe (a, b)) -> b -> LinkedList a; *)
             unfold f seed = case f seed of {
@@ -295,7 +294,6 @@ fn linked_list_unfold_let() {
     let module = utils::test::typecheck(
         r#"
             type LinkedList a = Cons a (LinkedList a) | Nil;
-            type Maybe a = Just a | Nothing;
 
             (* unfold : forall a b. (b -> Maybe (a, b)) -> b -> LinkedList a; *)
             unfold f seed =
