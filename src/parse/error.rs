@@ -5,13 +5,15 @@ use crate::precedence::Precedence;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    // @Errors: this should be caught as more specific errors, then this variant deleted
     #[error("Nom error: {0}")]
     Nom(#[from] nom::error::Error<&'static str>),
 
-    // @Errors: convert this into a parse error which exposes the underlying cause from Nom
+    // @Errors: this should be caught as more specific errors, then this variant deleted
     #[error("Leftover input: {0}")]
     Leftover(String),
 
+    // @Todo @Errors: this shouldn't be a parse error
     #[error(
         "Multiple modules defined with the same name: `{0}` (files {} and {})",
         .1.as_ref().map(|p| format!("{}", p.display())).unwrap_or_else(|| "<stdin>".to_string()),
@@ -35,6 +37,10 @@ pub enum Error {
     #[error("Multiple type constructors with the same name ({0})")]
     MultipleTypeConstructors(UnresolvedName),
 
+    // @Errors: this should print the locations of the multiple unconditionals
+    #[error("Multiple unconditional branches found in definition of `{0}`")]
+    MultipleUnconditionals(UnresolvedName),
+
     // @Errors: this should print the thing which caused a Definition to be made
     #[error("No assignment defining the name `{0}`")]
     MissingAssignment(UnresolvedName),
@@ -42,8 +48,4 @@ pub enum Error {
     // @Errors: this should print the assignment with the wrong number of args
     #[error("Incorrect number of function arguments in definition of `{0}`")]
     IncorrectArgumentCount(UnresolvedName),
-
-    // @Errors: this should print the locations of the multiple unconditionals
-    #[error("Multiple unconditional branches found in definition of `{0}`")]
-    MultipleUnconditionals(UnresolvedName),
 }

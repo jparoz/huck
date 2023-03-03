@@ -6,11 +6,75 @@ use crate::precedence::{Associativity, Precedence};
 use crate::utils::assert_matches;
 use crate::{ast, types};
 
-/// Shorthand to make an UnresolvedName.
+/// Shorthand to make an `UnresolvedName`.
 macro_rules! name {
     ($name:expr) => {
         UnresolvedName::Unqualified($name)
     };
+}
+
+/// Shorthand to parse a module into an [`ast::Module`].
+macro_rules! module {
+    ($src:expr) => {
+        parse::parse(concat!("module Test;", $src))
+            .and_then(|(path, stats)| ast::Module::from_statements(path, stats))
+    };
+}
+
+#[test]
+fn error_multiple_precs() {
+    assert_matches!(
+        module!(r#"a ++ b = 123; infixl 3 ++; infixr 4 ++;"#),
+        Err(ParseError::MultiplePrecs(..))
+    )
+}
+
+#[test]
+fn error_multiple_type_annotations() {
+    assert_matches!(
+        module!(r#"foo : Int; foo = 123; foo : Int;"#),
+        Err(ParseError::MultipleTypeAnnotations(..))
+    )
+}
+
+#[test]
+fn error_multiple_type_definitions() {
+    assert_matches!(
+        module!(r#"type Foo = Food; type Foo = Bard;"#),
+        Err(ParseError::MultipleTypeDefinitions(..))
+    )
+}
+
+#[test]
+fn error_multiple_type_constructors() {
+    assert_matches!(
+        module!(r#"type Foo = Foo; type Bar = Foo;"#),
+        Err(ParseError::MultipleTypeConstructors(..))
+    )
+}
+
+#[test]
+fn error_multiple_unconditionals() {
+    assert_matches!(
+        module!(r#"foo x = 123; foo y = 456;"#),
+        Err(ParseError::MultipleUnconditionals(..))
+    )
+}
+
+#[test]
+fn error_missing_assignment() {
+    assert_matches!(
+        module!(r#"foo : Int;"#),
+        Err(ParseError::MissingAssignment(..))
+    )
+}
+
+#[test]
+fn error_incorrect_argument_count() {
+    assert_matches!(
+        module!(r#"foo 1 2 = 3; foo xs = 456;"#),
+        Err(ParseError::IncorrectArgumentCount(..))
+    )
 }
 
 #[test]

@@ -51,6 +51,7 @@ pub fn compile(
         let (module_path, statements) = parse(info.source)?;
 
         if let Some(existing_info) = infos.insert(module_path, info) {
+            // @Todo @Errors: this shouldn't be a parse error
             Err(parse::Error::MultipleModules(
                 module_path,
                 infos.remove(&module_path).unwrap().input,
