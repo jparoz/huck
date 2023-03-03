@@ -949,9 +949,17 @@ impl Typechecker {
         log::trace!(log::TYPECHECK, "Emitting constraints about assumptions:");
 
         for module in self.modules.values() {
+            log::trace!(
+                log::TYPECHECK,
+                "  Checking top-level definitions in module {}",
+                module.path
+            );
             // Constrain assumptions about names defined in this module.
             for (name, defn) in module.definitions.iter() {
                 if let Some(assumed_types) = self.assumptions.remove(name) {
+                    log::trace!(log::TYPECHECK, "    Found type for {name}");
+
+                    // Constrain that the assumed types are instances of the found type.
                     for assumed_type in assumed_types {
                         let constraint = Constraint::ImplicitInstance(
                             assumed_type,
@@ -960,92 +968,45 @@ impl Typechecker {
                         );
                         self.constraints.add(constraint);
                     }
-                } else {
-                    // @Note: If a definition isn't used in any of the typechecked code,
-                    // we'll find out about it here.
-                    // This could be useful for dead code analysis,
-                    // although this will currently fire for all definitions,
-                    // even if the point of the defninition is to be used from Lua.
-                    // Would probably need to have explicit exports for this to be useful.
-                    // log::debug!("Possibly unused name: {name}");
                 }
             }
 
-            // Constrain assumptions about Huck imports.
-            for (import_path, import_items) in module.imports.iter() {
-                // Get the imported module.
-                let import_module = &self.modules[import_path];
+            log::trace!(
+                log::TYPECHECK,
+                "  Checking type definitions in module {}",
+                module.path
+            );
+            for type_defn in module.type_definitions.values() {
+                for (cons_name, cons_defn) in type_defn.constructors.iter() {
+                    // If there are any assumptions about the constructor, bind them.
+                    if let Some(assumed_types) = self.assumptions.remove(cons_name) {
+                        log::trace!(log::TYPECHECK, "    Found type for {cons_name}");
 
-                // Constrain that each assumed type is an instance of the name's inferred type.
-                for import_item in import_items {
-                    match import_item {
-                        ast::ImportItem::Value { name, .. } => {
-                            // Find the inferred type.
-                            let typ = import_module
-                                .definitions
-                                .get(name)
-                                .map(|defn| defn.typ.clone())
-                                .expect("should have resolved this name to a value");
-
-                            // If there are any assumptions about the variable, bind them.
-                            if let Some(assumed_types) = self.assumptions.remove(name) {
-                                // Constrain that the assumed types are instances of the inferred type.
-                                for assumed_type in assumed_types {
-                                    let constraint = Constraint::ImplicitInstance(
-                                        assumed_type,
-                                        typ.clone(),
-                                        TypeVarSet::empty(),
-                                    );
-                                    self.constraints.add(constraint);
-                                }
-                            } else {
-                                // @Errors @Warn: emit a warning for unused imports
-                                // @Note: it's possible that a name could be used,
-                                // and still not have any assumptions drawn about its type;
-                                // so this doesn't necessarily mean it's unused.
-                                if import_path != &ModulePath("Prelude") {
-                                    // log::warn!(log::IMPORT, "unused: import {import_path} ({import_name})");
-                                }
-                            }
-                        }
-                        ast::ImportItem::Type { constructors, .. } => {
-                            for (cons_name, _cons_ident) in constructors {
-                                let typ = import_module
-                                    .constructors
-                                    .get(cons_name)
-                                    .map(|constr_defn| constr_defn.typ.clone())
-                                    .expect("should have resolved this name to a type constructor");
-
-                                // If there are any assumptions about the constructor, bind them.
-                                if let Some(assumed_types) = self.assumptions.remove(cons_name) {
-                                    // Constrain that the assumed types are instances of the inferred type.
-                                    for assumed_type in assumed_types {
-                                        let constraint = Constraint::ImplicitInstance(
-                                            assumed_type,
-                                            typ.clone(),
-                                            TypeVarSet::empty(),
-                                        );
-                                        self.constraints.add(constraint);
-                                    }
-                                } else {
-                                    // @Errors @Warn: emit a warning for unused imports
-                                    // @Note: it's possible that a name could be used,
-                                    // and still not have any assumptions drawn about its type;
-                                    // so this doesn't necessarily mean it's unused.
-                                    if import_path != &ModulePath("Prelude") {
-                                        // log::warn!(log::IMPORT, "unused: import {import_path} ({import_name})");
-                                    }
-                                }
-                            }
+                        // Constrain that the assumed types are instances of the inferred type.
+                        for assumed_type in assumed_types {
+                            let constraint = Constraint::ImplicitInstance(
+                                assumed_type,
+                                cons_defn.typ.clone(),
+                                TypeVarSet::empty(),
+                            );
+                            self.constraints.add(constraint);
                         }
                     }
                 }
             }
 
+            log::trace!(
+                log::TYPECHECK,
+                "  Checking foreign imports in module {}",
+                module.path
+            );
             // Constrain assumptions about foreign imports.
             for imports in module.foreign_imports.values() {
                 for ast::ForeignImportItem { name, typ, .. } in imports {
                     if let Some(assumed_types) = self.assumptions.remove(name) {
+                        log::trace!(log::TYPECHECK, "    Found type for {name}");
+
+                        // Constrain that the assumed types are instances of the found type.
                         for assumed_type in assumed_types.iter() {
                             let tau = assumed_type.clone();
 
@@ -1064,7 +1025,11 @@ impl Typechecker {
         }
 
         // We should have removed all assumptions by now.
-        assert_eq!(self.assumptions, BTreeMap::new());
+        assert_eq!(
+            self.assumptions,
+            BTreeMap::new(),
+            "should have handled all assumptions"
+        );
 
         Ok(())
     }
