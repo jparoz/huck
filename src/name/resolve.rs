@@ -299,7 +299,6 @@ impl<'a> ModuleResolver<'a> {
                     // This is a name clash, so error.
                     if let Ok(existing_name) = self.resolve_name(UnresolvedName::Unqualified(ident))
                     {
-                        log::debug!(ident);
                         return Err(Error::ImportClash(names[0], existing_name));
                     }
 
@@ -323,13 +322,12 @@ impl<'a> ModuleResolver<'a> {
                     if let Ok(existing_name) =
                         self.resolve_type_name(UnresolvedName::Unqualified(type_ident))
                     {
-                        log::debug!(type_ident);
                         return Err(Error::ImportClash(names[0], existing_name));
                     }
 
                     // Because there were no clashes,
                     // we're okay to include it in the scope.
-                    self.type_scope.idents.insert(type_ident, names);
+                    assert!(self.type_scope.idents.insert(type_ident, names).is_none());
                 }
             }
         }
@@ -453,16 +451,7 @@ impl<'a> ModuleResolver<'a> {
                 typ: (),
             } in items
             {
-                log::trace!(
-                    log::RESOLVE,
-                    "Importing `require({require})[\"{foreign_name}\"]` \
-                    to the top-level scope as {name}"
-                );
-
-                // Check that it's the right type of name.
-                // @Errors: this should throw an error
-                //   (that is, if this is reachable; maybe it's already a parse error.
-                //   Actually, this should definitely be a parse error.)
+                // Make sure that it's the right type of name.
                 assert!(matches!(name, UnresolvedName::Unqualified(_)));
 
                 let source = Source::Foreign {
@@ -485,9 +474,24 @@ impl<'a> ModuleResolver<'a> {
                         typ: (),
                     });
 
-                // Insert it into the scope
                 let ident = name.ident();
-                self.bind(ident, ResolvedName::foreign(require, foreign_name, ident));
+                let resolved_name = ResolvedName::foreign(require, foreign_name, ident);
+
+                log::trace!(
+                    log::RESOLVE,
+                    "Importing `require({require})[\"{foreign_name}\"]` \
+                    to the top-level scope as `{resolved_name}`"
+                );
+
+                // If the name already resolves to something,
+                // that means it's defined in this module as well as being imported.
+                // This is a name clash, so error.
+                if let Ok(existing_name) = self.resolve_name(UnresolvedName::Unqualified(ident)) {
+                    return Err(Error::ImportClash(resolved_name, existing_name));
+                }
+
+                // Insert it into the scope
+                self.bind(ident, resolved_name);
             }
         }
 
