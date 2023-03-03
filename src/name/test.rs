@@ -1,9 +1,10 @@
 use test_log::test;
 
-use crate::error::Error as HuckError;
 use crate::utils::{assert_matches, test::transpile};
 
-use super::Error as NameError;
+use crate::error::Error as HuckError;
+use crate::name::Error as NameError;
+use crate::parse::Error as ParseError;
 
 #[test]
 fn name_in_scope() {
@@ -62,7 +63,7 @@ fn nonexistent_name() {
 #[test]
 fn duplicate_binding() {
     assert_matches!(
-        transpile("a + a = 123;"),
+        transpile("a ++ a = 123;"),
         Err(HuckError::NameResolution(NameError::DuplicateBinding(..)))
     )
 }
@@ -97,6 +98,22 @@ fn clashes_type_constructors() {
 fn clashes_import_redefinition() {
     assert_matches!(
         transpile("import Foo (foo); foo = 123;"),
+        Err(HuckError::NameResolution(NameError::ImportClash(..)))
+    )
+}
+
+#[test]
+fn clashes_import_redefinition_implicit_prelude() {
+    assert_matches!(
+        transpile("length 1 = 2;"),
+        Err(HuckError::NameResolution(NameError::ImportClash(..)))
+    )
+}
+
+#[test]
+fn clashes_import_type() {
+    assert_matches!(
+        transpile("import Foo (Data); type Data = MkData;"),
         Err(HuckError::NameResolution(NameError::ImportClash(..)))
     )
 }

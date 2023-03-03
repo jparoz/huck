@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
-use std::fmt;
 use std::time::Instant;
+use std::{fmt, mem};
 
 use crate::ast::Module;
 use crate::types::TypeVar;
@@ -65,40 +65,32 @@ impl Resolver {
         }
     }
 
-    /// Resolves the given module as the Prelude, adding it to self.modules.
-    pub fn resolve_prelude(&mut self, module: Module<UnresolvedName, ()>) -> Result<(), Error> {
-        let module_resolver = ModuleResolver::new(self, module.path);
-
-        let (resolved, scope, type_scope) = module_resolver.resolve(module)?;
-        self.modules.insert(resolved.path, resolved);
-
-        // Include the module_resolver's environment into the self,
-        // so that it will be implicitly imported into other modules.
-        self.scope.idents.extend(scope.idents);
-        self.type_scope.idents.extend(type_scope.idents);
-
-        // Pass on any assumptions
-        self.scope.assumptions.extend(scope.assumptions);
-        self.type_scope.assumptions.extend(type_scope.assumptions);
-
-        log::trace!(log::RESOLVE, "{self:?}");
-
-        Ok(())
-    }
-
     /// Resolves the given module, adding it to self.modules.
-    pub fn resolve_module(&mut self, module: Module<UnresolvedName, ()>) -> Result<(), Error> {
-        let module_resolver = ModuleResolver::new(self, module.path);
+    /// Takes an optional pair of `Scope` and `TypeScope`,
+    /// representing the scope of the Prelude.
+    /// These scopes are implicitly imported into any module
+    /// which doesn't have an explicit `import Prelude;` statement.
+    pub fn resolve_module(
+        &mut self,
+        module: Module<UnresolvedName, ()>,
+        prelude: Option<(Scope, TypeScope)>,
+    ) -> Result<(Scope, TypeScope), Error> {
+        let module_resolver = ModuleResolver::new(self, module.path, prelude);
 
-        let (resolved, scope, type_scope) = module_resolver.resolve(module)?;
+        let (resolved, mut scope, mut type_scope) = module_resolver.resolve(module)?;
 
         // Pass on any assumptions
-        self.scope.assumptions.extend(scope.assumptions);
-        self.type_scope.assumptions.extend(type_scope.assumptions);
+        self.scope
+            .assumptions
+            .extend(mem::take(&mut scope.assumptions));
+        self.type_scope
+            .assumptions
+            .extend(mem::take(&mut type_scope.assumptions));
 
         self.modules.insert(resolved.path, resolved);
 
-        Ok(())
+        // Return the scope and type scope (sans assumptions)
+        Ok((scope, type_scope))
     }
 
     /// Checks that any assumptions made in the resolved modules,
@@ -237,7 +229,7 @@ impl fmt::Debug for Resolver {
 }
 
 struct ModuleResolver<'a> {
-    /// The parent `Resolver`, which contains implicit imports (e.g. builtins, Prelude)
+    /// The parent `Resolver`, which contains implicitly imported builtins.
     resolver: &'a mut Resolver,
 
     /// The path of the module being resolved.
@@ -248,13 +240,22 @@ struct ModuleResolver<'a> {
 
     /// The `Scope` used for type-level names.
     type_scope: TypeScope,
+
+    /// The optional Prelude `Scope` and `TypeScope`,
+    /// to be implicitly imported if there is no explicit `import Prelude;`.
+    prelude: Option<(Scope, TypeScope)>,
 }
 
 impl<'a> ModuleResolver<'a> {
-    fn new(resolver: &'a mut Resolver, module_path: ModulePath) -> Self {
+    fn new(
+        resolver: &'a mut Resolver,
+        module_path: ModulePath,
+        prelude: Option<(Scope, TypeScope)>,
+    ) -> Self {
         ModuleResolver {
             resolver,
             module_path,
+            prelude,
             scope: Scope::default(),
             type_scope: TypeScope::default(),
         }
@@ -274,7 +275,8 @@ impl<'a> ModuleResolver<'a> {
         for name in module.definitions.keys() {
             log::trace!(log::RESOLVE, "Adding `{name}` to the top-level scope");
             let ident = name.ident();
-            self.bind(ident, ResolvedName::module(module.path, ident));
+            let resolved_name = ResolvedName::module(module.path, ident);
+            self.bind(ident, resolved_name);
         }
 
         // Add all the type names (and constructors) to the scope
@@ -284,7 +286,8 @@ impl<'a> ModuleResolver<'a> {
                 "Adding `{type_name}` to the top-level type scope"
             );
             let type_ident = type_name.ident();
-            self.bind_type(type_ident, ResolvedName::module(module.path, type_ident));
+            let resolved_name = ResolvedName::module(module.path, type_ident);
+            self.bind_type(type_ident, resolved_name);
 
             // Add its constructors
             for cons_name in type_defn.constructors.keys() {
@@ -293,10 +296,70 @@ impl<'a> ModuleResolver<'a> {
                     log::RESOLVE,
                     "Adding constructor `{type_ident}.{cons_ident}` to the top-level scope"
                 );
-                self.bind(
-                    cons_ident,
-                    ResolvedName::constructor(module.path, type_ident, cons_ident),
+
+                let resolved_name = ResolvedName::constructor(module.path, type_ident, cons_ident);
+                self.bind(cons_ident, resolved_name);
+            }
+        }
+
+        // If there is no explicit Prelude import,
+        // and we have a Prelude,
+        // implicitly import the contents of the Prelude.
+        let prelude_path = ModulePath("Prelude");
+        if !module.imports.contains_key(&prelude_path) {
+            if let Some((prelude_scope, prelude_type_scope)) = self.prelude.take() {
+                log::trace!(
+                    log::IMPORT,
+                    "Implicitly importing contents of {prelude_path} into {path}",
+                    path = module.path
                 );
+
+                // Check that there are no name clashes in `prelude_scope`.
+                for (ident, names) in prelude_scope.idents {
+                    // If `names` is empty,
+                    // that means there was a non-top-level binding of `ident` in the Prelude;
+                    // this is fine, is not a clash, and should be ignored.
+                    if names.is_empty() {
+                        continue;
+                    }
+
+                    // If the name already resolves to something,
+                    // that means it's defined in this module as well as being imported.
+                    // This is a name clash, so error.
+                    if let Ok(existing_name) = self.resolve_name(UnresolvedName::Unqualified(ident))
+                    {
+                        log::debug!(ident);
+                        return Err(Error::ImportClash(names[0], existing_name));
+                    }
+
+                    // Because there were no clashes,
+                    // we're okay to include it in the scope.
+                    assert!(self.scope.idents.insert(ident, names).is_none());
+                }
+
+                // Check that there are no name clashes in `prelude_type_scope`.
+                for (type_ident, names) in prelude_type_scope.idents {
+                    // If `names` is empty,
+                    // that means there was a non-top-level binding of `ident` in the Prelude;
+                    // this is fine, is not a clash, and should be ignored.
+                    if names.is_empty() {
+                        continue;
+                    }
+
+                    // If the name already resolves to something,
+                    // that means it's defined in this module as well as being imported.
+                    // This is a name clash, so error.
+                    if let Ok(existing_name) =
+                        self.resolve_type_name(UnresolvedName::Unqualified(type_ident))
+                    {
+                        log::debug!(type_ident);
+                        return Err(Error::ImportClash(names[0], existing_name));
+                    }
+
+                    // Because there were no clashes,
+                    // we're okay to include it in the scope.
+                    self.type_scope.idents.insert(type_ident, names);
+                }
             }
         }
 
@@ -317,18 +380,29 @@ impl<'a> ModuleResolver<'a> {
                     } => (false, ident, name, constructors),
                 };
 
+                let import_ident = name.ident();
+                let resolved_name = ResolvedName::module(path, import_ident);
+
                 log::trace!(
                     log::RESOLVE,
-                    "Importing `{path}.{ident}` to the top-level scope"
+                    "Importing `{resolved_name}` to the top-level scope as `{module_path}.{ident}`",
+                    module_path = module.path
                 );
-
-                let resolved_name = ResolvedName::module(path, name.ident());
 
                 // If the name already resolves to something,
                 // that means it's defined in this module as well as being imported.
                 // This is a name clash, so error.
-                if let Ok(existing_name) = self.resolve_name(UnresolvedName::Unqualified(ident)) {
-                    return Err(Error::ImportClash(resolved_name, existing_name));
+                if is_value {
+                    if let Ok(existing_name) = self.resolve_name(UnresolvedName::Unqualified(ident))
+                    {
+                        return Err(Error::ImportClash(resolved_name, existing_name));
+                    }
+                } else {
+                    if let Ok(existing_name) =
+                        self.resolve_type_name(UnresolvedName::Unqualified(ident))
+                    {
+                        return Err(Error::ImportClash(resolved_name, existing_name));
+                    }
                 }
 
                 // Assume that the imported name exists, to be checked later.
@@ -343,6 +417,16 @@ impl<'a> ModuleResolver<'a> {
 
                     let cons_resolved_name =
                         ResolvedName::constructor(path, resolved_name.ident, cons_name.ident());
+
+                    // If the name already resolves to something,
+                    // that means it's defined in this module as well as being imported.
+                    // This is a name clash, so error.
+                    if let Ok(existing_name) =
+                        self.resolve_name(UnresolvedName::Unqualified(cons_ident))
+                    {
+                        return Err(Error::ImportClash(cons_resolved_name, existing_name));
+                    }
+
                     // @Errors: is this the right place to push the assumption?
                     // Maybe should be into a value-level specific assumption vec, e.g.
                     // self.scope.assumptions.push(cons_resolved_name);
@@ -387,6 +471,9 @@ impl<'a> ModuleResolver<'a> {
         }
 
         // Add all the foreign imports to the scope as well as resolving the names.
+        // @Note: This *must* be done after the local definitions,
+        // because the type signatures of foreign imports
+        // could depend on locally-defined names (specifically type definitions).
         for (require, items) in module.foreign_imports {
             for ast::ForeignImportItem {
                 foreign_name,
@@ -489,7 +576,7 @@ impl<'a> ModuleResolver<'a> {
     fn bind(&mut self, ident: Ident, name: ResolvedName) {
         log::trace!(
             log::RESOLVE,
-            "    Binding name `{ident}` to resolved name {name}"
+            "    Binding identifier `{ident}` to resolved name `{name}`"
         );
         self.scope.bind(ident, name)
     }
@@ -497,7 +584,7 @@ impl<'a> ModuleResolver<'a> {
     /// Removes the `ResolvedName` on top of the value scope stack,
     /// and asserts that it's equal to the given `ResolvedName`.
     fn unbind(&mut self, ident: Ident, name: ResolvedName) {
-        log::trace!(log::RESOLVE, "    Unbinding ident `{ident}` ({name})");
+        log::trace!(log::RESOLVE, "    Unbinding ident `{ident}` (`{name}`)");
         self.scope.unbind(ident, name)
     }
 
@@ -505,7 +592,7 @@ impl<'a> ModuleResolver<'a> {
     fn bind_type(&mut self, ident: Ident, name: ResolvedName) {
         log::trace!(
             log::RESOLVE,
-            "    Binding type name `{ident}` to resolved name {name}"
+            "    Binding type identifier `{ident}` to resolved name `{name}`"
         );
         self.type_scope.bind(ident, name)
     }
@@ -1089,7 +1176,7 @@ impl<'a> fmt::Debug for ModuleResolver<'a> {
 
 /// A `Scope` records which names are defined in a given scope.
 #[derive(Debug, Default, Clone)]
-struct Scope {
+pub struct Scope {
     /// Identifiers which are in scope.
     /// Maps the bare identifier to its resolved name.
     idents: BTreeMap<Ident, Vec<ResolvedName>>,

@@ -1,11 +1,5 @@
 module Short;
 
 import Prelude (length as getLength);
-import Basic (LinkedList (Cons, Nil), myName, tuple, double);
-
-foo : () -> LinkedList Int;
-foo () = Cons 2 Nil;
-
-bar = 1 + 2;
 
 baz = getLength [1, 2, 3];

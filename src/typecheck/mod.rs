@@ -1006,7 +1006,7 @@ impl Typechecker {
                 // Constrain that each assumed type is an instance of the name's inferred type.
                 for import_item in import_items {
                     match import_item {
-                        ast::ImportItem::Value { ident, name } => {
+                        ast::ImportItem::Value { name, .. } => {
                             // Find the inferred type.
                             let typ = import_module
                                 .definitions
@@ -1035,11 +1035,7 @@ impl Typechecker {
                                 }
                             }
                         }
-                        ast::ImportItem::Type {
-                            ident,
-                            name,
-                            constructors,
-                        } => {
+                        ast::ImportItem::Type { constructors, .. } => {
                             for (cons_name, _cons_ident) in constructors {
                                 let typ = import_module
                                     .constructors

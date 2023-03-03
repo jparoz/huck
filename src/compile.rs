@@ -69,15 +69,16 @@ pub fn compile(
     // Resolve names
     let mut resolver = name::Resolver::new();
 
-    // Start with the prelude...
+    // Start with the prelude (if it's included)
     let prelude_path = ModulePath("Prelude");
+    let mut prelude = None;
     if let Some(unresolved_prelude) = parsed_modules.remove(&prelude_path) {
-        resolver.resolve_prelude(unresolved_prelude)?;
+        prelude = Some(resolver.resolve_module(unresolved_prelude, None)?);
     }
 
     // Then resolve all other modules.
     for module in parsed_modules.into_values() {
-        resolver.resolve_module(module)?;
+        resolver.resolve_module(module, prelude.clone())?;
     }
 
     // Check that any qualified names used actually exist.

@@ -69,9 +69,9 @@ fn function_id() {
 #[test]
 fn function_not() {
     assert_eq!(
-        transpile(r#"not True = False; not False = True;"#).unwrap(),
+        transpile(r#"myNot True = False; myNot False = True;"#).unwrap(),
         normalize(wrap!(
-            "not",
+            "myNot",
             r#"
                 function(...)
                     local _Test_0 = select(1, ...)
@@ -92,9 +92,9 @@ fn function_not() {
 #[test]
 fn function_and() {
     assert_eq!(
-        transpile(r#"True && True = True; _ && _ = False;"#).unwrap(),
+        transpile(r#"True & True = True; _ & _ = False;"#).unwrap(),
         normalize(wrap!(
-            "&&",
+            "&",
             r#"
                 function(...)
                     local _Test_0 = select(1, ...)

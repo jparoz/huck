@@ -71,10 +71,6 @@ isOdd 1 = True;
 isOdd n = isEven (n-1);
 
 (* Some more useful functions: *)
-not : Bool -> Bool;
-not True = False;
-not False = True;
-
 id : forall a. a -> a;
 id x = x;
 
