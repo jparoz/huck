@@ -268,7 +268,10 @@ fn linked_list_unfold_direct() {
     assert_matches!(f_l, Type::Var(_));
 
     let (f_r_cons, f_r_elem) = unwrap_match!(f_r, Type::App(cons, elem) => (*cons, *elem));
-    assert_eq!(f_r_cons, Type::Concrete(name!("Maybe")));
+    assert_eq!(
+        f_r_cons,
+        Type::Concrete(ResolvedName::module(ModulePath("Prelude"), "Maybe"))
+    );
 
     let f_r_vec = unwrap_match!(f_r_elem, Type::Tuple(vec) => vec);
     assert_matches!(f_r_vec[0], Type::Var(_));
@@ -315,7 +318,10 @@ fn linked_list_unfold_let() {
     assert_matches!(f_l, Type::Var(_));
 
     let (f_r_cons, f_r_elem) = unwrap_match!(f_r, Type::App(cons, elem) => (*cons, *elem));
-    assert_eq!(f_r_cons, Type::Concrete(name!("Maybe")));
+    assert_eq!(
+        f_r_cons,
+        Type::Concrete(ResolvedName::module(ModulePath("Prelude"), "Maybe"))
+    );
 
     let f_r_vec = unwrap_match!(f_r_elem, Type::Tuple(vec) => vec);
     assert_matches!(f_r_vec[0], Type::Var(_));
