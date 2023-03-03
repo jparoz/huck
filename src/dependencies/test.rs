@@ -4,7 +4,7 @@ use crate::utils::{assert_matches, test::transpile};
 use super::Error as DependencyError;
 
 #[test]
-fn value_mutually_recursive() {
+fn error_cyclic_dependency() {
     assert_matches!(
         transpile(
             r#"
@@ -15,5 +15,19 @@ fn value_mutually_recursive() {
         Err(HuckError::DependencyResolution(
             DependencyError::CyclicDependency(_)
         ))
+    )
+}
+
+#[test]
+fn function_cyclic_dependency() {
+    assert_matches!(
+        transpile(
+            r#"
+                foo x = bar x;
+                bar x = baz x;
+                baz x = foo x;
+            "#
+        ),
+        Ok(_)
     )
 }
