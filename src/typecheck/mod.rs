@@ -238,6 +238,7 @@ impl Typechecker {
             .foreign_exports
             .extend(module.foreign_exports);
 
+        // @Todo @Fixme: explicit Prelude imports don't prevent anything
         // If there is no explicit Prelude import already,
         // import everything in Prelude.
         let prelude_path = ModulePath("Prelude");

@@ -25,7 +25,7 @@ pub enum Error {
 
     // @Cleanup @Errors: this shouldn't use Debug printing, but should print the source.
     #[error("Multiple explicit type annotations found for `{0}`:{1}")]
-    MultipleTypes(UnresolvedName, String),
+    MultipleTypeAnnotations(UnresolvedName, String),
 
     // @Cleanup @Errors: this should print the source locations of the two definitions
     #[error("Multiple type definitions with the same name ({0})")]

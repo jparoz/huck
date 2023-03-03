@@ -76,3 +76,27 @@ fn duplicate_binding_lambda() {
         ))
     )
 }
+
+#[test]
+fn clashes_type_names() {
+    assert_matches!(
+        transpile("type Foo = Con; type Foo = Verse;"),
+        Err(HuckError::Parse(ParseError::MultipleTypeDefinitions(..)))
+    )
+}
+
+#[test]
+fn clashes_type_constructors() {
+    assert_matches!(
+        transpile("type Foo = Con; type Bar = Con;"),
+        Err(HuckError::Parse(ParseError::MultipleTypeConstructors(..)))
+    )
+}
+
+#[test]
+fn clashes_import_redefinition() {
+    assert_matches!(
+        transpile("import Foo (foo); foo = 123;"),
+        Err(HuckError::NameResolution(NameError::ImportClash(..)))
+    )
+}

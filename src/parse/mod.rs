@@ -117,7 +117,7 @@ impl Module<UnresolvedName, ()> {
 
                     // If there was already an explicit for this name, that's an error.
                     if let Some(previous_ts) = defn.explicit_type.replace(ts.clone()) {
-                        return Err(Error::MultipleTypes(
+                        return Err(Error::MultipleTypeAnnotations(
                             *assign.0.name(),
                             // @Cleanup: don't have this dodgy whitespace
                             format!("\n    {:?}\n    {:?}", ts, previous_ts),
@@ -150,7 +150,7 @@ impl Module<UnresolvedName, ()> {
                         .explicit_type
                         .replace(ts.clone())
                     {
-                        return Err(Error::MultipleTypes(
+                        return Err(Error::MultipleTypeAnnotations(
                             name,
                             // @Cleanup @Errors: don't have this dodgy whitespace
                             format!("\n    {:?}\n    {:?}", ts, previous_ts),

@@ -6,6 +6,9 @@ pub enum Error {
     #[error("Identifier not in scope (module {0}): {1}")]
     NotInScope(ModulePath, Ident),
 
+    #[error("Imported `{0}` clashes with `{1}`")]
+    ImportClash(ResolvedName, ResolvedName),
+
     #[error("Module `{0}` doesn't exist")]
     NonexistentModule(ModulePath),
 

@@ -324,6 +324,13 @@ impl<'a> ModuleResolver<'a> {
 
                 let resolved_name = ResolvedName::module(path, name.ident());
 
+                // If the name already resolves to something,
+                // that means it's defined in this module as well as being imported.
+                // This is a name clash, so error.
+                if let Ok(existing_name) = self.resolve_name(UnresolvedName::Unqualified(ident)) {
+                    return Err(Error::ImportClash(resolved_name, existing_name));
+                }
+
                 // Assume that the imported name exists, to be checked later.
                 self.resolver.assumptions.push(resolved_name);
                 log::trace!(log::RESOLVE, "  Assumed name `{name}` exists");
