@@ -139,7 +139,7 @@ impl Typechecker {
         // Set the new `Module`'s path.
         let mut typechecked_module = ast::Module::new(module.path);
 
-        // Generate constraints for each definition, while keeping track of inferred types
+        // Typecheck definitions
         for (name, defn) in module.definitions {
             let typ = self.typecheck_definition(&defn);
 
@@ -167,7 +167,7 @@ impl Typechecker {
                 .is_none());
         }
 
-        // Generate constraints for each type definition
+        // Typecheck type definitions
         for (_name, ast_type_defn) in module.type_definitions {
             let type_defn = self.typecheck_type_definition(ast_type_defn);
 
@@ -185,14 +185,9 @@ impl Typechecker {
                 .is_none());
         }
 
-        // Insert all imported names into the scope.
+        // Typecheck imports
         for (path, names) in module.imports {
-            log::trace!(
-                log::IMPORT,
-                "  Inserting into scope of {insert_path}: import {path} ({names:?})",
-                insert_path = module.path
-            );
-            // @Errors: check for name clashes
+            log::trace!(log::TYPECHECK, "  Typechecking: import {path} ({names:?})",);
             typechecked_module
                 .imports
                 .entry(path)
@@ -200,7 +195,7 @@ impl Typechecker {
                 .extend(names);
         }
 
-        // Insert all (foreign) imported names into the scope.
+        // Typecheck foreign imports
         for (require_string, imports) in module.foreign_imports {
             for ast::ForeignImportItem {
                 foreign_name,
@@ -210,16 +205,13 @@ impl Typechecker {
             } in imports
             {
                 log::trace!(
-                    log::IMPORT,
-                    "  Inserting into scope of {module_path}: \
-                         foreign import {require_string} ({foreign_name} as {name})",
-                    module_path = module.path
+                    log::TYPECHECK,
+                    "  Typechecking: foreign import {require_string} ({foreign_name} as {name})",
                 );
 
                 let ts = self.typecheck_type_scheme(&type_scheme);
                 let typ = self.instantiate(ts);
 
-                // @Errors: check for name clashes
                 typechecked_module
                     .foreign_imports
                     .entry(require_string)
@@ -233,37 +225,8 @@ impl Typechecker {
             }
         }
 
-        // Insert all foreign exports into the scope.
-        typechecked_module
-            .foreign_exports
-            .extend(module.foreign_exports);
-
-        // @Todo @Fixme: explicit Prelude imports don't prevent anything
-        // If there is no explicit Prelude import already,
-        // import everything in Prelude.
-        let prelude_path = ModulePath("Prelude");
-        if module.path != prelude_path {
-            log::trace!(
-                log::IMPORT,
-                "  Importing contents of Prelude into {}",
-                module.path
-            );
-            let prelude = &self.modules[&prelude_path];
-
-            // @Errors @Warn: name clashes
-            typechecked_module
-                .imports
-                .entry(prelude_path)
-                .or_default()
-                .extend(
-                    prelude
-                        .definitions
-                        .keys()
-                        .chain(prelude.constructors.keys())
-                        .cloned()
-                        .map(ast::ImportItem::from),
-                );
-        }
+        // Pass through foreign exports.
+        typechecked_module.foreign_exports = module.foreign_exports;
 
         // Add the Module<ResolvedName, Type> to the typechecker.
         assert!(self
