@@ -15,14 +15,15 @@ use super::{Error, Ident, ModulePath, ResolvedName, Source, UnresolvedName};
 /// `type Foo a = Bar a Int;`
 /// In this example, `Foo`, `a`, and `Int` are all type-level names;
 /// `Bar` is a value-level name.
+#[derive(Debug, Default)]
 pub struct Resolver {
     /// The modules which have already been resolved.
     pub modules: BTreeMap<ModulePath, Module<ResolvedName, ()>>,
 
-    /// The `Scope` used for implicitly-imported value-level names.
+    /// The `Scope` used for builtin value-level names.
     scope: Scope,
 
-    /// The `Scope` used for implicitly-imported type-level names.
+    /// The `Scope` used for builtin type-level names.
     type_scope: TypeScope,
 
     /// Holds assumptions about imported names,
@@ -59,9 +60,7 @@ impl Resolver {
         Resolver {
             scope,
             type_scope,
-            modules: BTreeMap::new(),
-            assumptions: Vec::new(),
-            module_assumptions: Vec::new(),
+            ..Resolver::default()
         }
     }
 
@@ -197,34 +196,6 @@ impl Resolver {
         }
 
         Ok(self.modules)
-    }
-}
-
-impl fmt::Debug for Resolver {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Resolver:")?;
-        for (name, sources) in self.scope.idents.iter() {
-            if !sources.is_empty() {
-                writeln!(f, "  {name}: \t{sources:?}")?;
-            }
-        }
-
-        for (name, sources) in self.type_scope.idents.iter() {
-            if !sources.is_empty() {
-                writeln!(f, "  type {name}: \t{sources:?}")?;
-            }
-        }
-
-        writeln!(f, "Assumptions: {{")?;
-        for assumption in self.scope.assumptions.iter() {
-            writeln!(f, "  {assumption:?}")?;
-        }
-        for assumption in self.type_scope.assumptions.iter() {
-            writeln!(f, "  {assumption:?}")?;
-        }
-        writeln!(f, "}}")?;
-
-        Ok(())
     }
 }
 
