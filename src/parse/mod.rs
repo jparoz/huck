@@ -179,7 +179,7 @@ fn import_type(input: &'static str) -> IResult<&'static str, ImportItem<Unresolv
                 unqualified(upper_ident),
                 opt(preceded(reserved("as"), unqualified(upper_ident))),
             )))),
-            // @Todo: (..) glob import syntax for constructors?
+            // @Future: (..) glob import syntax for constructors?
         )),
         |((name, as_name), opt_cons)| {
             let constructors = opt_cons

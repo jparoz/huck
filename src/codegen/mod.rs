@@ -590,9 +590,9 @@ fn pattern_match(
         }
 
         ir::Pattern::Tuple(list) => {
-            // @Todo @Errors: should this give a runtime error saying something like
+            // @Errors: should this give a runtime error saying something like
             // "tuple of incorrect length"
-            // when given the wrong number of arguments??
+            // when given the wrong number of arguments?
 
             // @Note: we don't need to check that the tuple is the right length,
             // because it's statically checked by the type system.
