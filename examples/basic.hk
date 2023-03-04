@@ -38,13 +38,14 @@ hasOneOrTwo [x, y] = True;
 hasOneOrTwo _ = False;
 
 (* We can define our own data structures: *)
-type LinkedList a = Cons a (LinkedList a) | Nil;
+type LinkedList a = a :: (LinkedList a) | Nil;
+infixr 5 ::;
 
-myLinkedList : LinkedList Int = Cons 1 (Cons 2 (Cons 3 Nil));
+myLinkedList : LinkedList Int = 1 :: 2 :: 3 :: Nil;
 
 (* We can define functions that accept other functions: *)
 map : forall a. (a -> a) -> LinkedList a -> LinkedList a;
-map f (Cons x xs) = Cons (f x) (map f xs);
+map f (x::xs) = f x :: map f xs;
 map _ Nil = Nil;
 
 (* And pass lambdas into them: *)

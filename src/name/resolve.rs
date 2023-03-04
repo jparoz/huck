@@ -528,6 +528,12 @@ impl<'a> ModuleResolver<'a> {
                 .is_none());
         }
 
+        // Resolve precedence declarations
+        for (unres_name, prec) in module.precedences {
+            let res_name = self.resolve_name(unres_name)?;
+            assert!(resolved_module.precedences.insert(res_name, prec).is_none());
+        }
+
         // Resolve foreign exports
         for (lua_lhs, unres_expr) in module.foreign_exports {
             log::trace!(log::RESOLVE, "Resolving foreign export `{lua_lhs}`");
@@ -622,7 +628,6 @@ impl<'a> ModuleResolver<'a> {
         Ok(ast::Definition {
             assignments,
             explicit_type,
-            precedence: defn.precedence,
             typ: defn.typ,
         })
     }

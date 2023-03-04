@@ -147,14 +147,12 @@ impl Typechecker {
                 let ast::Definition {
                     assignments,
                     explicit_type,
-                    precedence,
                     typ: (),
                 } = defn;
 
                 ast::Definition {
                     assignments,
                     explicit_type,
-                    precedence,
                     typ,
                 }
             };

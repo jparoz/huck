@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
-use std::iter;
+use std::mem;
 use std::path::PathBuf;
 
 use crate::ast::Module;
-use crate::name::{self, ModulePath, UnresolvedName};
+use crate::name::{self, ModulePath, ResolvedName, UnresolvedName};
 use crate::parse::{self, parse};
-use crate::precedence::ApplyPrecedence;
+use crate::precedence::{ApplyPrecedence, Precedence};
 use crate::typecheck::typecheck;
 use crate::{codegen, dependencies, ir};
 
@@ -86,13 +86,10 @@ pub fn compile(
     let mut resolved_modules = resolver.finish()?;
 
     // Apply operator precedences
-    let mut precs = BTreeMap::new();
-    for module in resolved_modules.values() {
-        for (name, defn) in module.definitions.iter() {
-            precs.extend(iter::repeat(name).zip(defn.precedence.iter()));
-        }
-    }
-
+    let precs: BTreeMap<ResolvedName, Precedence> = resolved_modules
+        .values_mut()
+        .flat_map(|module| mem::take(&mut module.precedences).into_iter())
+        .collect();
     for module in resolved_modules.values_mut() {
         module.apply(&precs);
     }

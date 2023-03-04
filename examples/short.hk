@@ -1,12 +1,8 @@
 module Short;
 
-import Prelude (length as getLength, Maybe (Just, Nothing), (+));
-import Basic (LinkedList(Cons, Nil), id);
+type List a = a :: (List a) | Nil;
+infixr 5 ::;
 
-foo = Just 1;
+myList = 1 :: 2 :: 3 :: Nil;
 
-bar = id 123;
-
-baz = getLength [1, 2, 3];
-
-quux = 1 + 2;
+type Foo = Bar | Baz;

@@ -1,5 +1,6 @@
 use std::fmt::{Debug, Display};
-use std::{io::Write, time::Instant};
+use std::io::Write;
+use std::time::Instant;
 
 use crate::error::Error as HuckError;
 use crate::log;
@@ -111,7 +112,7 @@ pub(crate) use leak;
 
 #[cfg(test)]
 pub mod test {
-    use std::collections::BTreeMap;
+    use std::{collections::BTreeMap, mem};
 
     use super::*;
     use crate::{
@@ -120,7 +121,7 @@ pub mod test {
         dependencies,
         name::{self, ModulePath, ResolvedName},
         parse::parse,
-        precedence::ApplyPrecedence,
+        precedence::{ApplyPrecedence, Precedence},
         typecheck,
         types::Type,
     };
@@ -164,13 +165,10 @@ pub mod test {
         let mut resolved_modules = resolver.finish()?;
 
         // Apply operator precedences
-        let mut precs = BTreeMap::new();
-        for module in resolved_modules.values() {
-            for (name, defn) in module.definitions.iter() {
-                precs.extend(std::iter::repeat(name).zip(defn.precedence.iter()));
-            }
-        }
-
+        let precs: BTreeMap<ResolvedName, Precedence> = resolved_modules
+            .values_mut()
+            .flat_map(|module| mem::take(&mut module.precedences).into_iter())
+            .collect();
         for module in resolved_modules.values_mut() {
             module.apply(&precs);
         }

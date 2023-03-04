@@ -12,17 +12,30 @@ use crate::types;
 /// into a single `Definition` struct for each function name.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Module<Name: Ord + Copy, Ty> {
+    /// The path to this module.
     pub path: ModulePath,
+
+    /// Value definitions declared in this module.
     pub definitions: BTreeMap<Name, Definition<Name, Ty>>,
 
+    /// Type definitions declared in this module.
     pub type_definitions: BTreeMap<Name, TypeDefinition<Name, Ty>>,
 
+    // @Todo @Cleanup: remove this field
     /// Note that all the members of this field can also be found
     /// in the values of the `type_definitions` field.
     pub constructors: BTreeMap<Name, ConstructorDefinition<Name, Ty>>,
 
+    /// All of the precedence declarations originating in this module.
+    pub precedences: BTreeMap<Name, Precedence>,
+
+    /// All of the imports from other Huck modules into this module.
     pub imports: BTreeMap<ModulePath, Vec<ImportItem<Name>>>,
+
+    /// All of the imports from Lua modules into this module.
     pub foreign_imports: BTreeMap<&'static str, Vec<ForeignImportItem<Name, Ty>>>,
+
+    /// All of the Lua globals assigned in this module using `foreign export`.
     pub foreign_exports: Vec<(&'static str, Expr<Name>)>,
 }
 
@@ -33,6 +46,7 @@ impl<Name: Ord + Copy, Ty> Module<Name, Ty> {
             definitions: BTreeMap::new(),
             type_definitions: BTreeMap::new(),
             constructors: BTreeMap::new(),
+            precedences: BTreeMap::new(),
             imports: BTreeMap::new(),
             foreign_imports: BTreeMap::new(),
             foreign_exports: Vec::new(),
@@ -49,7 +63,6 @@ impl<Name: Ord + Copy, Ty> Module<Name, Ty> {
 pub struct Definition<Name, Ty> {
     pub assignments: Vec<Assignment<Name>>,
     pub explicit_type: Option<TypeScheme<Name>>,
-    pub precedence: Option<Precedence>,
     pub typ: Ty,
 }
 
@@ -58,7 +71,6 @@ impl<Name> Default for Definition<Name, ()> {
         Self {
             assignments: Vec::new(),
             explicit_type: None,
-            precedence: None,
             typ: (),
         }
     }
@@ -531,14 +543,6 @@ pub enum ImportItem<Name> {
         /// (defined_name, as_name)
         constructors: Vec<(Name, Ident)>,
     },
-}
-
-impl<Name: Copy> ImportItem<Name> {
-    pub fn name(&self) -> Name {
-        match self {
-            ImportItem::Value { name, .. } | ImportItem::Type { name, .. } => *name,
-        }
-    }
 }
 
 impl From<UnresolvedName> for ImportItem<UnresolvedName> {
