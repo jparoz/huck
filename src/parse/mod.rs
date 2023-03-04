@@ -79,16 +79,19 @@ fn statement(input: &'static str) -> IResult<&'static str, Statement<UnresolvedN
         ),
         // Type definition
         map(
-            nom_tuple((
-                reserved("type"),
-                constructor_lhs,
-                reserved_op("="),
-                separated_list1(ws(tag("|")), constructor_definition),
+            terminated(
+                nom_tuple((
+                    preceded(reserved("type"), constructor_lhs),
+                    opt(preceded(
+                        reserved_op("="),
+                        separated_list1(ws(tag("|")), constructor_definition),
+                    )),
+                )),
                 semi,
-            )),
-            |(_, (name, vars), _, constr_defns, _)| {
+            ),
+            |((name, vars), opt_constr_defns)| {
                 let mut constructors = BTreeMap::new();
-                for constr_defn in constr_defns {
+                for constr_defn in opt_constr_defns.unwrap_or_default() {
                     constructors.insert(constr_defn.name, constr_defn);
                 }
                 Statement::TypeDefinition(TypeDefinition {
