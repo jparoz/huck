@@ -169,11 +169,17 @@ impl Typechecker {
         for (_name, ast_type_defn) in module.type_definitions {
             let type_defn = self.typecheck_type_definition(ast_type_defn);
 
-            for (constr_name, constr_defn) in type_defn.constructors.iter() {
-                typechecked_module
-                    .constructors
-                    .insert(*constr_name, constr_defn.clone());
-            }
+            // @Note:
+            // We could do the following,
+            // in order to pass on the map of constructor names further in the pipeline;
+            // but it's pointless work,
+            // as it's not used anywhere later in compilation.
+            //
+            // for (constr_name, constr_defn) in type_defn.constructors.iter() {
+            //     typechecked_module
+            //         .constructors
+            //         .insert(*constr_name, type_defn.name);
+            // }
 
             // @Note: guaranteed to be None,
             // because we're iterating over a BTreeMap.

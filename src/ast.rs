@@ -21,10 +21,11 @@ pub struct Module<Name: Ord + Copy, Ty> {
     /// Type definitions declared in this module.
     pub type_definitions: BTreeMap<Name, TypeDefinition<Name, Ty>>,
 
-    // @Todo @Cleanup: remove this field
-    /// Note that all the members of this field can also be found
-    /// in the values of the `type_definitions` field.
-    pub constructors: BTreeMap<Name, ConstructorDefinition<Name, Ty>>,
+    /// A convenience field to check if a type constructor is defined in this module.
+    /// Maps a constructor name to its originating type name.
+    /// Note that all the keys in this field
+    /// can also be found in the values of the `type_definitions` field.
+    pub constructors: BTreeMap<Name, Name>,
 
     /// All of the precedence declarations originating in this module.
     pub precedences: BTreeMap<Name, Precedence>,

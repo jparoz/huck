@@ -110,11 +110,15 @@ impl ast::Module<UnresolvedName, ()> {
                 }
 
                 ast::Statement::TypeDefinition(type_defn) => {
-                    for constr in type_defn.constructors.values().cloned() {
-                        if let Some(existing_constr) =
-                            module.constructors.insert(constr.name, constr)
+                    for constr_name in type_defn.constructors.keys() {
+                        if let Some(existing_type_name) =
+                            module.constructors.insert(*constr_name, type_defn.name)
                         {
-                            return Err(Error::MultipleTypeConstructors(existing_constr.name));
+                            return Err(Error::MultipleTypeConstructors(
+                                *constr_name,
+                                existing_type_name,
+                                type_defn.name,
+                            ));
                         }
                     }
 

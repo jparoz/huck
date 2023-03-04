@@ -34,8 +34,8 @@ pub enum Error {
     MultipleTypeDefinitions(UnresolvedName),
 
     // @Cleanup @Errors: this should print the source locations of the two definitions
-    #[error("Multiple type constructors with the same name ({0})")]
-    MultipleTypeConstructors(UnresolvedName),
+    #[error("Multiple type constructors with the same name `{0}` from types: `{1}`, `{2}`")]
+    MultipleTypeConstructors(UnresolvedName, UnresolvedName, UnresolvedName),
 
     // @Errors: this should print the locations of the multiple unconditionals
     #[error("Multiple unconditional branches found in definition of `{0}`")]
