@@ -1,4 +1,6 @@
 module Short;
 
-foo : () ();
+import Basic;
+
+foo : ();
 foo = unsafe lua {nil};

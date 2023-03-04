@@ -589,24 +589,36 @@ impl<'a> ModuleResolver<'a> {
 
     fn resolve_name(&mut self, name: UnresolvedName) -> Result<ResolvedName, Error> {
         log::trace!(log::RESOLVE, "  Attempting to resolve name `{name}`");
+
         // First check the current module...
-        self.scope
-            .resolve_name(name, self.module_path)
-            // then check the parent scope (builtins and Prelude).
-            .or_else(|_| self.resolver.scope.resolve_name(name, self.module_path))
+        if let Some(resolved) = self
+            .scope
+            .resolve_name(name)
+            // then check the parent scope (builtins).
+            .or_else(|| self.resolver.scope.resolve_name(name))
+        {
+            log::trace!(log::RESOLVE, "    Resolved name `{resolved}`");
+            Ok(resolved)
+        } else {
+            Err(Error::ValueNotInScope(self.module_path, name.ident()))
+        }
     }
 
     fn resolve_type_name(&mut self, name: UnresolvedName) -> Result<ResolvedName, Error> {
         log::trace!(log::RESOLVE, "  Attempting to resolve type name `{name}`");
+
         // First check the current module...
-        self.type_scope
-            .resolve_name(name, self.module_path)
-            // then check the parent type scope (builtins and Prelude).
-            .or_else(|_| {
-                self.resolver
-                    .type_scope
-                    .resolve_name(name, self.module_path)
-            })
+        if let Some(resolved) = self
+            .type_scope
+            .resolve_name(name)
+            // then check the parent type scope (builtins).
+            .or_else(|| self.resolver.type_scope.resolve_name(name))
+        {
+            log::trace!(log::RESOLVE, "    Resolved type name `{resolved}`");
+            Ok(resolved)
+        } else {
+            Err(Error::TypeNotInScope(self.module_path, name.ident()))
+        }
     }
 
     fn resolve_definition(
@@ -1187,14 +1199,8 @@ impl Scope {
     }
 
     /// Does the work for resolving a name in this scope.
-    /// `module_path` is just used for error messages.
-    ///
     /// See also [`ModuleResolver::resolve_name`] and [`ModuleResolver::resolve_type_name`].
-    fn resolve_name(
-        &mut self,
-        name: UnresolvedName,
-        module_path: ModulePath,
-    ) -> Result<ResolvedName, Error> {
+    fn resolve_name(&mut self, name: UnresolvedName) -> Option<ResolvedName> {
         match name {
             UnresolvedName::Qualified(path, ident) => {
                 let resolved = ResolvedName::module(path, ident);
@@ -1209,21 +1215,12 @@ impl Scope {
                 self.assumptions.push(resolved);
                 log::trace!(log::RESOLVE, "    Assumed name `{resolved}` exists");
 
-                Ok(resolved)
+                Some(resolved)
             }
-            UnresolvedName::Unqualified(ident) => {
-                let resolved = self
-                    .idents
-                    .get(&ident)
-                    .and_then(|names| names.last())
-                    // @Todo @Errors:
-                    // This error should be different for type- and value-level names.
-                    // This means the error handling will have to be pushed back up
-                    // to ModuleResolver::{resolve_name, resolve_type_name}.
-                    .ok_or(Error::NotInScope(module_path, ident))?;
-                log::trace!(log::RESOLVE, "    Resolved name `{resolved}`");
-                Ok(*resolved)
-            }
+            UnresolvedName::Unqualified(ident) => self
+                .idents
+                .get(&ident)
+                .and_then(|names| names.last().cloned()),
         }
     }
 }

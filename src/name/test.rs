@@ -7,10 +7,18 @@ use crate::name::Error as NameError;
 use crate::parse::Error as ParseError;
 
 #[test]
-fn error_not_in_scope() {
+fn error_value_not_in_scope() {
     assert_matches!(
         transpile("foo = 123; bar = baz;"),
-        Err(HuckError::NameResolution(NameError::NotInScope(..)))
+        Err(HuckError::NameResolution(NameError::ValueNotInScope(..)))
+    )
+}
+
+#[test]
+fn error_type_not_in_scope() {
+    assert_matches!(
+        transpile("foo : Int = 3; bar : Foo = unsafe lua {nil};"),
+        Err(HuckError::NameResolution(NameError::TypeNotInScope(..)))
     )
 }
 

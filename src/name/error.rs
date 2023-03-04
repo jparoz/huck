@@ -3,8 +3,12 @@ use crate::name::{Ident, ModulePath, ResolvedName, Source};
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     // @Cleanup: duplicate of NonexistentName or something?
-    #[error("Identifier not in scope (module {0}): {1}")]
-    NotInScope(ModulePath, Ident),
+    #[error("Variable `{1}` not in scope (module {0})")]
+    ValueNotInScope(ModulePath, Ident),
+
+    // @Cleanup: duplicate of NonexistentName or something?
+    #[error("Type `{1}` not in scope (module {0})")]
+    TypeNotInScope(ModulePath, Ident),
 
     #[error("Imported `{0}` clashes with `{1}`")]
     ImportClash(ResolvedName, ResolvedName),
