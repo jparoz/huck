@@ -35,8 +35,7 @@ impl ArityChecker {
                 self.assume_arity(*name, assumed_arity)
             }
 
-            // @Todo @XXX @Errors: This should probably be a proper error
-            ast::TypeTerm::Unit => assert_eq!(assumed_arity, 0),
+            ast::TypeTerm::Unit => self.assume_arity(ResolvedName::builtin("()"), assumed_arity),
 
             ast::TypeTerm::Parens(expr) => self.type_expr(expr, assumed_arity),
 
@@ -129,7 +128,7 @@ impl ArityChecker {
                 // so we should possibly change this whole match
                 // into an if let Source::Module(path) = name.source
                 Source::Builtin => match name.ident {
-                    "Int" | "Float" | "String" | "Bool" => 0,
+                    "Int" | "Float" | "String" | "Bool" | "()" => 0,
                     "IO" => 1,
                     _ => unreachable!("must have added new builtin types"),
                 },

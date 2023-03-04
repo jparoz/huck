@@ -1,8 +1,4 @@
 module Short;
 
-type List a = a :: (List a) | Nil;
-infixr 5 ::;
-
-myList = 1 :: 2 :: 3 :: Nil;
-
-type Foo = Bar | Baz;
+foo : () ();
+foo = unsafe lua {nil};
