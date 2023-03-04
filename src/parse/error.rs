@@ -1,6 +1,4 @@
-use std::path::PathBuf;
-
-use crate::name::{ModulePath, UnresolvedName};
+use crate::name::UnresolvedName;
 use crate::precedence::Precedence;
 
 #[derive(thiserror::Error, Debug)]
@@ -12,14 +10,6 @@ pub enum Error {
     // @Errors: this should be caught as more specific errors, then this variant deleted
     #[error("Leftover input: {0}")]
     Leftover(String),
-
-    // @Todo @Errors: this shouldn't be a parse error
-    #[error(
-        "Multiple modules defined with the same name: `{0}` (files {} and {})",
-        .1.as_ref().map(|p| format!("{}", p.display())).unwrap_or_else(|| "<stdin>".to_string()),
-        .2.as_ref().map(|p| format!("{}", p.display())).unwrap_or_else(|| "<stdin>".to_string()),
-    )]
-    MultipleModules(ModulePath, Option<PathBuf>, Option<PathBuf>),
 
     // @Cleanup @Errors: this shouldn't use Debug printing, but should print the source.
     #[error("Multiple precedence declarations found for `{0}`:\n    {1:?}\n    {2:?}")]

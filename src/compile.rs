@@ -4,10 +4,10 @@ use std::path::PathBuf;
 
 use crate::ast::Module;
 use crate::name::{self, ModulePath, ResolvedName, UnresolvedName};
-use crate::parse::{self, parse};
+use crate::parse::parse;
 use crate::precedence::{ApplyPrecedence, Precedence};
 use crate::typecheck::typecheck;
-use crate::{codegen, dependencies, ir};
+use crate::{codegen, dependencies, file, ir};
 
 use crate::error::Error as HuckError;
 
@@ -51,8 +51,7 @@ pub fn compile(
         let (module_path, statements) = parse(info.source)?;
 
         if let Some(existing_info) = infos.insert(module_path, info) {
-            // @Todo @Errors: this shouldn't be a parse error
-            Err(parse::Error::MultipleModules(
+            Err(file::Error::MultipleModules(
                 module_path,
                 infos.remove(&module_path).unwrap().input,
                 existing_info.input,
