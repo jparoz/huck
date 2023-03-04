@@ -326,9 +326,12 @@ fn import_item(input: &'static str) -> IResult<&'static str, ImportItem<Unresolv
 
 fn import_value(input: &'static str) -> IResult<&'static str, ImportItem<UnresolvedName>> {
     map(
-        nom_tuple((
-            unqualified(lower_ident),
-            opt(preceded(reserved("as"), unqualified(lower_ident))),
+        alt((
+            map(parens(operator), |op| (op, None)),
+            nom_tuple((
+                unqualified(lower_ident),
+                opt(preceded(reserved("as"), unqualified(lower_ident))),
+            )),
         )),
         |(name, as_name)| ImportItem::Value {
             name,
