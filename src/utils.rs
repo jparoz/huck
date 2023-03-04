@@ -58,6 +58,7 @@ pub fn display_iter<It: Display>(iter: impl Iterator<Item = It>) -> String {
 }
 
 /// Takes an iterator of `Debug`-able things, and prints them out comma-separated.
+#[allow(dead_code)]
 pub fn debug_iter<It: Debug>(iter: impl Iterator<Item = It>) -> String {
     use std::fmt::Write;
 
@@ -211,6 +212,7 @@ pub mod test {
 
     /// Takes Lua code as input, executes it using a Lua interpreter found in PATH,
     /// and returns the contents of stdout in a String.
+    #[allow(dead_code)]
     pub fn execute_lua(lua: &str) -> String {
         let output = std::process::Command::new("lua")
             .args([
