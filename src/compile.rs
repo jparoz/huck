@@ -18,8 +18,6 @@ pub struct CompileInfo {
     pub require: String,
 
     /// The Huck source code to be compiled.
-    /// This must be a `&'static str`;
-    /// it is suggested that you [leak](crate::read_to_leaked) the contents of the source file.
     pub source: &'static str,
 
     /// Path to the input file.
