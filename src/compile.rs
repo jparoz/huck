@@ -1,52 +1,33 @@
 use std::collections::BTreeMap;
 use std::mem;
-use std::path::PathBuf;
 
 use crate::ast::Module;
+use crate::file::{self, FileInfo};
 use crate::name::{self, ModulePath, ResolvedName, UnresolvedName};
 use crate::parse::parse;
 use crate::precedence::{ApplyPrecedence, Precedence};
 use crate::typecheck::typecheck;
-use crate::{codegen, dependencies, file, ir};
+use crate::{codegen, dependencies, ir};
 
 use crate::error::Error as HuckError;
 
-/// Filesystem-related information used to compile a module from source.
-#[derive(Debug, Clone)]
-pub struct CompileInfo {
-    /// A `String` which is given to Lua's `require` function.
-    pub require: String,
-
-    /// The Huck source code to be compiled.
-    pub source: &'static str,
-
-    /// Path to the input file.
-    /// A value of `None` means that there is no input file;
-    /// the code came from some other source (e.g. tests, stdin).
-    pub input: Option<PathBuf>,
-
-    /// Path to the output file.
-    /// A value of `None` means that there is no output file;
-    /// the generated Lua code should be output to stdout.
-    pub output: Option<PathBuf>,
-}
-
 /// Does every step necessary to take the added modules to compiled state.
-/// Takes a `Vec` of [`CompileInfo`]s,
-/// and returns a `Vec` of ([`CompileInfo`], compiled Lua code).
+/// Takes a `Vec` of [`FileInfo`]s,
+/// and returns a `Vec` of ([`FileInfo`], compiled Lua code).
 //
 // @Future: we could incrementally process modules somehow,
 // rather than just having this monolithic all-or-nothing compile step.
 pub fn compile(
-    input_infos: Vec<CompileInfo>,
-) -> Result<BTreeMap<ModulePath, (CompileInfo, String)>, HuckError> {
-    // Record which module originated from which `CompileInfo`.
+    input_infos: Vec<FileInfo>,
+) -> Result<BTreeMap<ModulePath, (FileInfo, String)>, HuckError> {
+    // Record which module originated from which `FileInfo`.
     let mut infos = BTreeMap::new();
 
     // Parse all the files
     let mut parsed = Vec::new();
-    for info in input_infos {
+    for mut info in input_infos {
         let (module_path, statements) = parse(info.source)?;
+        info.module_path = Some(module_path);
 
         if let Some(existing_info) = infos.insert(module_path, info) {
             Err(file::Error::MultipleModules(
@@ -111,9 +92,16 @@ pub fn compile(
             generation_orders
                 .remove(&module_path)
                 .expect("should have found a generation order during dependency resolution"),
-            &infos,
         );
-        generated.insert(module_path, (infos[&module_path].clone(), lua));
+        generated.insert(
+            module_path,
+            (
+                infos
+                    .remove(&module_path)
+                    .expect("file info should exist for a generated file"),
+                lua,
+            ),
+        );
     }
     Ok(generated)
 }

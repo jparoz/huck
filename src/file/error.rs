@@ -7,9 +7,6 @@ pub enum Error {
     #[error("IO error: {0}")]
     IO(#[from] std::io::Error),
 
-    #[error("Invalid characters in file path: `{0}`")]
-    BadFilePath(String),
-
     #[error("Attempt to compile a directory: `{0}`")]
     InputFileWasDirectory(PathBuf),
 

@@ -118,8 +118,9 @@ pub mod test {
     use super::*;
     use crate::{
         ast,
-        compile::{compile, CompileInfo},
+        compile::compile,
         dependencies,
+        file::FileInfo,
         name::{self, ModulePath, ResolvedName},
         parse::parse,
         precedence::{ApplyPrecedence, Precedence},
@@ -186,24 +187,26 @@ pub mod test {
     /// Takes some Huck and turns it into Lua, doing every step in between.
     pub fn transpile(huck: &'static str) -> Result<String, HuckError> {
         // Include the prelude
-        let prelude_info = CompileInfo {
-            require: "huck.Prelude".to_string(),
+        let prelude_info = FileInfo {
             source: PRELUDE_SRC,
+            module_path: None,
             input: None,
             output: None,
+            stdout: true,
         };
 
         // Include our module
-        let module_info = CompileInfo {
-            require: "Test".to_string(),
+        let module_info = FileInfo {
             source: leak!("module Test; {}", huck),
+            module_path: None,
             input: None,
             output: None,
+            stdout: true,
         };
 
         // Compile
         for (info, lua) in compile(vec![prelude_info, module_info.clone()])?.into_values() {
-            if info.require == module_info.require {
+            if info.module_path == Some(ModulePath("Test")) {
                 return normalize(&lua);
             }
         }

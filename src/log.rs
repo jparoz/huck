@@ -1,6 +1,8 @@
+// @Todo @Cleanup: These should be more systematically named
 #[allow(dead_code)]
 #[rustfmt::skip] pub const DEBUG     : &str = "     debug";
 #[rustfmt::skip] pub const METRICS   : &str = "   metrics";
+#[rustfmt::skip] pub const FILE      : &str = "      file";
 #[rustfmt::skip] pub const IMPORT    : &str = "    import";
 #[rustfmt::skip] pub const PARSE     : &str = "     parse";
 #[rustfmt::skip] pub const RESOLVE   : &str = "   resolve";

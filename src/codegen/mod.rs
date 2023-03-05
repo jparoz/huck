@@ -1,11 +1,10 @@
-use crate::compile::CompileInfo;
 use crate::ir::{self, Module};
 use crate::log;
 use crate::name::{Ident, ModulePath};
 use crate::name::{ResolvedName, Source};
 use crate::types::Type;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::fmt::{self, Write};
 use std::mem;
 use std::time::Instant;
@@ -18,18 +17,14 @@ mod test;
 /// Generates Lua for the given Huck module.
 /// `requires` is a mapping from a module's `ModulePath`
 /// to the segment of a filepath to be given to Lua's `require` function to load that module.
-pub fn generate(
-    module: ir::Module,
-    generation_order: GenerationOrder,
-    infos: &BTreeMap<ModulePath, CompileInfo>,
-) -> String {
+pub fn generate(module: ir::Module, generation_order: GenerationOrder) -> String {
     let start_time = Instant::now();
 
     let module_path = module.path;
 
     log::trace!(log::CODEGEN, "Generating code for module {}", module_path);
 
-    let generated = CodeGenerator::new(module, infos)
+    let generated = CodeGenerator::new(module)
         .generate(generation_order)
         .expect("write should not fail");
 
@@ -48,7 +43,7 @@ pub fn generate(
 /// Methods on this struct should generally correspond to Lua constructs,
 /// not to Huck constructs.
 #[derive(Debug)]
-struct CodeGenerator<'a> {
+struct CodeGenerator {
     // This is a String containing the contents of the Lua table which shall be returned.
     return_entries: String,
 
@@ -58,18 +53,14 @@ struct CodeGenerator<'a> {
     /// This is the module being generated.
     module: ir::Module,
 
-    /// This is a map from a module's path to its [`CompileInfo`].
-    infos: &'a BTreeMap<ModulePath, CompileInfo>,
-
     /// Used for generating unique variable IDs.
     unique_counter: u64,
 }
 
-impl<'a> CodeGenerator<'a> {
-    fn new(module: Module, infos: &'a BTreeMap<ModulePath, CompileInfo>) -> Self {
+impl CodeGenerator {
+    fn new(module: Module) -> Self {
         CodeGenerator {
             module,
-            infos,
             generated: BTreeSet::new(),
             return_entries: String::new(),
             unique_counter: 0,
@@ -513,10 +504,7 @@ impl<'a> CodeGenerator<'a> {
             Source::Module(path) | Source::Constructor(path, ..) => {
                 // It's a top-level definition from a different module,
                 // so we should emit e.g. require("Bar")["var"]
-                Ok(format!(
-                    r#"require("{}")["{}"]"#,
-                    self.infos[&path].require, name.ident
-                ))
+                Ok(format!(r#"require("{}")["{}"]"#, path, name.ident))
             }
 
             Source::Foreign {

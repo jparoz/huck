@@ -21,6 +21,7 @@ use clap::builder::TypedValueParser as _;
 use clap::Parser;
 
 use compile::compile;
+use file::FileInfo;
 
 use error::Error as HuckError;
 
@@ -104,38 +105,25 @@ fn do_main() -> Result<(), HuckError> {
     let mut to_compile = Vec::new();
 
     // Add the Prelude to the list to be compiled.
-    to_compile.push(file::load(&args.prelude)?);
+    to_compile.push(FileInfo::new(&args.prelude)?);
 
     // Add all the given files to the list to be compiled.
     for file in args.files.iter() {
-        to_compile.push(file::load(file)?);
+        to_compile.push(FileInfo::new(file)?);
     }
     for file in args.write_to_stdout.iter() {
-        let mut info = file::load(file)?;
-        info.output = None;
+        let mut info = FileInfo::new(file)?;
+        info.stdout = true;
         to_compile.push(info);
     }
 
     // We're done adding modules, so now we can compile.
-    for (info, mut lua) in compile(to_compile)?.into_values() {
+    for (file_info, mut lua) in compile(to_compile)?.into_values() {
         if args.normalize && !args.no_normalize {
             lua = utils::normalize(&lua)?;
         }
 
-        // Check if we should write to stdout instead of a file.
-        if let Some(file_path) = info.output {
-            // Write the compiled Lua to a .lua file.
-            log::info!(
-                log::CODEGEN,
-                "Writing generated output to {}",
-                file_path.display()
-            );
-            std::fs::write(file_path, lua).map_err(file::Error::IO)?;
-        } else {
-            // Write the compiled Lua to stdout.
-            log::info!(log::CODEGEN, "Writing generated output to stdout");
-            print!("{}", lua);
-        }
+        file_info.write(&lua)?;
     }
 
     log::info!(

@@ -174,7 +174,7 @@ fn import() {
         normalize(wrap!(
             "foo",
             r#"
-                (require("huck.Prelude")["length"])({3, 4, 5})
+                (require("Prelude")["length"])({3, 4, 5})
             "#
         ))
         .unwrap()
