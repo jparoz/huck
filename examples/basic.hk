@@ -71,13 +71,6 @@ isOdd 0 = False;
 isOdd 1 = True;
 isOdd n = isEven (n-1);
 
-(* Some more useful functions: *)
-id : forall a. a -> a;
-id x = x;
-
-const : forall a b. a -> b -> a;
-const x _ = x;
-
 (* We can import functions from Lua, too! *)
 foreign import "inspect" (inspect : forall a. a -> String);
 

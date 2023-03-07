@@ -90,5 +90,19 @@ a <> b = unsafe lua { a .. b };
 length : forall a. [a] -> Int;
 length xs = unsafe lua { #xs };
 
+-- Helpful combinators
+id : forall a. a -> a;
+id x = x;
+
+const : forall a b. a -> b -> a;
+const x _ = x;
+
+(.) : forall a b c. (b -> c) -> (a -> b) -> a -> c;
+f . g = \x -> f (g x);
+
 -- Maybe type
 type Maybe a = Just a | Nothing;
+
+fromJust : forall a. Maybe a -> a;
+fromJust (Just x) = x;
+fromJust Nothing = unsafe lua { error("called fromJust on Nothing") };

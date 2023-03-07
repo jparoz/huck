@@ -119,7 +119,7 @@ fn error_incorrect_arity() {
 fn error_incorrect_arity_type_variable() {
     // Correct
     assert_matches!(
-        utils::test::typecheck("id : forall a. a -> a; id x = x;"),
+        utils::test::typecheck("myId : forall a. a -> a; myId x = x;"),
         Ok(_)
     );
 
@@ -132,18 +132,19 @@ fn error_incorrect_arity_type_variable() {
 
 #[test]
 fn explicit_type_id_general() {
-    utils::test::typecheck("id : forall a. a -> a; id x = x;").expect("should typecheck correctly");
+    utils::test::typecheck("myId : forall a. a -> a; myId x = x;")
+        .expect("should typecheck correctly");
 }
 
 #[test]
 fn explicit_type_id_specific() {
-    utils::test::typecheck("id : Int -> Int; id x = x;").expect("should typecheck correctly");
+    utils::test::typecheck("myId : Int -> Int; myId x = x;").expect("should typecheck correctly");
 }
 
 #[test]
 fn explicit_type_id_too_general() {
     assert_matches!(
-        utils::test::typecheck("id : forall a b. a -> b; id x = x;"),
+        utils::test::typecheck("myId : forall a b. a -> b; myId x = x;"),
         Err(HuckError::Type(..))
     );
 }
@@ -151,7 +152,7 @@ fn explicit_type_id_too_general() {
 #[test]
 fn explicit_type_id_wrong_input_type() {
     assert_matches!(
-        utils::test::typecheck("id : forall a. Int -> a; id x = x;"),
+        utils::test::typecheck("myId : forall a. Int -> a; myId x = x;"),
         Err(HuckError::Type(..))
     );
 }
@@ -159,7 +160,7 @@ fn explicit_type_id_wrong_input_type() {
 #[test]
 fn explicit_type_id_wrong_output_type() {
     assert_matches!(
-        utils::test::typecheck("id : forall a. a -> Int; id x = x;"),
+        utils::test::typecheck("myId : forall a. a -> Int; myId x = x;"),
         Err(HuckError::Type(..))
     );
 }
@@ -445,8 +446,8 @@ fn literal_list_int() {
 // Also true for lots of other tests.
 #[test]
 fn function_id() {
-    let typ = utils::test::typecheck(r#"id a = a;"#)
-        .map(|mut module| module.definitions.remove(&name!("id")).unwrap().typ);
+    let typ = utils::test::typecheck(r#"myId a = a;"#)
+        .map(|mut module| module.definitions.remove(&name!("myId")).unwrap().typ);
 
     assert_matches!(typ, Ok(Type::Arrow(_, _)));
     let (l, r) = unwrap_match!(typ, Ok(Type::Arrow(l, r)) => (l, r));
@@ -462,9 +463,9 @@ fn function_id() {
 
 #[test]
 fn function_id_used() {
-    let module = utils::test::typecheck(r#"id a = a; foo = id 5; bar = id "hi";"#).unwrap();
+    let module = utils::test::typecheck(r#"myId a = a; foo = myId 5; bar = myId "hi";"#).unwrap();
 
-    let id = &module.definitions[&name!("id")].typ;
+    let id = &module.definitions[&name!("myId")].typ;
     assert_matches!(id, Type::Arrow(_, _));
     let (l, r) = unwrap_match!(id, Type::Arrow(l, r) => (l, r));
 
@@ -511,8 +512,8 @@ fn function_id_let_generic() {
 
 #[test]
 fn function_const() {
-    let typ = utils::test::typecheck(r#"const a b = a;"#)
-        .map(|mut module| module.definitions.remove(&name!("const")).unwrap().typ);
+    let typ = utils::test::typecheck(r#"myConst a b = a;"#)
+        .map(|mut module| module.definitions.remove(&name!("myConst")).unwrap().typ);
 
     assert_matches!(typ, Ok(Type::Arrow(_, _)));
 

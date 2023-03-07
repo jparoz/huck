@@ -21,17 +21,17 @@ macro_rules! wrap {
 #[test]
 fn lambda_equals_function() {
     assert_eq!(
-        transpile(r#"id = \a -> a;"#).unwrap(),
-        transpile(r#"id a = a;"#).unwrap()
+        transpile(r#"myId = \a -> a;"#).unwrap(),
+        transpile(r#"myId a = a;"#).unwrap()
     )
 }
 
 #[test]
 fn function_const() {
     assert_eq!(
-        transpile(r#"const a b = a;"#).unwrap(),
+        transpile(r#"myConst a b = a;"#).unwrap(),
         normalize(wrap!(
-            "const",
+            "myConst",
             r#"
                 function(...)
                     local _Test_0 = select(1, ...)
@@ -51,9 +51,9 @@ fn function_const() {
 #[test]
 fn function_id() {
     assert_eq!(
-        transpile(r#"id a = a;"#).unwrap(),
+        transpile(r#"myId a = a;"#).unwrap(),
         normalize(wrap!(
-            "id",
+            "myId",
             r#"
                 function(...)
                     local _Test_0 = select(1, ...)
