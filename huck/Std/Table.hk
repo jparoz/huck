@@ -1,0 +1,15 @@
+module Std.Table;
+
+import Std.List (List);
+import Std.Map (Map);
+
+type Table e k v;
+foreign import "Std.Table.Impl" (
+    lua_getList  : forall e k v. Table e k v -> List e,
+    lua_getMap   : forall e k v. Table e k v -> Map k v,
+    lua_mkTable  : forall e k v. List e -> Map k v -> Table e k v
+);
+
+getList  = lua_getList;
+getMap   = lua_getMap;
+mkTable  = lua_mkTable;
