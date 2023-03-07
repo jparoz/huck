@@ -485,3 +485,9 @@ fn empty_definition() {
     let module = ast::Module::from_statements(path, stats);
     assert_matches!(module, Err(ParseError::MissingAssignment(name!("foo"))));
 }
+
+#[test]
+fn comments() {
+    assert_eq!(parse::comment("-- Foobar").unwrap().0, "");
+    assert_eq!(parse::comment("(* baz (*nested*)*)").unwrap().0, "");
+}

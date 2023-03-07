@@ -6,7 +6,7 @@ module Prelude;
  * to ensure that the type at runtime matches the Huck type.
  *)
 
-(* Numeric operators *)
+-- Numeric operators
 
 (+) : Int -> Int -> Int;
 infixl 6 +;
@@ -40,7 +40,7 @@ negate : Int -> Int;
 negate n = unsafe lua { -n };
 
 
-(* Boolean operators *)
+-- Boolean operators
 
 (&&) : Bool -> Bool -> Bool;
 infixr 3 &&;
@@ -54,7 +54,7 @@ not : Bool -> Bool;
 not a = unsafe lua { not a };
 
 
-(* Comparison operators *)
+-- Comparison operators
 
 (==) : forall a. a -> a -> Bool;
 infix 4 ==;
@@ -81,14 +81,14 @@ infix 4 >=;
 a >= b = unsafe lua { a >= b };
 
 
-(* String concatenation operator *)
+-- String concatenation operator
 (<>) : String -> String -> String;
 infixr 5 <>;
 a <> b = unsafe lua { a .. b };
 
-(* Length operator *)
+-- Length operator
 length : forall a. [a] -> Int;
 length xs = unsafe lua { #xs };
 
-(* Maybe type *)
+-- Maybe type
 type Maybe a = Just a | Nothing;

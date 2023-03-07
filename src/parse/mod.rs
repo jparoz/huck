@@ -1,8 +1,10 @@
 use nom::branch::alt;
 use nom::bytes::complete::{escaped, is_not, tag};
-use nom::character::complete::{anychar, char, digit1, hex_digit1, one_of, satisfy};
+use nom::character::complete::{
+    anychar, char, digit1, hex_digit1, line_ending, not_line_ending, one_of, satisfy,
+};
 use nom::character::complete::{none_of, u8 as nom_u8};
-use nom::combinator::{map, not, opt, peek, recognize, success, value, verify};
+use nom::combinator::{eof, map, not, opt, peek, recognize, success, value, verify};
 use nom::multi::{many0, many1, separated_list0, separated_list1};
 use nom::number::complete::recognize_float;
 use nom::sequence::tuple as nom_tuple;
@@ -772,15 +774,27 @@ fn unit(input: &'static str) -> IResult<&'static str, &'static str> {
     ws(tag("()"))(input)
 }
 
-fn comment(input: &'static str) -> IResult<&'static str, &'static str> {
+fn line_comment(input: &'static str) -> IResult<&'static str, &'static str> {
+    recognize(nom_tuple((
+        tag("--"),
+        not_line_ending,
+        alt((line_ending, eof)),
+    )))(input)
+}
+
+fn block_comment(input: &'static str) -> IResult<&'static str, &'static str> {
     recognize(nom_tuple((
         tag("(*"),
         many0(alt((
-            value((), nom_tuple((peek(tag("(*")), comment))),
+            value((), nom_tuple((peek(tag("(*")), block_comment))),
             value((), nom_tuple((peek(not(tag("*)"))), anychar))),
         ))),
         tag("*)"),
     )))(input)
+}
+
+fn comment(input: &'static str) -> IResult<&'static str, &'static str> {
+    alt((block_comment, line_comment))(input)
 }
 
 fn ws<F, O>(inner: F) -> impl FnMut(&'static str) -> IResult<&'static str, O>
