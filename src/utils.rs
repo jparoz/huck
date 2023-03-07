@@ -188,26 +188,30 @@ pub mod test {
     pub fn transpile(huck: &'static str) -> Result<String, HuckError> {
         // Include the prelude
         let prelude_info = FileInfo {
-            source: PRELUDE_SRC,
+            huck: Some(PRELUDE_SRC),
+            lua: None,
             module_path: None,
             input: None,
-            output: None,
+            output_file_path: None,
+            output_dir: None,
             stdout: true,
         };
 
         // Include our module
         let module_info = FileInfo {
-            source: leak!("module Test; {}", huck),
+            huck: Some(leak!("module Test; {}", huck)),
+            lua: None,
             module_path: None,
             input: None,
-            output: None,
+            output_file_path: None,
+            output_dir: None,
             stdout: true,
         };
 
         // Compile
-        for (info, lua) in compile(vec![prelude_info, module_info.clone()])?.into_values() {
+        for info in compile(vec![prelude_info, module_info])? {
             if info.module_path == Some(ModulePath("Test")) {
-                return normalize(&lua);
+                return normalize(&info.lua.unwrap());
             }
         }
         unreachable!()

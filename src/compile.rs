@@ -7,36 +7,48 @@ use crate::name::{self, ModulePath, ResolvedName, UnresolvedName};
 use crate::parse::parse;
 use crate::precedence::{ApplyPrecedence, Precedence};
 use crate::typecheck::typecheck;
-use crate::{codegen, dependencies, ir};
+use crate::{codegen, dependencies, ir, log};
 
 use crate::error::Error as HuckError;
 
 /// Does every step necessary to take the added modules to compiled state.
 /// Takes a `Vec` of [`FileInfo`]s,
-/// and returns a `Vec` of ([`FileInfo`], compiled Lua code).
+/// and returns a `Vec` of corresponding [`FileInfo`],
+/// filled in with compiled Lua code.
 //
 // @Future: we could incrementally process modules somehow,
 // rather than just having this monolithic all-or-nothing compile step.
-pub fn compile(
-    input_infos: Vec<FileInfo>,
-) -> Result<BTreeMap<ModulePath, (FileInfo, String)>, HuckError> {
+pub fn compile(input_infos: Vec<FileInfo>) -> Result<Vec<FileInfo>, HuckError> {
     // Record which module originated from which `FileInfo`.
     let mut infos = BTreeMap::new();
+
+    // Build up the output list of FileInfos.
+    let mut output_infos = Vec::new();
 
     // Parse all the files
     let mut parsed = Vec::new();
     for mut info in input_infos {
-        let (module_path, statements) = parse(info.source)?;
-        info.module_path = Some(module_path);
+        if info.huck.is_some() {
+            // This means it's a Huck module which needs compiling.
+            let (module_path, statements) = parse(info.huck.unwrap())?;
+            info.module_path = Some(module_path);
 
-        if let Some(existing_info) = infos.insert(module_path, info) {
-            Err(file::Error::MultipleModules(
-                module_path,
-                infos.remove(&module_path).unwrap().input,
-                existing_info.input,
-            ))?;
+            if let Some(existing_info) = infos.insert(module_path, info) {
+                Err(file::Error::MultipleModules(
+                    module_path,
+                    infos.remove(&module_path).unwrap().input,
+                    existing_info.input,
+                ))?;
+            }
+            parsed.push((module_path, statements));
+        } else if info.lua.is_some() {
+            // Otherwise,
+            // it's a native Lua module,
+            // so just add it directly to the output Vec.
+            output_infos.push(info);
+        } else {
+            log::warn!(log::FILE, "Ignoring FileInfo with no huck or lua: {info:?}");
         }
-        parsed.push((module_path, statements));
     }
 
     // Post-parse processing
@@ -85,7 +97,6 @@ pub fn compile(
     }
 
     // Generate code
-    let mut generated = BTreeMap::new();
     for (module_path, module) in ir_modules {
         let lua = codegen::generate(
             module,
@@ -93,15 +104,14 @@ pub fn compile(
                 .remove(&module_path)
                 .expect("should have found a generation order during dependency resolution"),
         );
-        generated.insert(
-            module_path,
-            (
-                infos
-                    .remove(&module_path)
-                    .expect("file info should exist for a generated file"),
-                lua,
-            ),
-        );
+
+        assert!(infos
+            .get_mut(&module_path)
+            .expect("a FileInfo should have been added to huck_infos for any generated file")
+            .lua
+            .replace(lua)
+            .is_none());
+        output_infos.push(infos.remove(&module_path).unwrap());
     }
-    Ok(generated)
+    Ok(output_infos)
 }

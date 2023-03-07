@@ -1,4 +1,4 @@
-use std::fs::create_dir_all;
+use std::fs::{create_dir_all, read_to_string};
 use std::path::{Path, PathBuf};
 
 use crate::log;
@@ -14,7 +14,14 @@ mod test;
 #[derive(Debug, Clone)]
 pub struct FileInfo {
     /// The Huck source code to be compiled.
-    pub source: &'static str,
+    pub huck: Option<&'static str>,
+
+    /// The Lua code which represents this module.
+    /// If the module is a Huck module,
+    /// then this will be filled when the code is compiled;
+    /// if it's a Lua module,
+    /// it will simply be copied to the output path.
+    pub lua: Option<String>,
 
     /// The [`ModulePath`] of this module.
     /// This gets filled in at the parse step.
@@ -27,7 +34,11 @@ pub struct FileInfo {
 
     /// Path to the chosen output file.
     /// A value of `None` means that the default should be used.
-    pub output: Option<PathBuf>,
+    pub output_file_path: Option<PathBuf>,
+
+    /// Path to the chosen output directory.
+    /// A value of `None` means that the default should be used.
+    pub output_dir: Option<PathBuf>,
 
     /// If true,
     /// don't write to a file,
@@ -56,51 +67,111 @@ impl FileInfo {
             };
         }
 
-        let source = read_to_leaked(path)?;
+        // Check the file extension to see if it's
+        // a Huck file which should be compiled,
+        // or a Lua file which should simply be copied through to the output directory.
+        match input.extension().map(|os| os.to_string_lossy()).as_deref() {
+            // Lua file
+            Some("lua") => {
+                Ok(FileInfo {
+                    huck: None,
+                    lua: Some(read_to_string(path)?),
 
-        Ok(FileInfo {
-            source,
-            module_path: None,
-            input: Some(input),
-            output: None,
-            stdout: false,
-        })
+                    // Use the file stem as a pseudo-ModulePath
+                    // @Errors: should have some more robust checks
+                    module_path: Some(ModulePath(leak_string(
+                        input.file_stem().unwrap().to_string_lossy().to_string(),
+                    ))),
+
+                    // Default to putting the code into an `output` directory
+                    output_dir: Some(PathBuf::from("output")),
+
+                    input: Some(input),
+                    output_file_path: None,
+                    stdout: false,
+                })
+            }
+
+            // Huck file
+            ext => {
+                // Warn if the extension isn't .hk
+                match ext {
+                    Some(hk) if hk != "hk" => {
+                        log::warn!(
+                        log::FILE,
+                        "Non-standard file extension `.{hk}` for file `{path}` (expected `.hk`); \
+                         assuming the file is valid Huck",
+                         path = path.as_ref().display())
+                    }
+                    None => {
+                        log::warn!(
+                            log::FILE,
+                            "No file extension for file `{path}` (expected `.hk`); \
+                             assuming the file is valid Huck",
+                            path = path.as_ref().display()
+                        )
+                    }
+                    _ => (),
+                }
+
+                Ok(FileInfo {
+                    huck: Some(read_to_leaked(path)?),
+                    lua: None,
+                    module_path: None,
+                    input: Some(input),
+                    output_file_path: None,
+                    // Default to putting the code into an `output` directory
+                    output_dir: Some("output".into()),
+                    stdout: false,
+                })
+            }
+        }
     }
 
-    /// Writes a string to the `FileInfo`'s output filepath.
-    pub fn write(&self, lua: &str) -> Result<(), Error> {
+    /// Writes the `FileInfo`'s `lua` field to the `FileInfo`'s output filepath.
+    pub fn write(&self) -> Result<(), Error> {
+        // Assert that we have some Lua to write.
+        self.lua
+            .as_ref()
+            .expect("lua should have been generated before writing a FileInfo");
+
         // Check if we should write to stdout instead of a file.
         if self.stdout {
             log::info!(log::FILE, "Writing generated output to stdout");
-            print!("{}", lua);
+            print!("{}", self.lua.as_ref().unwrap());
             return Ok(());
         }
 
         // Get the output file path,
         // or build it from the module path if not specifically set.
-        let file_path = match self.output.clone() {
-            Some(path) => path,
-            None => {
-                // @Todo @Cleanup: this whole thing should be overridable,
-                // and probably have a different default
-                // (e.g. in a single `output` folder,
-                // instead of trying to put all the output files next to their inputs).
-                let mut path = if let Some(mut input) = self.input.clone() {
-                    input.pop();
-                    input
-                } else {
-                    PathBuf::new()
-                };
+        let file_path = if let Some(path) = self.output_file_path.clone() {
+            path
+        } else {
+            let mut base_dir = if let Some(dir) = self.output_dir.clone() {
+                // If a base output directory was specified,
+                // use that.
+                dir
+            } else if let Some(mut input) = self.input.clone() {
+                // If no base output directory was specified,
+                // but there was an input file given,
+                // put it in the same directory as the input file.
+                input.pop();
+                input
+            } else {
+                // Otherwise,
+                // use a relative filepath
+                // (i.e. put it in the current working directory).
+                PathBuf::new()
+            };
 
-                let module_path_filepath: PathBuf = self
-                    .module_path
-                    .expect("should have found the module path before writing generated code")
-                    .into();
+            let module_path_filepath: PathBuf = self
+                .module_path
+                .expect("should have found the module path before writing generated code")
+                .into();
 
-                path.extend(&module_path_filepath);
+            base_dir.extend(&module_path_filepath);
 
-                path
-            }
+            base_dir
         };
 
         // Create the parent directory (recursively) if it doesn't exist.
@@ -117,7 +188,7 @@ impl FileInfo {
             "Writing generated output to {}",
             file_path.display()
         );
-        std::fs::write(file_path, lua).map_err(Error::IO)?;
+        std::fs::write(file_path, self.lua.as_ref().unwrap()).map_err(Error::IO)?;
 
         Ok(())
     }
