@@ -71,6 +71,10 @@ struct Args {
     )]
     no_normalize: bool,
 
+    /// Change the output directory
+    #[arg(long)]
+    output_dir: Option<PathBuf>,
+
     /// Instead of writing file.hk's output to file.lua, print it to stdout
     #[arg(long)]
     write_to_stdout: Vec<PathBuf>,
@@ -115,6 +119,13 @@ fn do_main() -> Result<(), HuckError> {
         let mut info = FileInfo::new(file)?;
         info.stdout = true;
         to_compile.push(info);
+    }
+
+    // If given, change the output directory of each FileInfo.
+    if args.output_dir.is_some() {
+        for info in to_compile.iter_mut() {
+            info.output_dir = args.output_dir.clone();
+        }
     }
 
     // We're done adding modules, so now we can compile.
