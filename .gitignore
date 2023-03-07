@@ -1,7 +1,3 @@
 /target
 coverage.out
-
-/huck/**/*.lua
-/examples/**/*.lua
-!/examples/lua_library.lua
 /output
