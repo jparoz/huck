@@ -1,0 +1,22 @@
+module Std.List;
+
+type List a;
+foreign import "Std.List.Impl" (
+    lua_index   : forall a. Int -> List a -> a,
+    lua_insert  : forall a. Int -> a -> List a -> List a,
+    lua_remove  : forall a. Int -> List a -> List a,
+    lua_replace : forall a. Int -> a -> List a -> List a,
+    lua_push    : forall a. a -> List a -> List a,
+    lua_pop     : forall a. List a -> List a,
+    lua_iter    : forall a. List a -> [a],
+    lua_collect : forall a. [a] -> List a
+);
+
+index   = lua_index;
+insert  = lua_insert;
+remove  = lua_remove;
+replace = lua_replace;
+push    = lua_push;
+pop     = lua_pop;
+iter    = lua_iter;
+collect = lua_collect;

@@ -1,6 +1,14 @@
 module Short;
 
-import Basic;
+import Std.List (List);
 
-foo : ();
-foo = unsafe lua {nil};
+foo : List Int;
+foo = Std.List.collect [1, 2, 3];
+
+stream : [Int];
+stream = [1, 2, 3];
+
+bar : List Int;
+bar = Std.List.collect stream;
+
+type Void;
