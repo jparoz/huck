@@ -361,17 +361,12 @@ impl<'a> ModuleResolver<'a> {
                 // If the name already resolves to something,
                 // that means it's defined in this module as well as being imported.
                 // This is a name clash, so error.
-                if is_value {
-                    if let Ok(existing_name) = self.resolve_name(UnresolvedName::Unqualified(ident))
-                    {
-                        return Err(Error::ImportClash(resolved_name, existing_name));
-                    }
+                if let Ok(existing_name) = if is_value {
+                    self.resolve_name(UnresolvedName::Unqualified(ident))
                 } else {
-                    if let Ok(existing_name) =
-                        self.resolve_type_name(UnresolvedName::Unqualified(ident))
-                    {
-                        return Err(Error::ImportClash(resolved_name, existing_name));
-                    }
+                    self.resolve_type_name(UnresolvedName::Unqualified(ident))
+                } {
+                    return Err(Error::ImportClash(resolved_name, existing_name));
                 }
 
                 // Assume that the imported name exists, to be checked later.
