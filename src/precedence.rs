@@ -79,7 +79,7 @@ impl ApplyPrecedence for ast::Lhs<ResolvedName> {
 impl ApplyPrecedence for ast::Pattern<ResolvedName> {
     fn apply(&mut self, precs: &BTreeMap<ResolvedName, Precedence>) {
         match self {
-            ast::Pattern::List(args) => {
+            ast::Pattern::Stream(args) => {
                 for arg in args {
                     arg.apply(precs)
                 }
@@ -182,7 +182,7 @@ impl ApplyPrecedence for ast::Expr<ResolvedName> {
                 argument.apply(precs);
             }
             ast::Expr::Term(t) => match t {
-                ast::Term::List(v) => {
+                ast::Term::Stream(v) => {
                     for e in v {
                         e.apply(precs);
                     }

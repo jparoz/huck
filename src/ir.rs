@@ -42,10 +42,10 @@ pub enum Expression {
     /// A literal.
     Literal(Literal),
 
-    /// A list.
-    List(Vec<Expression>),
+    /// A stream literal.
+    Stream(Vec<Expression>),
 
-    /// A tuple.
+    /// A tuple literal.
     Tuple(Vec<Expression>),
 
     /// An occurence of a name.
@@ -102,8 +102,8 @@ pub enum Pattern {
     /// Match on a literal.
     Literal(Literal),
 
-    /// Match on a list.
-    List(Vec<Pattern>),
+    /// Match on a stream literal.
+    Stream(Vec<Pattern>),
 
     /// Match on a tuple.
     Tuple(Vec<Pattern>),
@@ -124,7 +124,7 @@ impl Pattern {
         match self {
             Pattern::Bind(name) => vec![*name],
 
-            Pattern::Constructor(_, pats) | Pattern::Tuple(pats) | Pattern::List(pats) => {
+            Pattern::Constructor(_, pats) | Pattern::Tuple(pats) | Pattern::Stream(pats) => {
                 pats.iter().flat_map(|pat| pat.names_bound()).collect()
             }
 
@@ -268,8 +268,8 @@ impl From<ast::Expr<Name>> for Expression {
 
                 ast::Term::Name(name) => Expression::Reference(name),
 
-                ast::Term::List(es) => {
-                    Expression::List(es.into_iter().map(Expression::from).collect())
+                ast::Term::Stream(es) => {
+                    Expression::Stream(es.into_iter().map(Expression::from).collect())
                 }
                 ast::Term::Tuple(es) => {
                     Expression::Tuple(es.into_iter().map(Expression::from).collect())
@@ -380,8 +380,8 @@ impl From<ast::Pattern<Name>> for Pattern {
             ast::Pattern::Bind(name) => Pattern::Bind(name),
             ast::Pattern::Underscore(s) => Pattern::Underscore(s),
 
-            ast::Pattern::List(pats) => {
-                Pattern::List(pats.into_iter().map(Pattern::from).collect())
+            ast::Pattern::Stream(pats) => {
+                Pattern::Stream(pats.into_iter().map(Pattern::from).collect())
             }
             ast::Pattern::Tuple(pats) => {
                 Pattern::Tuple(pats.into_iter().map(Pattern::from).collect())

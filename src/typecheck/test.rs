@@ -436,7 +436,7 @@ fn literal_list_int() {
         utils::test::typecheck(r#"a = [123, 456];"#)
             .map(|mut module| module.definitions.remove(&name!("a")).unwrap().typ)
             .unwrap(),
-        Type::List(Box::new(Type::Primitive(Primitive::Int)))
+        Type::Stream(Box::new(Type::Primitive(Primitive::Int)))
     );
 }
 

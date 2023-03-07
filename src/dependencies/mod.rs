@@ -217,7 +217,7 @@ impl ast::Expr<ResolvedName> {
     fn dependencies(&self, deps: &mut BTreeSet<ResolvedName>) {
         use ast::*;
         match self {
-            Expr::Term(Term::List(es)) | Expr::Term(Term::Tuple(es)) => {
+            Expr::Term(Term::Stream(es)) | Expr::Term(Term::Tuple(es)) => {
                 es.iter().for_each(|e| e.dependencies(deps));
             }
             Expr::Term(Term::Name(name)) => {

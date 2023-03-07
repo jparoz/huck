@@ -607,14 +607,14 @@ impl Typechecker {
             }
 
             ast::Expr::Term(ast::Term::Parens(e)) => self.typecheck_expr(e),
-            ast::Expr::Term(ast::Term::List(es)) => {
+            ast::Expr::Term(ast::Term::Stream(es)) => {
                 let beta = self.fresh();
                 for e in es {
                     let e_type = self.typecheck_expr(e);
                     self.constraints
                         .add(Constraint::Equality(beta.clone(), e_type));
                 }
-                Type::List(Box::new(beta))
+                Type::Stream(Box::new(beta))
             }
             ast::Expr::Term(ast::Term::Tuple(es)) => {
                 Type::Tuple(es.iter().map(|e| self.typecheck_expr(e)).collect())
@@ -848,7 +848,7 @@ impl Typechecker {
 
             ast::TypeTerm::Parens(e) => self.typecheck_type_expr(e),
 
-            ast::TypeTerm::List(e) => Type::List(Box::new(self.typecheck_type_expr(e))),
+            ast::TypeTerm::Stream(e) => Type::Stream(Box::new(self.typecheck_type_expr(e))),
 
             ast::TypeTerm::Tuple(exprs) => {
                 Type::Tuple(exprs.iter().map(|e| self.typecheck_type_expr(e)).collect())
@@ -885,7 +885,7 @@ impl Typechecker {
             // because they're not legal identifiers and can't be used again.
             ast::Pattern::Underscore(_) => self.fresh(),
 
-            ast::Pattern::List(pats) => {
+            ast::Pattern::Stream(pats) => {
                 let beta = self.fresh();
 
                 for pat in pats {
@@ -894,7 +894,7 @@ impl Typechecker {
                         .add(Constraint::Equality(beta.clone(), typ));
                 }
 
-                Type::List(Box::new(beta))
+                Type::Stream(Box::new(beta))
             }
             ast::Pattern::Tuple(pats) => {
                 Type::Tuple(pats.iter().map(|pat| self.bind_pattern(pat)).collect())
@@ -1078,7 +1078,7 @@ impl Type {
 
             Type::Var(var) => TypeVarSet::single(*var),
             Type::Arrow(a, b) | Type::App(a, b) => a.free_vars().union(&b.free_vars()),
-            Type::List(t) => t.free_vars(),
+            Type::Stream(t) => t.free_vars(),
             Type::Tuple(v) => v
                 .iter()
                 .fold(TypeVarSet::empty(), |a, t| a.union(&t.free_vars())),
@@ -1121,7 +1121,7 @@ impl Type {
                     }
                 }
 
-                (Type::List(t1), Type::List(t2)) => pairs.push((*t1, *t2)),
+                (Type::Stream(t1), Type::Stream(t2)) => pairs.push((*t1, *t2)),
                 (Type::Tuple(ts1), Type::Tuple(ts2)) => {
                     for (t1, t2) in ts1.into_iter().zip(ts2.into_iter()) {
                         pairs.push((t1, t2));
@@ -1169,7 +1169,7 @@ impl Type {
                     }
                 }
 
-                (Type::List(t1), Type::List(t2)) => pairs.push((*t1, *t2)),
+                (Type::Stream(t1), Type::Stream(t2)) => pairs.push((*t1, *t2)),
                 (Type::Tuple(ts1), Type::Tuple(ts2)) => {
                     for (t1, t2) in ts1.into_iter().zip(ts2.into_iter()) {
                         pairs.push((t1, t2));
