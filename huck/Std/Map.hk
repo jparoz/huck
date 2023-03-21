@@ -5,8 +5,8 @@ foreign import "Std.Map.Impl" (
     lua_get     : forall k v. k -> Map k v -> v,
     lua_insert  : forall k v. k -> v -> Map k v -> Map k v,
     lua_remove  : forall k v. k -> Map k v -> Map k v,
-    lua_iter    : forall k v. Map k v -> [(k, v)],
-    lua_collect : forall k v. [(k, v)] -> Map k v
+    lua_iter    : forall k v. Map k v -> List (k, v),
+    lua_collect : forall k v. List (k, v) -> Map k v
 );
 
 get     = lua_get;

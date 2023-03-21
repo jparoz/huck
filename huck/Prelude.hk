@@ -1,5 +1,9 @@
 module Prelude;
 
+-- @Note: List should more properly be defined in Std.List.
+-- This will move there after a @Future @Typeclass is defined.
+type List a;
+
 (* @Typeclasses:
  * Almost all of these operators should have different types;
  * in addition, some of them need to have more typesafe definitions
@@ -87,7 +91,7 @@ infixr 5 <>;
 a <> b = unsafe lua { a .. b };
 
 -- Length operator
-length : forall a. [a] -> Int;
+length : forall a. List a -> Int;
 length xs = unsafe lua { #xs };
 
 -- Helpful combinators

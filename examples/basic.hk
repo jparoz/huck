@@ -9,13 +9,13 @@ hello = "world";
 (* Assignments can have a type signature attached, *)
 (* either inline: *)
 theBestNumber : Int = 123;
-myList : [Float] = [1.23, 4.56];
+myList : List Float = [1.23, 4.56];
 
 (* or free-standing: *)
 myName : String;
 myName = "Jeff";
 
-myList' : [Float];
+myList' : List Float;
 myList' = [1.23, 4.56];
 
 (* The right-hand-side of an assignment can be more complex: *)

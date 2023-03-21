@@ -614,7 +614,15 @@ impl Typechecker {
                     self.constraints
                         .add(Constraint::Equality(beta.clone(), e_type));
                 }
-                Type::List(Box::new(beta))
+                Type::App(
+                    // @Hardcode: to be replaced with typeclass list syntax overloading
+                    // @Typeclass @Future
+                    Box::new(Type::Concrete(ResolvedName::module(
+                        ModulePath("Prelude"),
+                        "List",
+                    ))),
+                    Box::new(beta),
+                )
             }
             ast::Expr::Term(ast::Term::Tuple(es)) => {
                 Type::Tuple(es.iter().map(|e| self.typecheck_expr(e)).collect())
@@ -848,8 +856,6 @@ impl Typechecker {
 
             ast::TypeTerm::Parens(e) => self.typecheck_type_expr(e),
 
-            ast::TypeTerm::List(e) => Type::List(Box::new(self.typecheck_type_expr(e))),
-
             ast::TypeTerm::Tuple(exprs) => {
                 Type::Tuple(exprs.iter().map(|e| self.typecheck_type_expr(e)).collect())
             }
@@ -894,7 +900,15 @@ impl Typechecker {
                         .add(Constraint::Equality(beta.clone(), typ));
                 }
 
-                Type::List(Box::new(beta))
+                Type::App(
+                    // @Hardcode: to be replaced with typeclass list syntax overloading
+                    // @Typeclass @Future
+                    Box::new(Type::Concrete(ResolvedName::module(
+                        ModulePath("Prelude"),
+                        "List",
+                    ))),
+                    Box::new(beta),
+                )
             }
             ast::Pattern::Tuple(pats) => {
                 Type::Tuple(pats.iter().map(|pat| self.bind_pattern(pat)).collect())
@@ -1078,7 +1092,6 @@ impl Type {
 
             Type::Var(var) => TypeVarSet::single(*var),
             Type::Arrow(a, b) | Type::App(a, b) => a.free_vars().union(&b.free_vars()),
-            Type::List(t) => t.free_vars(),
             Type::Tuple(v) => v
                 .iter()
                 .fold(TypeVarSet::empty(), |a, t| a.union(&t.free_vars())),
@@ -1121,7 +1134,6 @@ impl Type {
                     }
                 }
 
-                (Type::List(t1), Type::List(t2)) => pairs.push((*t1, *t2)),
                 (Type::Tuple(ts1), Type::Tuple(ts2)) => {
                     for (t1, t2) in ts1.into_iter().zip(ts2.into_iter()) {
                         pairs.push((t1, t2));
@@ -1169,7 +1181,6 @@ impl Type {
                     }
                 }
 
-                (Type::List(t1), Type::List(t2)) => pairs.push((*t1, *t2)),
                 (Type::Tuple(ts1), Type::Tuple(ts2)) => {
                     for (t1, t2) in ts1.into_iter().zip(ts2.into_iter()) {
                         pairs.push((t1, t2));

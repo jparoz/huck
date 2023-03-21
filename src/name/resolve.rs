@@ -1115,10 +1115,6 @@ impl<'a> ModuleResolver<'a> {
                 self.resolve_type_expr(*type_expr)?,
             ))),
 
-            ast::TypeTerm::List(type_expr) => Ok(ast::TypeTerm::List(Box::new(
-                self.resolve_type_expr(*type_expr)?,
-            ))),
-
             ast::TypeTerm::Tuple(unres_type_exprs) => {
                 let mut res_type_exprs = Vec::new();
                 for unres_type_expr in unres_type_exprs {

@@ -436,7 +436,15 @@ fn literal_list_int() {
         utils::test::typecheck(r#"a = [123, 456];"#)
             .map(|mut module| module.definitions.remove(&name!("a")).unwrap().typ)
             .unwrap(),
-        Type::List(Box::new(Type::Primitive(Primitive::Int)))
+        Type::App(
+            // @Hardcode: to be replaced with typeclass list syntax overloading
+            // @Typeclass @Future
+            Box::new(Type::Concrete(ResolvedName::module(
+                ModulePath("Prelude"),
+                "List",
+            ))),
+            Box::new(Type::Primitive(Primitive::Int)),
+        )
     );
 }
 

@@ -377,9 +377,6 @@ fn type_term(input: &'static str) -> IResult<&'static str, TypeTerm<UnresolvedNa
     alt((
         map(upper_name, TypeTerm::Concrete),
         map(unqualified(lower_ident), TypeTerm::Var),
-        map(delimited(ws(tag("[")), type_expr, ws(tag("]"))), |t| {
-            TypeTerm::List(Box::new(t))
-        }),
         value(TypeTerm::Unit, unit),
         map(parens(type_expr), |t| TypeTerm::Parens(Box::new(t))),
         map(tuple(type_expr), TypeTerm::Tuple),

@@ -156,8 +156,8 @@ impl CodeGenerator {
             ir::Expression::Literal(lit) => Ok(format!("{}", lit)),
 
             // @Note: this is where the semantics for Huck lists are decided.
-            // The below simply converts them as Lua lists;
-            // possibly one day we should instead convert them to Lua iterators.
+            // We'll probably need to do something when we use typeclass overloading.
+            // @Typeclass @Future
             ir::Expression::List(v) => Ok(format!(
                 "{{{}}}",
                 v.into_iter()

@@ -1,6 +1,5 @@
 module Std.Table;
 
-import Std.List (List);
 import Std.Map (Map);
 
 type Table e k v;

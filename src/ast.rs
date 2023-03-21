@@ -464,7 +464,6 @@ pub enum TypeTerm<Name> {
     Concrete(Name),
     Var(Name),
     Parens(Box<TypeExpr<Name>>),
-    List(Box<TypeExpr<Name>>),
     Tuple(Vec<TypeExpr<Name>>),
     Unit,
 }
@@ -475,7 +474,6 @@ impl<Name: Display> Display for TypeTerm<Name> {
             TypeTerm::Var(name) | TypeTerm::Concrete(name) => name.fmt(f),
 
             TypeTerm::Parens(e) => write!(f, "({e})"),
-            TypeTerm::List(e) => write!(f, "[{e}]"),
 
             TypeTerm::Tuple(es) => {
                 write!(

@@ -1,19 +1,13 @@
 module Short;
 
-import Std.List (List);
+import Std.List;
 import Std.Map (Map);
 import Std.Table (Table, mkTable);
 
 foo : List Int;
-foo = Std.List.collect [1, 2, 3];
+foo = [1, 2, 3];
 
-stream : [Int];
-stream = [1, 2, 3];
-
-bar : List Int;
-bar = Std.List.collect stream;
-
-inserted = Std.List.insert 2 17 bar;
+inserted = Std.List.insert 2 17 foo;
 
 aMap = Std.Map.collect [("one", 1), ("two", 2), ("three", 3)];
 

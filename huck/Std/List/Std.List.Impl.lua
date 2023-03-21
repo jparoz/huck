@@ -62,16 +62,4 @@ M.lua_pop = function(list)
     return new_list
 end
 
-M.lua_iter = function(list)
-    -- @Note: relies upon a Huck value of type `[a]`
-    -- being implemented as a Lua list of `a`s
-    return list
-end
-
-M.lua_collect = function(stream)
-    -- @Note: relies upon a Huck value of type `[a]`
-    -- being implemented as a Lua list of `a`s
-    return stream
-end
-
 return M
