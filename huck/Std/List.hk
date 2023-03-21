@@ -10,7 +10,7 @@ foreign import "Std.List.Impl" (
     lua_remove  : forall a. Int -> List a -> List a,
     lua_replace : forall a. Int -> a -> List a -> List a,
     lua_push    : forall a. a -> List a -> List a,
-    lua_pop     : forall a. List a -> List a
+    lua_pop     : forall a. List a -> List a,
 );
 
 index   = lua_index;

@@ -5,7 +5,7 @@ use nom::character::complete::{
 };
 use nom::character::complete::{none_of, u8 as nom_u8};
 use nom::combinator::{eof, map, not, opt, peek, recognize, success, value, verify};
-use nom::multi::{many0, many1, separated_list0, separated_list1};
+use nom::multi::{many0, many1, separated_list1};
 use nom::number::complete::recognize_float;
 use nom::sequence::tuple as nom_tuple;
 use nom::sequence::{delimited, preceded, separated_pair, terminated};
@@ -731,11 +731,14 @@ fn list<F, O>(inner: F) -> impl FnMut(&'static str) -> IResult<&'static str, Vec
 where
     F: FnMut(&'static str) -> IResult<&'static str, O>,
 {
-    delimited(
-        ws(tag("[")),
-        separated_list0(ws(tag(",")), inner),
-        ws(tag("]")),
-    )
+    alt((
+        map(ws(tag("[]")), |_| Vec::new()),
+        delimited(
+            ws(tag("[")),
+            terminated(separated_list1(ws(tag(",")), inner), opt(ws(tag(",")))),
+            ws(tag("]")),
+        ),
+    ))
 }
 
 fn tuple<F, O>(inner: F) -> impl FnMut(&'static str) -> IResult<&'static str, Vec<O>>
@@ -744,7 +747,7 @@ where
 {
     delimited(
         ws(tag("(")),
-        separated_list1(ws(tag(",")), inner),
+        terminated(separated_list1(ws(tag(",")), inner), opt(ws(tag(",")))),
         ws(tag(")")),
     )
 }
