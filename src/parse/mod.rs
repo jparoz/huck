@@ -288,7 +288,7 @@ fn pattern(input: &'static str) -> IResult<&'static str, Pattern<UnresolvedName>
         map(ws(lower_ident), |v| {
             Pattern::Bind(UnresolvedName::Unqualified(v))
         }),
-        map(list(pattern), Pattern::Stream),
+        map(list(pattern), Pattern::List),
         map(tuple(pattern), Pattern::Tuple),
         map(numeral_int, Pattern::Int),
         map(string, Pattern::String),
@@ -378,7 +378,7 @@ fn type_term(input: &'static str) -> IResult<&'static str, TypeTerm<UnresolvedNa
         map(upper_name, TypeTerm::Concrete),
         map(unqualified(lower_ident), TypeTerm::Var),
         map(delimited(ws(tag("[")), type_expr, ws(tag("]"))), |t| {
-            TypeTerm::Stream(Box::new(t))
+            TypeTerm::List(Box::new(t))
         }),
         value(TypeTerm::Unit, unit),
         map(parens(type_expr), |t| TypeTerm::Parens(Box::new(t))),
@@ -524,7 +524,7 @@ fn term(input: &'static str) -> IResult<&'static str, Term<UnresolvedName>> {
     alt((
         map(numeral, Term::Numeral),
         map(string, Term::String),
-        map(list(expr), Term::Stream),
+        map(list(expr), Term::List),
         map(name, Term::Name),
         value(Term::Unit, unit),
         typed_expr,

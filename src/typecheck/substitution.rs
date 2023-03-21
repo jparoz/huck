@@ -129,7 +129,7 @@ impl ApplySub for Type {
                 a.apply(sub);
                 b.apply(sub);
             }
-            Type::Stream(list_t) => list_t.apply(sub),
+            Type::List(list_t) => list_t.apply(sub),
             Type::Tuple(ref mut tuple_v) => tuple_v.iter_mut().for_each(|t| {
                 t.apply(sub);
             }),

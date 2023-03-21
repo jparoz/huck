@@ -668,12 +668,12 @@ impl<'a> ModuleResolver<'a> {
             ast::Expr::Term(term) => Ok(ast::Expr::Term(match term {
                 ast::Term::Name(name) => ast::Term::Name(self.resolve_name(name)?),
 
-                ast::Term::Stream(unres_es) => {
+                ast::Term::List(unres_es) => {
                     let mut res_es = Vec::new();
                     for e in unres_es {
                         res_es.push(self.resolve_expr(e)?);
                     }
-                    ast::Term::Stream(res_es)
+                    ast::Term::List(res_es)
                 }
                 ast::Term::Tuple(unres_es) => {
                     let mut res_es = Vec::new();
@@ -917,14 +917,14 @@ impl<'a> ModuleResolver<'a> {
                 ast::Pattern::Bind(binding)
             }
 
-            ast::Pattern::Stream(pats) => {
+            ast::Pattern::List(pats) => {
                 let mut res_pats = Vec::new();
                 for pat in pats {
                     let (sub_bindings, sub_pat) = self.resolve_pattern(pat)?;
                     bindings.extend(sub_bindings);
                     res_pats.push(sub_pat);
                 }
-                ast::Pattern::Stream(res_pats)
+                ast::Pattern::List(res_pats)
             }
             ast::Pattern::Tuple(pats) => {
                 let mut res_pats = Vec::new();
@@ -1115,7 +1115,7 @@ impl<'a> ModuleResolver<'a> {
                 self.resolve_type_expr(*type_expr)?,
             ))),
 
-            ast::TypeTerm::Stream(type_expr) => Ok(ast::TypeTerm::Stream(Box::new(
+            ast::TypeTerm::List(type_expr) => Ok(ast::TypeTerm::List(Box::new(
                 self.resolve_type_expr(*type_expr)?,
             ))),
 

@@ -167,7 +167,7 @@ impl<Name: Display> Display for Lhs<Name> {
 pub enum Pattern<Name> {
     Bind(Name),
     Underscore(&'static str),
-    Stream(Vec<Pattern<Name>>),
+    List(Vec<Pattern<Name>>),
     Tuple(Vec<Pattern<Name>>),
     Int(&'static str),
     String(&'static str),
@@ -189,7 +189,7 @@ impl<Name> Pattern<Name> {
     pub fn is_unconditional(&self) -> bool {
         match self {
             Pattern::Bind(_) | Pattern::Underscore(_) | Pattern::Unit => true,
-            Pattern::Stream(_)
+            Pattern::List(_)
             | Pattern::Tuple(_)
             | Pattern::Int(_)
             | Pattern::String(_)
@@ -208,7 +208,7 @@ impl<Name: Copy> Pattern<Name> {
 
             Pattern::Destructure { args: pats, .. }
             | Pattern::Tuple(pats)
-            | Pattern::Stream(pats) => pats.iter().flat_map(|pat| pat.names_bound()).collect(),
+            | Pattern::List(pats) => pats.iter().flat_map(|pat| pat.names_bound()).collect(),
 
             Pattern::Binop { lhs, rhs, .. } => {
                 let mut names = lhs.names_bound();
@@ -231,7 +231,7 @@ impl<Name: Display> Display for Pattern<Name> {
         match self {
             Bind(n) => write!(f, "{n}"),
             Underscore(_) => write!(f, "_"),
-            Stream(v) => write!(
+            List(v) => write!(
                 f,
                 "[{}]",
                 v.iter()
@@ -369,7 +369,7 @@ impl<Name: Display + Copy> Display for Expr<Name> {
 pub enum Term<Name> {
     Numeral(Numeral),
     String(&'static str),
-    Stream(Vec<Expr<Name>>),
+    List(Vec<Expr<Name>>),
     Name(Name),
     TypedExpr(Box<Expr<Name>>, TypeScheme<Name>),
     Parens(Box<Expr<Name>>),
@@ -383,7 +383,7 @@ impl<Name: Display + Copy> Display for Term<Name> {
         match self {
             Numeral(n) => write!(f, "{}", n),
             String(s) => write!(f, "{}", s),
-            Stream(v) => write!(
+            List(v) => write!(
                 f,
                 "[{}]",
                 v.iter()
@@ -464,7 +464,7 @@ pub enum TypeTerm<Name> {
     Concrete(Name),
     Var(Name),
     Parens(Box<TypeExpr<Name>>),
-    Stream(Box<TypeExpr<Name>>),
+    List(Box<TypeExpr<Name>>),
     Tuple(Vec<TypeExpr<Name>>),
     Unit,
 }
@@ -475,7 +475,7 @@ impl<Name: Display> Display for TypeTerm<Name> {
             TypeTerm::Var(name) | TypeTerm::Concrete(name) => name.fmt(f),
 
             TypeTerm::Parens(e) => write!(f, "({e})"),
-            TypeTerm::Stream(e) => write!(f, "[{e}]"),
+            TypeTerm::List(e) => write!(f, "[{e}]"),
 
             TypeTerm::Tuple(es) => {
                 write!(

@@ -9,7 +9,7 @@ pub enum Type {
     Concrete(ResolvedName),
     Primitive(Primitive),
 
-    Stream(Box<Type>),
+    List(Box<Type>),
     Tuple(Vec<Type>),
 
     /// The function type
@@ -38,7 +38,7 @@ impl Display for Type {
 
             Type::App(a, b) => write!(f, "({} {})", a, b),
 
-            Type::Stream(inner) => {
+            Type::List(inner) => {
                 write!(f, "[{}]", inner)
             }
             Type::Tuple(v) => write!(

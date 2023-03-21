@@ -154,10 +154,10 @@ impl CodeGenerator {
             ir::Expression::Reference(name) => self.reference(name),
 
             ir::Expression::Literal(lit) => Ok(format!("{}", lit)),
-            // @Note: this is where the semantics for Huck streams are decided.
+            // @Note: this is where the semantics for Huck Lists are decided.
             // The below simply converts them as Lua lists;
-            // we should instead convert them to Lua iterators.
-            ir::Expression::Stream(v) => Ok(format!(
+            // possibly one day we should instead convert them to Lua iterators.
+            ir::Expression::List(v) => Ok(format!(
                 "{{{}}}",
                 v.into_iter()
                     .map(|e| self.expression(e))
@@ -564,7 +564,7 @@ fn pattern_match(
         // we don't need to bind anything at all.
         ir::Pattern::Underscore(_) => (),
 
-        ir::Pattern::Stream(list) => {
+        ir::Pattern::List(list) => {
             // Check that the list is the correct length
             conditions.push(format!("#{} == {}", lua_arg_name, list.len()));
 
@@ -601,9 +601,10 @@ fn pattern_match(
             conditions.push(format!("{} == {}", lua_arg_name, lit));
         }
 
+        // @Cleanup @Hardcode @Hack-ish
         ir::Pattern::Constructor(name, args)
-            if name.is_builtin()
-                && args.is_empty()
+            if args.is_empty()
+                && name.is_builtin()
                 && (name.ident == "True" || name.ident == "False") =>
         {
             let mut name_string = name.ident.to_string();

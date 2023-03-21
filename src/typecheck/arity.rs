@@ -40,7 +40,7 @@ impl ArityChecker {
             ast::TypeTerm::Parens(expr) => self.type_expr(expr, assumed_arity),
 
             // The type in the list should have arity 0.
-            ast::TypeTerm::Stream(expr) => self.type_expr(expr, 0),
+            ast::TypeTerm::List(expr) => self.type_expr(expr, 0),
 
             // Each of the types in the tuple should have arity 0.
             ast::TypeTerm::Tuple(exprs) => {
