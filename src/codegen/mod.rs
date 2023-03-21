@@ -154,7 +154,8 @@ impl CodeGenerator {
             ir::Expression::Reference(name) => self.reference(name),
 
             ir::Expression::Literal(lit) => Ok(format!("{}", lit)),
-            // @Note: this is where the semantics for Huck Lists are decided.
+
+            // @Note: this is where the semantics for Huck lists are decided.
             // The below simply converts them as Lua lists;
             // possibly one day we should instead convert them to Lua iterators.
             ir::Expression::List(v) => Ok(format!(

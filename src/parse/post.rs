@@ -7,8 +7,7 @@ use super::Error;
 
 impl ast::Module<UnresolvedName, ()> {
     /// Takes the `Vec<ast::Statement>` from parsing
-    /// and turns it into a [`ast::Module`]
-    /// as well as a map of [`Precedence`](crate::precedence::Precedence)s.
+    /// and turns it into a [`ast::Module`].
     pub fn from_statements(
         path: ModulePath,
         statements: Vec<ast::Statement<UnresolvedName, ()>>,
