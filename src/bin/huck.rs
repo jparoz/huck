@@ -1,17 +1,4 @@
-mod ast;
-mod codegen;
-mod compile;
-mod dependencies;
-mod error;
-mod file;
-mod ir;
-mod log;
-mod name;
-mod parse;
-mod precedence;
-mod typecheck;
-mod types;
-mod utils;
+use huck::*;
 
 use std::path::PathBuf;
 use std::str::FromStr;

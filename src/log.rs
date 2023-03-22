@@ -10,35 +10,40 @@
 #[rustfmt::skip] pub const CODEGEN   : &str = "   codegen";
 
 #[allow(unused_macros)]
+#[macro_export]
 macro_rules! error {
     ($target:expr, $($arg:tt)+) => (log_crate::log!(target: $target, log_crate::Level::Error, $($arg)+))
 }
 #[allow(unused_imports)]
-pub(crate) use error;
+pub use error;
 
 #[allow(unused_macros)]
+#[macro_export]
 macro_rules! log_warn {
     ($target:expr, $($arg:tt)+) => (log_crate::log!(target: $target, log_crate::Level::Warn, $($arg)+))
 }
 #[allow(unused_imports)]
-pub(crate) use log_warn as warn;
+pub use log_warn as warn;
 
 #[allow(unused_macros)]
+#[macro_export]
 macro_rules! info {
     ($target:expr, $($arg:tt)+) => (log_crate::log!(target: $target, log_crate::Level::Info, $($arg)+))
 }
 #[allow(unused_imports)]
-pub(crate) use info;
+pub use info;
 
 #[allow(unused_macros)]
+#[macro_export]
 macro_rules! trace {
     ($target:expr, $($arg:tt)+) => (log_crate::log!(target: $target, log_crate::Level::Trace, $($arg)+))
 }
 #[allow(unused_imports)]
-pub(crate) use trace;
+pub use trace;
 
 /// Debug is different
 #[allow(unused_macros)]
+#[macro_export]
 macro_rules! debug {
     ($lit:literal, $($arg:tt)+) => (log_crate::log!(
             target: $crate::log::DEBUG,
@@ -57,4 +62,4 @@ macro_rules! debug {
         );
 }
 #[allow(unused_imports)]
-pub(crate) use debug;
+pub use debug;
