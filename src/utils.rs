@@ -120,7 +120,6 @@ pub mod test {
         ast,
         compile::compile,
         dependencies,
-        file::FileInfo,
         name::{self, ModulePath, ResolvedName},
         parse::parse,
         precedence::{ApplyPrecedence, Precedence},
@@ -129,7 +128,7 @@ pub mod test {
     };
 
     pub const PRELUDE_SRC: &str =
-        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/huck/Prelude.hk"));
+        include_str!(concat!(env!("HUCK_LIB_DIR"), "/Std/src/Prelude.hk"));
 
     /// Typechecks the given module.
     pub fn typecheck(huck: &'static str) -> Result<ast::Module<ResolvedName, Type>, HuckError> {
@@ -186,32 +185,10 @@ pub mod test {
 
     /// Takes some Huck and turns it into Lua, doing every step in between.
     pub fn transpile(huck: &'static str) -> Result<String, HuckError> {
-        // Include the prelude
-        let prelude_info = FileInfo {
-            huck: Some(PRELUDE_SRC),
-            lua: None,
-            module_path: None,
-            input: None,
-            output_file_path: None,
-            output_dir: None,
-            stdout: true,
-        };
-
-        // Include our module
-        let module_info = FileInfo {
-            huck: Some(leak!("module Test; {}", huck)),
-            lua: None,
-            module_path: None,
-            input: None,
-            output_file_path: None,
-            output_dir: None,
-            stdout: true,
-        };
-
         // Compile
-        for info in compile(vec![prelude_info, module_info])? {
-            if info.module_path == Some(ModulePath("Test")) {
-                return normalize(&info.lua.unwrap());
+        for (path, lua) in compile(vec![leak!("module Test; {}", huck), PRELUDE_SRC])? {
+            if path == ModulePath("Test") {
+                return normalize(&lua);
             }
         }
         unreachable!()

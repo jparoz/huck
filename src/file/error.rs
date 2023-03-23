@@ -10,6 +10,8 @@ pub enum Error {
     #[error("Attempt to compile a directory: `{0}`")]
     InputFileWasDirectory(PathBuf),
 
+    // @Todo: move this error out of compile::compile,
+    // into somewhere that knows about filenames
     #[error(
         "Multiple modules defined with the same name: `{0}` (files {} and {})",
         .1.as_ref().map(|p| format!("{}", p.display())).unwrap_or_else(|| "<stdin>".to_string()),

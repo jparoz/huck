@@ -4,10 +4,15 @@ use super::*;
 
 #[test]
 fn error_file_doesnt_exist() {
-    assert_matches!(FileInfo::new("file/doesnt/exist.hk"), Err(Error::IO(_)))
+    assert_matches!(read_to_leaked("file/doesnt/exist.hk"), Err(Error::IO(_)))
 }
 
 #[test]
 fn error_file_was_directory() {
-    assert_matches!(FileInfo::new("/"), Err(Error::InputFileWasDirectory(_)))
+    assert_matches!(write("src", "foo"), Err(Error::InputFileWasDirectory(_)))
+}
+
+#[test]
+fn error_file_was_root() {
+    assert_matches!(write("/", "foo"), Err(Error::InputFileWasDirectory(_)))
 }
